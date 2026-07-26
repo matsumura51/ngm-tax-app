@@ -7,7 +7,6 @@ import Link from 'next/link'
 import { ChevronLeft, Plus, Trash2 } from 'lucide-react'
 import { Director, ClientDocument } from '@/lib/types'
 
-const INDUSTRY_OPTIONS = ['1：卸売業', '2：小売業', '3：製造業', '4：建設業', '5：不動産業', '6：サービス業', '7：飲食業']
 const WITHHOLDING_TAX_OPTIONS = ['納特', '毎月', '不要']
 const CONTRACT_STATUS_OPTIONS = ['契約中', '契約終了', '見込み', '休止']
 const ENTITY_TYPE_OPTIONS = ['法人', '個人']
@@ -17,11 +16,11 @@ const BLUE_WHITE_OPTIONS = ['青色', '白色']
 const ic = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const icReq = 'w-full border border-red-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-red-50'
 
-const REQUIRED = ['code', 'name', 'entity_type', 'fiscal_month', 'withholding_tax', 'consumption_tax', 'primary_staff', 'contract_status', 'send_postal_code', 'send_address', 'send_tel', 'send_recipient'] as const
+const REQUIRED = ['code', 'name', 'entity_type', 'fiscal_month', 'withholding_tax', 'consumption_tax', 'primary_staff', 'contract_status', 'year_end_adjustment', 'send_postal_code', 'send_address', 'send_tel', 'send_recipient'] as const
 
 type FormState = {
   code: string; name: string; entity_type: string
-  fiscal_month: string; contract_status: string; industry: string
+  fiscal_month: string; contract_status: string
   contract_start_date: string; contract_end_date: string
   withholding_tax: string; consumption_tax: string
   year_end_adjustment: string; notification_send: string
@@ -31,19 +30,19 @@ type FormState = {
   email: string; postal_code: string; address: string; phone: string; fax: string
   send_postal_code: string; send_address: string; send_tel: string; send_recipient: string
   contact_notes: string; capital: string; tax_office: string
-  blue_white_type: string; chatwork_id: string; director_changed: string; exclude_productivity: string
+  blue_white_type: string; director_changed: string
   primary_staff: string; sub_staff: string; manager: string; notes: string
 }
 
 const INIT: FormState = {
-  code: '', name: '', entity_type: '', fiscal_month: '', contract_status: '', industry: '',
+  code: '', name: '', entity_type: '', fiscal_month: '', contract_status: '',
   contract_start_date: '', contract_end_date: '', withholding_tax: '', consumption_tax: '',
   year_end_adjustment: '', notification_send: '', representative: '', honorific: '',
   representative_title: '', employee_count: '', invoice_number: '', client_department: '',
   client_contact: '', website: '', email: '', postal_code: '', address: '', phone: '', fax: '',
   send_postal_code: '', send_address: '', send_tel: '', send_recipient: '', contact_notes: '',
-  capital: '', tax_office: '', blue_white_type: '', chatwork_id: '', director_changed: '',
-  exclude_productivity: '', primary_staff: '', sub_staff: '', manager: '', notes: '',
+  capital: '', tax_office: '', blue_white_type: '', director_changed: '',
+  primary_staff: '', sub_staff: '', manager: '', notes: '',
 }
 
 export default function ClientNewPage() {
@@ -64,7 +63,7 @@ export default function ClientNewPage() {
     const labels: Record<string, string> = {
       code: '顧客コード', name: '顧客名', entity_type: '法・個区分',
       fiscal_month: '決算月', withholding_tax: '源泉税', consumption_tax: '消費税',
-      primary_staff: '主担当', contract_status: '契約ステータス',
+      primary_staff: '主担当', contract_status: '契約ステータス', year_end_adjustment: '年調有無',
       send_postal_code: '送付先郵便番号', send_address: '送付先住所',
       send_tel: '送付先TEL', send_recipient: '送付先宛先',
     }
@@ -150,6 +149,7 @@ export default function ClientNewPage() {
             <F label="決算月" required>
               <select className={errors.fiscal_month ? icReq : ic} value={form.fiscal_month} onChange={e => set('fiscal_month', e.target.value)}>
                 <option value="">選択</option>
+                <option value="0">個人</option>
                 {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}月</option>)}
               </select>
               {errors.fiscal_month && <p className="text-xs text-red-500 mt-0.5">{errors.fiscal_month}</p>}
@@ -160,12 +160,6 @@ export default function ClientNewPage() {
                 {CONTRACT_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
               {errors.contract_status && <p className="text-xs text-red-500 mt-0.5">{errors.contract_status}</p>}
-            </F>
-            <F label="業種" cn="col-span-2">
-              <select className={ic} value={form.industry} onChange={e => set('industry', e.target.value)}>
-                <option value="">選択</option>
-                {INDUSTRY_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
             </F>
 
             <F label="契約開始日" cn="col-span-2">
@@ -189,11 +183,12 @@ export default function ClientNewPage() {
               </select>
               {errors.consumption_tax && <p className="text-xs text-red-500 mt-0.5">{errors.consumption_tax}</p>}
             </F>
-            <F label="年調有無">
-              <select className={ic} value={form.year_end_adjustment} onChange={e => set('year_end_adjustment', e.target.value)}>
+            <F label="年調有無" required>
+              <select className={errors.year_end_adjustment ? icReq : ic} value={form.year_end_adjustment} onChange={e => set('year_end_adjustment', e.target.value)}>
                 <option value="">選択</option>
                 {YES_NO_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
+              {errors.year_end_adjustment && <p className="text-xs text-red-500 mt-0.5">{errors.year_end_adjustment}</p>}
             </F>
             <F label="申告の知らせ送付">
               <select className={ic} value={form.notification_send} onChange={e => set('notification_send', e.target.value)}>
@@ -292,18 +287,8 @@ export default function ClientNewPage() {
                 {BLUE_WHITE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </F>
-            <F label="ChatWork連携">
-              <input className={ic} value={form.chatwork_id} onChange={e => set('chatwork_id', e.target.value)} />
-            </F>
-            <F label="役員変更" cn="col-span-2">
+            <F label="役員変更">
               <input className={ic} value={form.director_changed} onChange={e => set('director_changed', e.target.value)} />
-            </F>
-            <F label="生産性分析除外" cn="col-span-2">
-              <select className={ic} value={form.exclude_productivity} onChange={e => set('exclude_productivity', e.target.value)}>
-                <option value="">選択</option>
-                <option value="生産性分析から除外しない">生産性分析から除外しない</option>
-                <option value="生産性分析から除外する">生産性分析から除外する</option>
-              </select>
             </F>
             <F label="連絡・注意事項" cn="col-span-4">
               <textarea className={ic + ' resize-none'} rows={3} value={form.contact_notes} onChange={e => set('contact_notes', e.target.value)} />

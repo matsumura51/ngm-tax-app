@@ -6,7 +6,6 @@ import { Client, MonthlyProgress, Schedule, Director, ClientDocument } from '@/l
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 
-const INDUSTRY_OPTIONS = ['1：卸売業', '2：小売業', '3：製造業', '4：建設業', '5：不動産業', '6：サービス業', '7：飲食業']
 const WITHHOLDING_TAX_OPTIONS = ['納特', '毎月', '不要']
 const CONTRACT_STATUS_OPTIONS = ['契約中', '契約終了', '見込み', '休止']
 const ENTITY_TYPE_OPTIONS = ['法人', '個人']
@@ -169,6 +168,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               <F label="決算月">
                 <select className={ic} value={form.fiscal_month?.toString() || ''} onChange={e => set('fiscal_month', e.target.value ? parseInt(e.target.value) : null)}>
                   <option value="">選択</option>
+                  <option value="0">個人</option>
                   {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}月</option>)}
                 </select>
               </F>
@@ -176,12 +176,6 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                 <select className={ic} value={form.contract_status || ''} onChange={e => set('contract_status', e.target.value)}>
                   <option value="">選択</option>
                   {CONTRACT_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                </select>
-              </F>
-              <F label="業種" cn="col-span-2">
-                <select className={ic} value={form.industry || ''} onChange={e => set('industry', e.target.value)}>
-                  <option value="">選択</option>
-                  {INDUSTRY_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </F>
 
@@ -303,18 +297,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                   {BLUE_WHITE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </F>
-              <F label="ChatWork連携">
-                <input className={ic} value={form.chatwork_id || ''} onChange={e => set('chatwork_id', e.target.value)} />
-              </F>
-              <F label="役員変更" cn="col-span-2">
+              <F label="役員変更">
                 <input className={ic} value={form.director_changed || ''} onChange={e => set('director_changed', e.target.value)} />
-              </F>
-              <F label="生産性分析除外" cn="col-span-2">
-                <select className={ic} value={form.exclude_productivity || ''} onChange={e => set('exclude_productivity', e.target.value)}>
-                  <option value="">選択</option>
-                  <option value="生産性分析から除外しない">生産性分析から除外しない</option>
-                  <option value="生産性分析から除外する">生産性分析から除外する</option>
-                </select>
               </F>
               <F label="連絡・注意事項" cn="col-span-4">
                 <textarea className={ic + ' resize-none'} rows={3} value={form.contact_notes || ''} onChange={e => set('contact_notes', e.target.value)} />
