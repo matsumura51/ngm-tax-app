@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, use } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { User } from '@/lib/types'
 import { ChevronLeft } from 'lucide-react'
@@ -10,12 +11,28 @@ const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm f
 
 export default function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [form, setForm] = useState({ name: '', code: '', department: '', role: 'staff' })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
-  useEffect(() => { load() }, [id])
+  useEffect(() => { checkAdminAndLoad() }, [id])
+
+  async function checkAdminAndLoad() {
+    const supabase = createClient()
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser) { router.push('/login'); return }
+
+    const { data: profile } = await supabase.from('users').select('role').eq('id', authUser.id).single()
+    if (profile?.role !== 'admin') {
+      router.push('/dashboard')
+      return
+    }
+    setIsAdmin(true)
+    await load()
+  }
 
   async function load() {
     const supabase = createClient()
@@ -40,7 +57,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
     setSaving(false)
   }
 
-  if (!user) return <div className="p-6 text-gray-400">読み込み中...</div>
+  if (!isAdmin || !user) return <div className="p-6 text-gray-400">読み込み中...</div>
 
   return (
     <div className="p-6 max-w-xl">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { User } from '@/lib/types'
 import { ChevronRight, Plus, X } from 'lucide-react'
@@ -13,17 +14,32 @@ const ROLE_LABELS: Record<string, string> = {
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
 export default function UsersPage() {
+  const router = useRouter()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [form, setForm] = useState({ code: '', name: '', password: '', role: 'staff', department: '' })
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { checkAdminAndLoad() }, [])
+
+  async function checkAdminAndLoad() {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
+
+    const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single()
+    if (profile?.role !== 'admin') {
+      router.push('/dashboard')
+      return
+    }
+    setIsAdmin(true)
+    await load()
+  }
 
   async function load() {
-    setLoading(true)
     const supabase = createClient()
     const { data } = await supabase.from('users').select('*').order('name')
     setUsers(data || [])
@@ -61,6 +77,9 @@ export default function UsersPage() {
     setSaving(false)
   }
 
+  if (loading) return <div className="p-6 text-gray-400">読み込み中...</div>
+  if (!isAdmin) return null
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -74,9 +93,7 @@ export default function UsersPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow overflow-hidden">
-        {loading ? (
-          <div className="text-center py-12 text-gray-400">読み込み中...</div>
-        ) : users.length === 0 ? (
+        {users.length === 0 ? (
           <div className="text-center py-12 text-gray-400">ユーザーがいません</div>
         ) : (
           <table className="w-full text-sm">
@@ -117,7 +134,6 @@ export default function UsersPage() {
               <h2 className="text-lg font-bold text-gray-800">スタッフを追加</h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
             </div>
-
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">ログインID *</label>
@@ -145,7 +161,6 @@ export default function UsersPage() {
               </div>
               {saveError && <p className="text-red-500 text-sm">{saveError}</p>}
             </div>
-
             <div className="flex gap-2 mt-5">
               <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">
                 キャンセル
