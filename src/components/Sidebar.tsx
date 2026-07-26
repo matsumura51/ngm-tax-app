@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { LayoutDashboard, FileText, Calendar, ClipboardList, LogOut, Users } from 'lucide-react'
+import { LayoutDashboard, FileText, Calendar, ClipboardList, LogOut, Users, UserCog } from 'lucide-react'
 
 const nav = [
   { href: '/dashboard', label: 'ダッシュボード', icon: LayoutDashboard },
@@ -11,6 +11,7 @@ const nav = [
   { href: '/monthly', label: '月次進捗表', icon: ClipboardList },
   { href: '/daily-reports', label: '日報', icon: FileText },
   { href: '/schedules', label: 'スケジュール', icon: Calendar },
+  { href: '/users', label: 'ユーザー管理', icon: UserCog },
 ]
 
 export default function Sidebar() {

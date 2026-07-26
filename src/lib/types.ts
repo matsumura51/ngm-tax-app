@@ -108,5 +108,6 @@ export interface User {
   name: string
   code: string | null
   department: string | null
-  email: string
+  email: string | null
+  role: string | null
 }
