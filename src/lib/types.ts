@@ -2,19 +2,64 @@ export type Industry = '1：卸売業' | '2：小売業' | '3：製造業' | '4�
 export type ConsumptionTax = '免税' | '本則' | '簡易' | '2割特例'
 export type WithholdingTax = '納特' | '毎月' | '不要'
 
+export interface Director {
+  role: string
+  name: string
+}
+
+export interface ClientDocument {
+  date: string
+  document_name: string
+}
+
 export interface Client {
   id: string
   code: string
   name: string
-  representative: string | null
-  phone: string | null
-  address: string | null
-  email: string | null
+  entity_type: string | null
+  // 顧客情報
   fiscal_month: number | null
+  contract_status: string | null
   industry: string | null
+  contract_start_date: string | null
+  contract_end_date: string | null
+  withholding_tax: string | null
   consumption_tax: string | null
   invoice_registered: boolean
-  withholding_tax: string | null
+  year_end_adjustment: string | null
+  notification_send: string | null
+  // 代表者
+  representative: string | null
+  honorific: string | null
+  representative_title: string | null
+  employee_count: number | null
+  invoice_number: string | null
+  // 顧客担当
+  client_department: string | null
+  client_contact: string | null
+  website: string | null
+  // 連絡先
+  email: string | null
+  postal_code: string | null
+  address: string | null
+  phone: string | null
+  fax: string | null
+  // 送付先
+  send_postal_code: string | null
+  send_address: string | null
+  send_tel: string | null
+  send_recipient: string | null
+  // その他
+  contact_notes: string | null
+  capital: number | null
+  tax_office: string | null
+  blue_white_type: string | null
+  chatwork_id: string | null
+  director_changed: string | null
+  directors: Director[]
+  documents: ClientDocument[]
+  exclude_productivity: string | null
+  // 担当スタッフ
   primary_staff: string | null
   sub_staff: string | null
   manager: string | null
