@@ -6,11 +6,19 @@ export interface Client {
   id: string
   code: string
   name: string
+  representative: string | null
+  phone: string | null
+  address: string | null
+  email: string | null
   fiscal_month: number | null
   industry: string | null
   consumption_tax: string | null
   invoice_registered: boolean
   withholding_tax: string | null
+  primary_staff: string | null
+  sub_staff: string | null
+  manager: string | null
+  notes: string | null
   created_at: string
 }
 
