@@ -16,7 +16,7 @@ const BLUE_WHITE_OPTIONS = ['青色', '白色']
 const ic = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const icReq = 'w-full border border-red-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-red-50'
 
-const REQUIRED = ['code', 'name', 'entity_type', 'fiscal_month', 'withholding_tax', 'consumption_tax', 'primary_staff', 'contract_status', 'year_end_adjustment', 'send_postal_code', 'send_address', 'send_tel', 'send_recipient'] as const
+const REQUIRED = ['code', 'name', 'entity_type', 'fiscal_month', 'withholding_tax', 'consumption_tax', 'primary_staff', 'contract_status', 'year_end_adjustment', 'notification_send', 'send_postal_code', 'send_address', 'send_recipient'] as const
 
 type FormState = {
   code: string; name: string; entity_type: string
@@ -63,9 +63,9 @@ export default function ClientNewPage() {
     const labels: Record<string, string> = {
       code: '顧客コード', name: '顧客名', entity_type: '法・個区分',
       fiscal_month: '決算月', withholding_tax: '源泉税', consumption_tax: '消費税',
-      primary_staff: '主担当', contract_status: '契約ステータス', year_end_adjustment: '年調有無',
-      send_postal_code: '送付先郵便番号', send_address: '送付先住所',
-      send_tel: '送付先TEL', send_recipient: '送付先宛先',
+      primary_staff: '主担当', contract_status: '契約ステータス',
+      year_end_adjustment: '年調有無', notification_send: '申告の知らせ送付',
+      send_postal_code: '送付先郵便番号', send_address: '送付先住所', send_recipient: '送付先宛先',
     }
     for (const field of REQUIRED) {
       if (!form[field]) newErrors[field] = `${labels[field]}は必須です`
@@ -190,11 +190,12 @@ export default function ClientNewPage() {
               </select>
               {errors.year_end_adjustment && <p className="text-xs text-red-500 mt-0.5">{errors.year_end_adjustment}</p>}
             </F>
-            <F label="申告の知らせ送付">
-              <select className={ic} value={form.notification_send} onChange={e => set('notification_send', e.target.value)}>
+            <F label="申告の知らせ送付" required>
+              <select className={errors.notification_send ? icReq : ic} value={form.notification_send} onChange={e => set('notification_send', e.target.value)}>
                 <option value="">選択</option>
                 {YES_NO_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
+              {errors.notification_send && <p className="text-xs text-red-500 mt-0.5">{errors.notification_send}</p>}
             </F>
           </div>
         </Section>
@@ -261,9 +262,8 @@ export default function ClientNewPage() {
               <input className={errors.send_address ? icReq : ic} value={form.send_address} onChange={e => set('send_address', e.target.value)} />
               {errors.send_address && <p className="text-xs text-red-500 mt-0.5">{errors.send_address}</p>}
             </F>
-            <F label="送付先TEL" required>
-              <input className={errors.send_tel ? icReq : ic} value={form.send_tel} onChange={e => set('send_tel', e.target.value)} />
-              {errors.send_tel && <p className="text-xs text-red-500 mt-0.5">{errors.send_tel}</p>}
+            <F label="送付先TEL">
+              <input className={ic} value={form.send_tel} onChange={e => set('send_tel', e.target.value)} />
             </F>
             <F label="送付先宛先" required cn="col-span-4">
               <input className={errors.send_recipient ? icReq : ic} value={form.send_recipient} onChange={e => set('send_recipient', e.target.value)} placeholder="株式会社〇〇 〇〇 様" />
