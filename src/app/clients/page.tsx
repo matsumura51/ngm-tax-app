@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { Client } from '@/lib/types'
-import { Plus, Search, ChevronRight, Upload } from 'lucide-react'
+import { Plus, Search, ChevronRight, Upload, Download } from 'lucide-react'
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
@@ -30,6 +30,12 @@ export default function ClientsPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">顧客カルテ</h1>
         <div className="flex gap-2">
+          <Link
+            href="/clients/export"
+            className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium"
+          >
+            <Download size={16} /> Excelエクスポート
+          </Link>
           <Link
             href="/clients/import"
             className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium"
