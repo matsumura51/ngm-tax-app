@@ -11,6 +11,8 @@ const ROLE_LABELS: Record<string, string> = {
   staff: 'スタッフ',
 }
 
+const DIVISION_OPTIONS = ['管理部', '事業部1', '事業部2', '事業部3']
+
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
 export default function UsersPage() {
@@ -21,7 +23,7 @@ export default function UsersPage() {
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
-  const [form, setForm] = useState({ code: '', name: '', password: '', role: 'staff', department: '' })
+  const [form, setForm] = useState({ code: '', name: '', password: '', role: 'staff', department: '', hire_date: '', division: '' })
 
   useEffect(() => { checkAdminAndLoad() }, [])
 
@@ -72,7 +74,7 @@ export default function UsersPage() {
     }
 
     setShowModal(false)
-    setForm({ code: '', name: '', password: '', role: 'staff', department: '' })
+    setForm({ code: '', name: '', password: '', role: 'staff', department: '', hire_date: '', division: '' })
     await load()
     setSaving(false)
   }
@@ -101,7 +103,8 @@ export default function UsersPage() {
               <tr>
                 <th className="px-4 py-3 text-left">氏名</th>
                 <th className="px-4 py-3 text-left">ログインID</th>
-                <th className="px-4 py-3 text-left">部署</th>
+                <th className="px-4 py-3 text-left">所属</th>
+                <th className="px-4 py-3 text-left">入社日</th>
                 <th className="px-4 py-3 text-left">権限</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -111,7 +114,8 @@ export default function UsersPage() {
                 <tr key={u.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => window.location.href = `/users/${u.id}`}>
                   <td className="px-4 py-3 font-medium text-gray-800">{u.name}</td>
                   <td className="px-4 py-3 text-gray-600 font-mono">{u.code || '-'}</td>
-                  <td className="px-4 py-3 text-gray-600">{u.department || '-'}</td>
+                  <td className="px-4 py-3 text-gray-600">{u.division || '-'}</td>
+                  <td className="px-4 py-3 text-gray-600">{u.hire_date || '-'}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
                       u.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
@@ -147,6 +151,17 @@ export default function UsersPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">初期パスワード *</label>
                 <input className={inputClass} type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="8文字以上" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">所属</label>
+                <select className={inputClass} value={form.division} onChange={e => set('division', e.target.value)}>
+                  <option value="">選択してください</option>
+                  {DIVISION_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">入社日</label>
+                <input type="date" className={inputClass} value={form.hire_date} onChange={e => set('hire_date', e.target.value)} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">部署</label>

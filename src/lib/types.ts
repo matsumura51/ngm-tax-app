@@ -155,4 +155,6 @@ export interface User {
   department: string | null
   email: string | null
   role: string | null
+  hire_date: string | null
+  division: string | null
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req: NextRequest) {
-  const { code, name, password, role, department } = await req.json()
+  const { code, name, password, role, department, hire_date, division } = await req.json()
 
   if (!code || !name || !password) {
     return NextResponse.json({ error: 'ログインID・氏名・パスワードは必須です' }, { status: 400 })
@@ -36,6 +36,8 @@ export async function POST(req: NextRequest) {
     code,
     role: role || 'staff',
     department: department || null,
+    hire_date: hire_date || null,
+    division: division || null,
   }).eq('id', data.user.id)
 
   return NextResponse.json({ success: true })

@@ -8,12 +8,13 @@ import { ChevronLeft } from 'lucide-react'
 import Link from 'next/link'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+const DIVISION_OPTIONS = ['管理部', '事業部1', '事業部2', '事業部3']
 
 export default function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
-  const [form, setForm] = useState({ name: '', code: '', department: '', role: 'staff' })
+  const [form, setForm] = useState({ name: '', code: '', department: '', role: 'staff', hire_date: '', division: '' })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -39,7 +40,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
     const { data } = await supabase.from('users').select('*').eq('id', id).single()
     if (data) {
       setUser(data)
-      setForm({ name: data.name || '', code: data.code || '', department: data.department || '', role: data.role || 'staff' })
+      setForm({ name: data.name || '', code: data.code || '', department: data.department || '', role: data.role || 'staff', hire_date: data.hire_date || '', division: data.division || '' })
     }
   }
 
@@ -51,6 +52,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
       code: form.code || null,
       department: form.department || null,
       role: form.role,
+      hire_date: form.hire_date || null,
+      division: form.division || null,
     }).eq('id', id)
     if (error) alert('エラー: ' + error.message)
     else { setSaved(true); setTimeout(() => setSaved(false), 2000) }
@@ -82,6 +85,17 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">コード</label>
             <input className={inputClass} value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="例：001" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">所属</label>
+            <select className={inputClass} value={form.division} onChange={e => setForm(f => ({ ...f, division: e.target.value }))}>
+              <option value="">選択してください</option>
+              {DIVISION_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">入社日</label>
+            <input type="date" className={inputClass} value={form.hire_date} onChange={e => setForm(f => ({ ...f, hire_date: e.target.value }))} />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">部署</label>
