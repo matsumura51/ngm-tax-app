@@ -10,6 +10,28 @@ import Link from 'next/link'
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const TASK_TYPES = ['記帳', '決算', '申告', '年末調整', '給与計算', '相談', '訪問', '電話', 'メール', 'その他']
 
+function calcWorkTime(start: string, end: string): string {
+  if (!start || !end) return ''
+  const [sh, sm] = start.split(':').map(Number)
+  const [eh, em] = end.split(':').map(Number)
+  const diff = (eh * 60 + em) - (sh * 60 + sm)
+  if (diff <= 0) return ''
+  return `${Math.floor(diff / 60)}:${(diff % 60).toString().padStart(2, '0')}`
+}
+
+function sumWorkTimes(rows: { work_time: string | null | undefined }[]): string {
+  let total = 0
+  for (const r of rows) {
+    const parts = (r.work_time || '').split(':')
+    if (parts.length === 2) {
+      const h = parseInt(parts[0]), m = parseInt(parts[1])
+      if (!isNaN(h) && !isNaN(m)) total += h * 60 + m
+    }
+  }
+  if (total === 0) return ''
+  return `${Math.floor(total / 60)}:${(total % 60).toString().padStart(2, '0')}`
+}
+
 function emptyDetail(): Omit<DailyReportDetail, 'id' | 'report_id'> {
   return {
     sort_order: 0,
@@ -34,8 +56,6 @@ export default function DailyReportNewPage() {
   const [userName, setUserName] = useState('')
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0],
-    important_report: '',
-    performance_activity: '',
     total_hours: '',
   })
   const [details, setDetails] = useState([emptyDetail()])
@@ -60,8 +80,21 @@ export default function DailyReportNewPage() {
     setDetails(d => d.filter((_, idx) => idx !== i))
   }
 
+  useEffect(() => {
+    setForm(f => ({ ...f, total_hours: sumWorkTimes(details) }))
+  }, [details])
+
   function setDetail(i: number, field: string, value: string) {
-    setDetails(d => d.map((row, idx) => idx === i ? { ...row, [field]: value } : row))
+    setDetails(d => d.map((row, idx) => {
+      if (idx !== i) return row
+      const updated = { ...row, [field]: value }
+      if (field === 'start_time' || field === 'end_time') {
+        const start = field === 'start_time' ? value : (row.start_time || '')
+        const end = field === 'end_time' ? value : (row.end_time || '')
+        updated.work_time = calcWorkTime(start, end)
+      }
+      return updated
+    }))
   }
 
   async function save() {
@@ -74,8 +107,6 @@ export default function DailyReportNewPage() {
       user_id: user.id,
       user_name: userName,
       date: form.date,
-      important_report: form.important_report || null,
-      performance_activity: form.performance_activity || null,
       total_hours: form.total_hours || null,
       unread_check: '未チェック',
     }).select().single()
@@ -114,16 +145,8 @@ export default function DailyReportNewPage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">合計時間</label>
-            <input className={inputClass} value={form.total_hours} onChange={e => setForm(f => ({ ...f, total_hours: e.target.value }))} placeholder="例：8:00" />
+            <input className={inputClass + ' bg-gray-50 text-gray-600'} value={form.total_hours} readOnly tabIndex={-1} placeholder="自動計算" />
           </div>
-        </div>
-        <div className="mb-4">
-          <label className="block text-xs font-medium text-gray-500 mb-1">重要事項・報告</label>
-          <textarea className={inputClass + ' resize-none'} rows={3} value={form.important_report} onChange={e => setForm(f => ({ ...f, important_report: e.target.value }))} />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">実績・活動</label>
-          <textarea className={inputClass + ' resize-none'} rows={3} value={form.performance_activity} onChange={e => setForm(f => ({ ...f, performance_activity: e.target.value }))} />
         </div>
       </div>
 
@@ -158,7 +181,7 @@ export default function DailyReportNewPage() {
                     <input type="time" className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.end_time || ''} onChange={e => setDetail(i, 'end_time', e.target.value)} />
                   </td>
                   <td className="px-1 py-1">
-                    <input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.work_time || ''} onChange={e => setDetail(i, 'work_time', e.target.value)} placeholder="1:00" />
+                    <input className="w-full border border-gray-100 rounded px-1 py-1 text-xs bg-gray-50 text-gray-600 text-center" value={d.work_time || ''} readOnly tabIndex={-1} placeholder="自動" />
                   </td>
                   <td className="px-1 py-1">
                     <select className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.task_type || ''} onChange={e => setDetail(i, 'task_type', e.target.value)}>
