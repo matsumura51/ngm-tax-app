@@ -1,35 +1,88 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ChevronLeft, Upload, AlertCircle, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 
 const COLUMN_MAP: Record<string, string> = {
+  // 顧客基本
   '顧客コード': 'code',
   'コード': 'code',
   '顧客名': 'name',
   '名称': 'name',
-  '代表者': 'representative',
-  '代表者名': 'representative',
-  '電話': 'phone',
-  '電話番号': 'phone',
-  '業種': 'industry',
+  // 法個区分
+  '法・個区分': 'entity_type',
+  '法個区分': 'entity_type',
+  '法・個区分（法人/個人）': 'entity_type',
+  // 決算月
   '決算月': 'fiscal_month',
+  // 契約
+  '契約ステータス': 'contract_status',
+  '契約ステータス（期更新）': 'contract_status',
+  '契約状況': 'contract_status',
+  '契約開始日': 'contract_start_date',
+  '契約終了日': 'contract_end_date',
+  // 税務
   '消費税': 'consumption_tax',
+  '消費税区分': 'consumption_tax',
   '源泉': 'withholding_tax',
   '源泉税': 'withholding_tax',
-  'インボイス': 'invoice_registered',
-  '主担当': 'primary_staff',
-  '副担当': 'sub_staff',
-  '担当': 'primary_staff',
-  '所長': 'manager',
-  '責任者': 'manager',
+  '源泉徴収税': 'withholding_tax',
+  '年調有無': 'year_end_adjustment',
+  '年末調整': 'year_end_adjustment',
+  '申告のお知らせ送付の有無': 'notification_send',
+  '申告の知らせ送付の有無': 'notification_send',
+  '申告お知らせ': 'notification_send',
+  // 代表者
+  '代表者': 'representative',
+  '代表者名': 'representative',
+  '敬称': 'honorific',
+  '役職名': 'representative_title',
+  '従業員数': 'employee_count',
+  'インボイス番号': 'invoice_number',
+  '適格請求書番号': 'invoice_number',
+  '部署名': 'client_department',
+  '顧客担当者名': 'client_contact',
+  '顧客担当者': 'client_contact',
+  'ホームページ': 'website',
+  'リンク': 'website',
+  // 連絡先
+  '郵便番号': 'postal_code',
+  '住所': 'address',
+  'TEL': 'phone',
+  '電話': 'phone',
+  '電話番号': 'phone',
+  'FAX': 'fax',
+  'Fax': 'fax',
   'メール': 'email',
   'メールアドレス': 'email',
-  '住所': 'address',
+  // 送付先
+  '送付先郵便番号': 'send_postal_code',
+  '送付先住所': 'send_address',
+  '送付先宛先': 'send_recipient',
+  '送付先TEL': 'send_tel',
+  '送付先電話番号': 'send_tel',
+  // 担当スタッフ
+  '主担当': 'primary_staff',
+  '担当': 'primary_staff',
+  '担当者': 'primary_staff',
+  '副担当': 'sub_staff',
+  '所長': 'manager',
+  '責任者': 'manager',
+  // その他
+  '資本金': 'capital',
+  '管轄税務署名': 'tax_office',
+  '税務署': 'tax_office',
+  '青白区分': 'blue_white_type',
+  '役員変更': 'director_changed',
+  '連絡・注意事項': 'contact_notes',
+  '連絡注意事項': 'contact_notes',
+  '業種': 'industry',
+  'インボイス': 'invoice_registered',
   '備考': 'notes',
+  'メモ': 'notes',
+  '注記': 'notes',
 }
 
 function parseCSV(text: string): { headers: string[]; rows: string[][] } {
@@ -62,16 +115,14 @@ function parseCSV(text: string): { headers: string[]; rows: string[][] } {
 }
 
 export default function ClientImportPage() {
-  const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
   const [headers, setHeaders] = useState<string[]>([])
   const [rows, setRows] = useState<string[][]>([])
+  const [encoding, setEncoding] = useState<'Shift-JIS' | 'UTF-8'>('Shift-JIS')
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<{ success: number; errors: string[] } | null>(null)
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  function readFile(file: File, enc: 'Shift-JIS' | 'UTF-8') {
     const reader = new FileReader()
     reader.onload = ev => {
       const text = ev.target?.result as string
@@ -80,7 +131,19 @@ export default function ClientImportPage() {
       setRows(rows.filter(r => r.some(c => c)))
       setResult(null)
     }
-    reader.readAsText(file, 'UTF-8')
+    reader.readAsText(file, enc)
+  }
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    readFile(file, encoding)
+  }
+
+  function onEncodingChange(enc: 'Shift-JIS' | 'UTF-8') {
+    setEncoding(enc)
+    const file = fileRef.current?.files?.[0]
+    if (file) readFile(file, enc)
   }
 
   async function doImport() {
@@ -102,9 +165,15 @@ export default function ClientImportPage() {
         const val = row[j] || ''
 
         if (dbField === 'fiscal_month') {
-          record[dbField] = val ? parseInt(val.replace('月', '')) || null : null
+          if (val === '個人') {
+            record[dbField] = 0
+          } else {
+            record[dbField] = val ? parseInt(val.replace('月', '')) || null : null
+          }
         } else if (dbField === 'invoice_registered') {
           record[dbField] = val === '○' || val === '✓' || val === '1' || val === 'true' || val === '登録済み'
+        } else if (dbField === 'employee_count' || dbField === 'capital') {
+          record[dbField] = val ? parseInt(val.replace(/[,，]/g, '')) || null : null
         } else {
           record[dbField] = val || null
         }
@@ -135,11 +204,29 @@ export default function ClientImportPage() {
         <h1 className="text-2xl font-bold text-gray-800">顧客データ CSVインポート</h1>
       </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-sm text-blue-700">
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 text-sm text-blue-700">
         <p className="font-medium mb-1">CSVファイルの形式について</p>
-        <p>1行目にヘッダー行が必要です。以下の列名に対応しています：</p>
-        <p className="mt-1 text-xs text-blue-600">顧客コード / 顧客名 / 代表者名 / 電話番号 / 業種 / 決算月 / 消費税 / 源泉税 / 主担当 / 副担当 / 所長 / メールアドレス / 住所 / 備考</p>
+        <p>kintoneからのエクスポートファイルに対応しています。1行目にヘッダー行が必要です。</p>
+        <p className="mt-1 text-xs text-blue-600">顧客コード / 顧客名 / 法・個区分 / 決算月 / 契約ステータス / 郵便番号 / 住所 / 代表者名 / TEL / 送付先郵便番号 / 送付先住所 / 送付先宛先 / 担当者 / 年調有無 / 申告のお知らせ送付の有無 / 備考 など</p>
         <p className="mt-1 text-xs">※ 既存の顧客コードがある場合は上書き更新します</p>
+      </div>
+
+      <div className="flex items-center gap-4 mb-4">
+        <span className="text-sm font-medium text-gray-600">文字コード：</span>
+        {(['Shift-JIS', 'UTF-8'] as const).map(enc => (
+          <label key={enc} className="flex items-center gap-1.5 cursor-pointer text-sm text-gray-700">
+            <input
+              type="radio"
+              name="encoding"
+              value={enc}
+              checked={encoding === enc}
+              onChange={() => onEncodingChange(enc)}
+              className="accent-blue-600"
+            />
+            {enc}
+            {enc === 'Shift-JIS' && <span className="text-xs text-gray-400">（kintone標準）</span>}
+          </label>
+        ))}
       </div>
 
       <div
