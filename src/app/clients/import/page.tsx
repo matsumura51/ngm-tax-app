@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { createClient } from '@/lib/supabase'
 import { ChevronLeft, Upload, AlertCircle, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 
@@ -173,10 +172,9 @@ export default function ClientImportPage() {
   async function doImport() {
     if (rows.length === 0) return
     setImporting(true)
-    const supabase = createClient()
 
-    const errors: string[] = []
-    let success = 0
+    const records: Record<string, string | number | boolean | null>[] = []
+    const preErrors: string[] = []
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
@@ -205,16 +203,21 @@ export default function ClientImportPage() {
       }
 
       if (!record.code || !record.name) {
-        errors.push(`行${i + 2}: 顧客コードまたは顧客名が空です`)
+        preErrors.push(`行${i + 2}: 顧客コードまたは顧客名が空です`)
         continue
       }
 
-      const { error } = await supabase.from('clients').upsert(record as any, { onConflict: 'code' })
-      if (error) errors.push(`行${i + 2} (${record.code}): ${error.message}`)
-      else success++
+      records.push(record)
     }
 
-    setResult({ success, errors })
+    const res = await fetch('/api/clients/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ records }),
+    })
+    const json = await res.json()
+
+    setResult({ success: json.success, errors: [...preErrors, ...(json.errors || [])] })
     setImporting(false)
   }
 
