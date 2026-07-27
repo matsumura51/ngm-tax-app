@@ -62,7 +62,7 @@ export default function ClientExportPage() {
 
       const headerRow = cols.map(c => c.label)
       const dataRows = (data as Client[]).map(client =>
-        cols.map(c => formatValue(c.key, (client as Record<string, unknown>)[c.key]))
+        cols.map(c => formatValue(c.key, (client as unknown as Record<string, unknown>)[c.key]))
       )
 
       const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows])
