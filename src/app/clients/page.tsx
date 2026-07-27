@@ -74,11 +74,11 @@ export default function ClientsPage() {
                 <tr>
                   <th className="px-4 py-3 text-left">コード</th>
                   <th className="px-4 py-3 text-left">顧客名</th>
-                  <th className="px-4 py-3 text-left">業種</th>
+                  <th className="px-4 py-3 text-left">法個</th>
                   <th className="px-4 py-3 text-left">決算月</th>
-                  <th className="px-4 py-3 text-left">消費税</th>
+                  <th className="px-4 py-3 text-left">契約状態</th>
                   <th className="px-4 py-3 text-left">主担当</th>
-                  <th className="px-4 py-3 text-left">電話番号</th>
+                  <th className="px-4 py-3 text-left">TEL</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -87,9 +87,11 @@ export default function ClientsPage() {
                   <tr key={c.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => window.location.href = `/clients/${c.id}`}>
                     <td className="px-4 py-3 font-mono text-gray-600">{c.code}</td>
                     <td className="px-4 py-3 font-medium text-gray-800">{c.name}</td>
-                    <td className="px-4 py-3 text-gray-600">{c.industry || '-'}</td>
-                    <td className="px-4 py-3 text-gray-600">{c.fiscal_month ? `${c.fiscal_month}月` : '-'}</td>
-                    <td className="px-4 py-3 text-gray-600">{c.consumption_tax || '-'}</td>
+                    <td className="px-4 py-3 text-gray-600">{c.entity_type || '-'}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {c.fiscal_month === 0 ? '個人' : c.fiscal_month ? `${c.fiscal_month}月` : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">{c.contract_status || '-'}</td>
                     <td className="px-4 py-3 text-gray-600">{c.primary_staff || '-'}</td>
                     <td className="px-4 py-3 text-gray-600">{c.phone || '-'}</td>
                     <td className="px-4 py-3">
