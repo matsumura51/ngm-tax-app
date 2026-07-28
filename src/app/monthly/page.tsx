@@ -261,9 +261,7 @@ export default function MonthlyPage() {
                 <th className={`sticky left-0 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-20`} rowSpan={2}>顧客コード</th>
                 <th className={`sticky left-20 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600`} rowSpan={2}>顧客名</th>
                 <th className={`${thH1} w-14`} rowSpan={2}>決算月</th>
-                <th className={`${thH1} w-24`} rowSpan={2}>業種</th>
-                <th className={`${thH1} w-20`} rowSpan={2}>主担当</th>
-                <th className={`${thH1} w-14 border-r border-purple-600`} rowSpan={2}>消費税</th>
+                <th className={`${thH1} w-20 border-r border-purple-600`} rowSpan={2}>主担当</th>
                 {MONTHS.map(m => (
                   <th key={m} colSpan={6}
                     className={`${thH1} border-l border-purple-600 ${String(currentMonth) === m ? '!bg-[#8b2252]' : ''}`}>
@@ -285,7 +283,7 @@ export default function MonthlyPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={78} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
+                <tr><td colSpan={76} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
               ) : filtered.map((c, ri) => {
                 const even = ri % 2 === 0
                 const p = prog(c.code)
@@ -294,9 +292,7 @@ export default function MonthlyPage() {
                     <td className={stickyCode(even)}>{c.code}</td>
                     <td className={stickyName(even)}>{c.name}</td>
                     <td className={td}>{c.fiscal_month === 0 ? '個人' : c.fiscal_month ? `${c.fiscal_month}月` : '-'}</td>
-                    <td className={td}>{c.industry || '-'}</td>
-                    <td className={td}>{c.primary_staff || p?.primary_staff || '-'}</td>
-                    <td className={`${td} border-r border-gray-200`}>{c.consumption_tax || '-'}</td>
+                    <td className={`${td} border-r border-gray-200`}>{c.primary_staff || p?.primary_staff || '-'}</td>
                     {MONTHS.map(m => (
                       MONTHLY_FIELDS.map((f, fi) => {
                         const val = getMonthVal(c.code, f.key, m, f.type === 'date')
@@ -330,7 +326,6 @@ export default function MonthlyPage() {
                 <th className={`sticky left-0 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-20`}>顧客コード</th>
                 <th className={`sticky left-20 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600`}>顧客名</th>
                 <th className={thH1}>決算月</th>
-                <th className={thH1}>業種</th>
                 <th className={`${thH1} border-l border-purple-600`}>{prevYear}<br/>消費税</th>
                 <th className={thH1}>{year}<br/>消費税</th>
                 <th className={`${thH1} border-l border-purple-600`}>{prevYear}期<br/>法人税中間有無</th>
@@ -349,7 +344,7 @@ export default function MonthlyPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={18} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
+                <tr><td colSpan={17} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
               ) : filtered.map((c, ri) => {
                 const p = prog(c.code)
                 const even = ri % 2 === 0
@@ -359,7 +354,6 @@ export default function MonthlyPage() {
                     <td className={stickyCode(even)}>{c.code}</td>
                     <td className={stickyName(even)}>{c.name}</td>
                     <td className={td}>{c.fiscal_month === 0 ? '個人' : c.fiscal_month ? `${c.fiscal_month}月` : '-'}</td>
-                    <td className={td}>{c.industry || '-'}</td>
                     <td className={`${td} border-l border-gray-100`}>{p?.prev_consumption_tax || c.consumption_tax || ''}</td>
                     <td className={td}>{p?.consumption_tax || c.consumption_tax || ''}</td>
                     <td className={`${td} border-l border-gray-100`}>{p?.prev_corp_interim_exists || ''}</td>
