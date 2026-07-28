@@ -94,6 +94,29 @@ export interface MonthlyProgress {
   invoice_status: string | null
   notes: string | null
   created_at: string
+  // 税務情報（前期・当期）
+  prev_consumption_tax: string | null
+  prev_corp_interim_exists: string | null
+  prev_corp_interim_date: string | null
+  prev_con_interim_exists: string | null
+  prev_con_interim_1: string | null
+  prev_con_interim_2: string | null
+  prev_con_interim_3: string | null
+  corp_interim_exists: string | null
+  corp_interim_date: string | null
+  con_interim_exists: string | null
+  con_interim_1: string | null
+  con_interim_2: string | null
+  con_interim_3: string | null
+  // 決算業務
+  settle_consumption_judged: string | null
+  settle_notice: string | null
+  settle_materials: string | null
+  settle_return_prepared: string | null
+  settle_contact: string | null
+  settle_filed: string | null
+  settle_payment: string | null
+  director_change: string | null
 }
 
 export interface DailyReport {
