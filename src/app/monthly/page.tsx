@@ -97,10 +97,10 @@ export default function MonthlyPage() {
     if (activeTab === '税務情報') loadTaxSchedules()
   }, [activeTab, year, scheduleMonth])
 
-  async function loadTaxSchedules() {
+  async function loadTaxSchedules(m = scheduleMonth, y = year) {
     const supabase = createClient()
     const { data } = await supabase.from('tax_schedules')
-      .select('*').eq('year', year).eq('month', scheduleMonth).order('client_name')
+      .select('*').eq('year', y).eq('month', m).order('client_name')
     setTaxSchedules(data || [])
     if (data && data.length > 0) {
       setScheduleInfo({ deadline: data[0].deadline, imported_at: data[0].imported_at })
@@ -116,7 +116,7 @@ export default function MonthlyPage() {
       const json = await res.json()
       if (!res.ok) { alert('読み込みエラー: ' + json.error); return }
       setScheduleMonth(json.month)
-      await loadTaxSchedules()
+      await loadTaxSchedules(json.month, json.year)
       alert(`${json.year}年${json.month}月分 ${json.count}件を読み込みました\n納付期限: ${json.deadline || '不明'}`)
     } finally {
       setImporting(false)
@@ -372,12 +372,15 @@ export default function MonthlyPage() {
           {taxSubTab === '予定納税' && (
             <div>
               <div className="flex items-center gap-3 mb-3 flex-wrap">
-                <select value={scheduleMonth} onChange={e => setScheduleMonth(Number(e.target.value))}
-                  className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <option key={i + 1} value={i + 1}>{i + 1}月</option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-500 whitespace-nowrap">表示月:</span>
+                  <select value={scheduleMonth} onChange={e => setScheduleMonth(Number(e.target.value))}
+                    className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>{i + 1}月</option>
+                    ))}
+                  </select>
+                </div>
                 <button onClick={importFromSheet} disabled={importing}
                   className="flex items-center gap-1.5 bg-purple-700 hover:bg-purple-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
                   <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
