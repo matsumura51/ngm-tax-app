@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { Client } from '@/lib/types'
-import { Plus, Search, ChevronRight, Upload, Download, FileDown } from 'lucide-react'
+import { Plus, Search, ChevronRight, Upload, Download, FileDown, Trash2 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { CLIENT_COLUMNS } from '@/lib/clientColumns'
 
@@ -29,6 +29,8 @@ export default function ClientsPage() {
   const [fiscalFilter, setFiscalFilter] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -37,6 +39,7 @@ export default function ClientsPage() {
     const supabase = createClient()
     const { data } = await supabase.from('clients').select('*').order('code')
     setClients(data || [])
+    setSelectedIds(new Set())
     setLoading(false)
   }
 
@@ -55,6 +58,40 @@ export default function ClientsPage() {
     XLSX.writeFile(wb, `顧客カルテ_絞り込み_${date}.xlsx`)
   }
 
+  async function deleteSelected() {
+    if (selectedIds.size === 0) return
+    if (!confirm(`選択した ${selectedIds.size} 件を削除しますか？\nこの操作は取り消せません。`)) return
+    setDeleting(true)
+    const res = await fetch('/api/clients/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: Array.from(selectedIds) }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      alert('削除エラー: ' + json.error)
+    } else {
+      await load()
+    }
+    setDeleting(false)
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    if (selectedIds.size === filtered.length && filtered.length > 0) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filtered.map(c => c.id)))
+    }
+  }
+
   const filtered = clients.filter(c => {
     if (!showAll && c.contract_end_date) return false
     if (search && !c.name.includes(search) && !c.code.includes(search)) return false
@@ -65,6 +102,8 @@ export default function ClientsPage() {
     }
     return true
   })
+
+  const allSelected = filtered.length > 0 && selectedIds.size === filtered.length
 
   return (
     <div className="p-6">
@@ -136,6 +175,25 @@ export default function ClientsPage() {
         </button>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="mb-3 flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">
+          <span className="text-sm text-red-700 font-medium">{selectedIds.size}件選択中</span>
+          <button
+            onClick={deleteSelected}
+            disabled={deleting}
+            className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50"
+          >
+            <Trash2 size={14} /> {deleting ? '削除中...' : '選択した顧客を削除'}
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="text-xs text-gray-500 hover:text-gray-700 ml-auto"
+          >
+            選択解除
+          </button>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl shadow overflow-hidden">
         {loading ? (
           <div className="text-center py-12 text-gray-400">読み込み中...</div>
@@ -146,6 +204,14 @@ export default function ClientsPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs text-gray-500">
                 <tr>
+                  <th className="px-3 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                      className="w-4 h-4 rounded accent-blue-600"
+                    />
+                  </th>
                   <th className="px-4 py-3 text-left">コード</th>
                   <th className="px-4 py-3 text-left">顧客名</th>
                   <th className="px-4 py-3 text-left">法個</th>
@@ -160,9 +226,17 @@ export default function ClientsPage() {
                 {filtered.map(c => (
                   <tr
                     key={c.id}
-                    className={`hover:bg-gray-50 cursor-pointer ${c.contract_end_date ? 'opacity-50' : ''}`}
+                    className={`hover:bg-gray-50 cursor-pointer ${c.contract_end_date ? 'opacity-50' : ''} ${selectedIds.has(c.id) ? 'bg-blue-50' : ''}`}
                     onClick={() => window.location.href = `/clients/${c.id}`}
                   >
+                    <td className="px-3 py-3" onClick={e => { e.stopPropagation(); toggleSelect(c.id) }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(c.id)}
+                        onChange={() => toggleSelect(c.id)}
+                        className="w-4 h-4 rounded accent-blue-600"
+                      />
+                    </td>
                     <td className="px-4 py-3 font-mono text-gray-600">{c.code}</td>
                     <td className="px-4 py-3 font-medium text-gray-800">{c.name}</td>
                     <td className="px-4 py-3 text-gray-600">{c.entity_type || '-'}</td>

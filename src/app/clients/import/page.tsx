@@ -187,7 +187,12 @@ export default function ClientImportPage() {
         if (!dbField) continue
         const val = row[j]?.trim() || ''
 
-        if (dbField === 'fiscal_month') {
+        if (['contract_start_date', 'contract_end_date'].includes(dbField)) {
+          if (!val) { record[dbField] = null; continue }
+          // YYYY/MM/DD → YYYY-MM-DD
+          const normalized = val.replace(/\//g, '-')
+          record[dbField] = /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : null
+        } else if (dbField === 'fiscal_month') {
           if (val === '個人') {
             record[dbField] = 0
           } else {
