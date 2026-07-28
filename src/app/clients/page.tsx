@@ -4,7 +4,17 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { Client } from '@/lib/types'
-import { Plus, Search, ChevronRight, Upload, Download } from 'lucide-react'
+import { Plus, Search, ChevronRight, Upload, Download, FileDown } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { CLIENT_COLUMNS } from '@/lib/clientColumns'
+
+function formatValue(key: string, value: unknown): string {
+  if (value === null || value === undefined) return ''
+  if (key === 'fiscal_month') return value === 0 ? '個人' : `${value}月`
+  if (typeof value === 'boolean') return value ? '○' : ''
+  if (Array.isArray(value)) return ''
+  return String(value)
+}
 
 const FISCAL_MONTHS = [
   { value: '', label: 'すべて' },
@@ -28,6 +38,21 @@ export default function ClientsPage() {
     const { data } = await supabase.from('clients').select('*').order('code')
     setClients(data || [])
     setLoading(false)
+  }
+
+  function exportFiltered() {
+    const rows = filtered.map(c => {
+      const row: Record<string, string> = {}
+      CLIENT_COLUMNS.forEach(col => {
+        row[col.label] = formatValue(col.key, (c as unknown as Record<string, unknown>)[col.key])
+      })
+      return row
+    })
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '顧客カルテ')
+    const date = new Date().toISOString().slice(0, 10)
+    XLSX.writeFile(wb, `顧客カルテ_絞り込み_${date}.xlsx`)
   }
 
   const filtered = clients.filter(c => {
@@ -102,6 +127,13 @@ export default function ClientsPage() {
           契約終了を含む全て表示
         </label>
         <span className="text-xs text-gray-400">{filtered.length}件</span>
+        <button
+          onClick={exportFiltered}
+          disabled={filtered.length === 0}
+          className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-40"
+        >
+          <FileDown size={15} /> 絞り込み結果をエクスポート
+        </button>
       </div>
 
       <div className="bg-white rounded-xl shadow overflow-hidden">
