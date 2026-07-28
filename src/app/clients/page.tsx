@@ -123,6 +123,15 @@ export default function ClientsPage() {
   })
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length
+  const allMonthlyChecked = filtered.length > 0 && filtered.every(c => c.show_in_monthly)
+
+  async function toggleAllMonthly() {
+    const next = !allMonthlyChecked
+    const ids = filtered.map(c => c.id)
+    setClients(prev => prev.map(c => ids.includes(c.id) ? { ...c, show_in_monthly: next } : c))
+    const supabase = createClient()
+    await supabase.from('clients').update({ show_in_monthly: next }).in('id', ids)
+  }
 
   return (
     <div className="p-6">
@@ -204,7 +213,13 @@ export default function ClientsPage() {
                     <input type="checkbox" checked={allSelected} onChange={toggleAll}
                       className="w-4 h-4 rounded accent-blue-600" />
                   </th>
-                  <th className="px-3 py-3 text-center whitespace-nowrap text-blue-600">月次進捗</th>
+                  <th className="px-3 py-3 text-center whitespace-nowrap text-blue-600">
+                    <div className="flex flex-col items-center gap-1">
+                      <span>月次進捗</span>
+                      <input type="checkbox" checked={allMonthlyChecked} onChange={toggleAllMonthly}
+                        className="w-4 h-4 rounded accent-blue-600 cursor-pointer" />
+                    </div>
+                  </th>
                   <th className="px-4 py-3 text-left">コード</th>
                   <th className="px-4 py-3 text-left">顧客名</th>
                   <th className="px-4 py-3 text-left">法個</th>
