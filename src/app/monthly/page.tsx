@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { MonthlyProgress, Client } from '@/lib/types'
-import { Search, X } from 'lucide-react'
+import { MonthlyProgress, Client, TaxSchedule } from '@/lib/types'
+import { Search, X, RefreshCw } from 'lucide-react'
 
 const MONTHS = ['1','2','3','4','5','6','7','8','9','10','11','12']
 const MONTHLY_FIELDS = [
@@ -71,6 +71,12 @@ export default function MonthlyPage() {
   const [settleModal, setSettleModal] = useState<Client | null>(null)
   const [settleForm, setSettleForm] = useState<Record<string, string>>({})
 
+  const [taxSubTab, setTaxSubTab] = useState<'予定納税' | '消費税・中間'>('予定納税')
+  const [taxSchedules, setTaxSchedules] = useState<TaxSchedule[]>([])
+  const [scheduleMonth, setScheduleMonth] = useState(new Date().getMonth() + 1)
+  const [scheduleInfo, setScheduleInfo] = useState<{ deadline: string | null; imported_at: string | null } | null>(null)
+  const [importing, setImporting] = useState(false)
+
   useEffect(() => { load() }, [year])
 
   async function load() {
@@ -85,6 +91,36 @@ export default function MonthlyPage() {
     for (const p of (progressData || [])) map[p.client_code] = p
     setProgressMap(map)
     setLoading(false)
+  }
+
+  useEffect(() => {
+    if (activeTab === '税務情報') loadTaxSchedules()
+  }, [activeTab, year, scheduleMonth])
+
+  async function loadTaxSchedules() {
+    const supabase = createClient()
+    const { data } = await supabase.from('tax_schedules')
+      .select('*').eq('year', year).eq('month', scheduleMonth).order('client_name')
+    setTaxSchedules(data || [])
+    if (data && data.length > 0) {
+      setScheduleInfo({ deadline: data[0].deadline, imported_at: data[0].imported_at })
+    } else {
+      setScheduleInfo(null)
+    }
+  }
+
+  async function importFromSheet() {
+    setImporting(true)
+    try {
+      const res = await fetch('/api/tax-schedules/import', { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) { alert('読み込みエラー: ' + json.error); return }
+      setScheduleMonth(json.month)
+      await loadTaxSchedules()
+      alert(`${json.year}年${json.month}月分 ${json.count}件を読み込みました\n納付期限: ${json.deadline || '不明'}`)
+    } finally {
+      setImporting(false)
+    }
   }
 
   function prog(code: string): MonthlyProgress | null { return progressMap[code] || null }
@@ -319,60 +355,153 @@ export default function MonthlyPage() {
 
       {/* ===== 税務情報 Tab ===== */}
       {activeTab === '税務情報' && (
-        <div className={tableContainer} style={containerStyle}>
-          <table className="min-w-full border-collapse" style={{ fontSize: '11px' }}>
-            <thead>
-              <tr className={`${H1} text-white`}>
-                <th className={`sticky left-0 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-20`}>顧客コード</th>
-                <th className={`sticky left-20 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600`}>顧客名</th>
-                <th className={thH1}>決算月</th>
-                <th className={`${thH1} border-l border-purple-600`}>{prevYear}<br/>消費税</th>
-                <th className={thH1}>{year}<br/>消費税</th>
-                <th className={`${thH1} border-l border-purple-600`}>{prevYear}期<br/>法人税中間有無</th>
-                <th className={thH1}>{prevYear}期<br/>法人税中間</th>
-                <th className={thH1}>{year}期<br/>法人税中間有無</th>
-                <th className={thH1}>{year}期<br/>法人税中間</th>
-                <th className={`${thH1} border-l border-purple-600`}>{prevYear}期<br/>消費税中間有無</th>
-                <th className={thH1}>{prevYear}期<br/>消費税中間①</th>
-                <th className={thH1}>{prevYear}期<br/>消費税中間②</th>
-                <th className={thH1}>{prevYear}期<br/>消費税中間③</th>
-                <th className={`${thH1} border-l border-purple-600`}>{year}期<br/>消費税中間有無</th>
-                <th className={thH1}>{year}期<br/>消費税中間①</th>
-                <th className={thH1}>{year}期<br/>消費税中間②</th>
-                <th className={thH1}>{year}期<br/>消費税中間③</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                <tr><td colSpan={17} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
-              ) : filtered.map((c, ri) => {
-                const p = prog(c.code)
-                const even = ri % 2 === 0
-                return (
-                  <tr key={c.id} onClick={() => openTaxModal(c)}
-                    className={`cursor-pointer hover:bg-blue-50 ${even ? 'bg-white' : 'bg-gray-50'}`}>
-                    <td className={stickyCode(even)}>{c.code}</td>
-                    <td className={stickyName(even)}>{c.name}</td>
-                    <td className={td}>{c.fiscal_month === 0 ? '個人' : c.fiscal_month ? `${c.fiscal_month}月` : '-'}</td>
-                    <td className={`${td} border-l border-gray-100`}>{p?.prev_consumption_tax || c.consumption_tax || ''}</td>
-                    <td className={td}>{p?.consumption_tax || c.consumption_tax || ''}</td>
-                    <td className={`${td} border-l border-gray-100`}>{p?.prev_corp_interim_exists || ''}</td>
-                    <td className={td}>{p?.prev_corp_interim_date || ''}</td>
-                    <td className={td}>{p?.corp_interim_exists || ''}</td>
-                    <td className={td}>{p?.corp_interim_date || ''}</td>
-                    <td className={`${td} border-l border-gray-100`}>{p?.prev_con_interim_exists || ''}</td>
-                    <td className={td}>{p?.prev_con_interim_1 || ''}</td>
-                    <td className={td}>{p?.prev_con_interim_2 || ''}</td>
-                    <td className={td}>{p?.prev_con_interim_3 || ''}</td>
-                    <td className={`${td} border-l border-gray-100`}>{p?.con_interim_exists || ''}</td>
-                    <td className={td}>{p?.con_interim_1 || ''}</td>
-                    <td className={td}>{p?.con_interim_2 || ''}</td>
-                    <td className={td}>{p?.con_interim_3 || ''}</td>
+        <div>
+          {/* サブタブ */}
+          <div className="flex gap-1 mb-3">
+            {(['予定納税', '消費税・中間'] as const).map(t => (
+              <button key={t} onClick={() => setTaxSubTab(t)}
+                className={`px-4 py-1.5 text-xs font-medium rounded-full border transition ${
+                  taxSubTab === t ? 'bg-purple-700 text-white border-purple-700' : 'bg-white text-gray-500 border-gray-300 hover:border-purple-400'
+                }`}>
+                {t}
+              </button>
+            ))}
+          </div>
+
+          {/* 予定納税サブタブ */}
+          {taxSubTab === '予定納税' && (
+            <div>
+              <div className="flex items-center gap-3 mb-3 flex-wrap">
+                <select value={scheduleMonth} onChange={e => setScheduleMonth(Number(e.target.value))}
+                  className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <option key={i + 1} value={i + 1}>{i + 1}月</option>
+                  ))}
+                </select>
+                <button onClick={importFromSheet} disabled={importing}
+                  className="flex items-center gap-1.5 bg-purple-700 hover:bg-purple-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
+                  <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
+                  {importing ? '読み込み中...' : 'スプレッドシートから読み込む'}
+                </button>
+                {scheduleInfo && (
+                  <span className="text-xs text-gray-500">
+                    納付期限: <span className="font-medium text-red-600">{scheduleInfo.deadline || '—'}</span>
+                    　最終読み込み: {new Date(scheduleInfo.imported_at!).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}
+                  </span>
+                )}
+                {taxSchedules.length > 0 && (
+                  <span className="text-xs text-gray-400">{taxSchedules.length}件</span>
+                )}
+              </div>
+
+              <div className={tableContainer} style={containerStyle}>
+                <table className="min-w-full border-collapse" style={{ fontSize: '11px' }}>
+                  <thead>
+                    <tr className={`${H1} text-white`}>
+                      <th className={`sticky left-0 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44`}>顧客名</th>
+                      <th className={thH1}>税目</th>
+                      <th className={thH1}>納付額</th>
+                      <th className={thH1}>回数</th>
+                      <th className={`${thH1} text-red-200`}>期限</th>
+                      <th className={thH1}>納付方法</th>
+                      <th className={thH1}>送付日・申告日</th>
+                      <th className={thH1}>納付日</th>
+                      <th className={thH1}>確認</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {taxSchedules.length === 0 ? (
+                      <tr><td colSpan={9} className="text-center py-10 text-gray-400">
+                        {importing ? '読み込み中...' : '「スプレッドシートから読み込む」ボタンでデータを取得してください'}
+                      </td></tr>
+                    ) : taxSchedules
+                        .filter(s => !search || s.client_name.includes(search))
+                        .map((s, ri) => {
+                          const even = ri % 2 === 0
+                          return (
+                            <tr key={s.id} className={even ? 'bg-white' : 'bg-gray-50'}>
+                              <td className={`sticky left-0 z-10 ${even ? 'bg-white' : 'bg-gray-50'} px-3 py-2 font-medium text-gray-800 text-[11px] whitespace-nowrap border-r border-gray-200`}>
+                                {s.client_name}
+                                {s.matched_client_code && (
+                                  <span className="ml-1 text-purple-500 text-[10px]">[{s.matched_client_code}]</span>
+                                )}
+                              </td>
+                              <td className={td}>{s.tax_type || ''}</td>
+                              <td className="px-2 py-2 text-right text-gray-800 text-[11px] font-medium tabular-nums">{s.amount || ''}</td>
+                              <td className={td}>{s.installment || ''}</td>
+                              <td className="px-2 py-2 text-center text-red-600 font-medium text-[11px]">{s.deadline || ''}</td>
+                              <td className={td}>{s.payment_method || ''}</td>
+                              <td className={td}>{s.send_date || ''}</td>
+                              <td className={td}>{s.payment_date || ''}</td>
+                              <td className={`${td} ${s.confirmation ? 'text-green-600 font-medium' : ''}`}>{s.confirmation || ''}</td>
+                            </tr>
+                          )
+                        })
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* 消費税・中間サブタブ */}
+          {taxSubTab === '消費税・中間' && (
+            <div className={tableContainer} style={containerStyle}>
+              <table className="min-w-full border-collapse" style={{ fontSize: '11px' }}>
+                <thead>
+                  <tr className={`${H1} text-white`}>
+                    <th className={`sticky left-0 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-20`}>顧客コード</th>
+                    <th className={`sticky left-20 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600`}>顧客名</th>
+                    <th className={thH1}>決算月</th>
+                    <th className={`${thH1} border-l border-purple-600`}>{prevYear}<br/>消費税</th>
+                    <th className={thH1}>{year}<br/>消費税</th>
+                    <th className={`${thH1} border-l border-purple-600`}>{prevYear}期<br/>法人税中間有無</th>
+                    <th className={thH1}>{prevYear}期<br/>法人税中間</th>
+                    <th className={thH1}>{year}期<br/>法人税中間有無</th>
+                    <th className={thH1}>{year}期<br/>法人税中間</th>
+                    <th className={`${thH1} border-l border-purple-600`}>{prevYear}期<br/>消費税中間有無</th>
+                    <th className={thH1}>{prevYear}期<br/>消費税中間①</th>
+                    <th className={thH1}>{prevYear}期<br/>消費税中間②</th>
+                    <th className={thH1}>{prevYear}期<br/>消費税中間③</th>
+                    <th className={`${thH1} border-l border-purple-600`}>{year}期<br/>消費税中間有無</th>
+                    <th className={thH1}>{year}期<br/>消費税中間①</th>
+                    <th className={thH1}>{year}期<br/>消費税中間②</th>
+                    <th className={thH1}>{year}期<br/>消費税中間③</th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {loading ? (
+                    <tr><td colSpan={17} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
+                  ) : filtered.map((c, ri) => {
+                    const p = prog(c.code)
+                    const even = ri % 2 === 0
+                    return (
+                      <tr key={c.id} onClick={() => openTaxModal(c)}
+                        className={`cursor-pointer hover:bg-blue-50 ${even ? 'bg-white' : 'bg-gray-50'}`}>
+                        <td className={stickyCode(even)}>{c.code}</td>
+                        <td className={stickyName(even)}>{c.name}</td>
+                        <td className={td}>{c.fiscal_month === 0 ? '個人' : c.fiscal_month ? `${c.fiscal_month}月` : '-'}</td>
+                        <td className={`${td} border-l border-gray-100`}>{p?.prev_consumption_tax || c.consumption_tax || ''}</td>
+                        <td className={td}>{p?.consumption_tax || c.consumption_tax || ''}</td>
+                        <td className={`${td} border-l border-gray-100`}>{p?.prev_corp_interim_exists || ''}</td>
+                        <td className={td}>{p?.prev_corp_interim_date || ''}</td>
+                        <td className={td}>{p?.corp_interim_exists || ''}</td>
+                        <td className={td}>{p?.corp_interim_date || ''}</td>
+                        <td className={`${td} border-l border-gray-100`}>{p?.prev_con_interim_exists || ''}</td>
+                        <td className={td}>{p?.prev_con_interim_1 || ''}</td>
+                        <td className={td}>{p?.prev_con_interim_2 || ''}</td>
+                        <td className={td}>{p?.prev_con_interim_3 || ''}</td>
+                        <td className={`${td} border-l border-gray-100`}>{p?.con_interim_exists || ''}</td>
+                        <td className={td}>{p?.con_interim_1 || ''}</td>
+                        <td className={td}>{p?.con_interim_2 || ''}</td>
+                        <td className={td}>{p?.con_interim_3 || ''}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

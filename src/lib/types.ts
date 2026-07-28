@@ -173,6 +173,24 @@ export interface Schedule {
   created_at: string
 }
 
+export interface TaxSchedule {
+  id: string
+  client_id: string | null
+  client_name: string
+  matched_client_code: string | null
+  year: number
+  month: number
+  deadline: string | null
+  tax_type: string | null
+  amount: string | null
+  installment: string | null
+  payment_method: string | null
+  send_date: string | null
+  payment_date: string | null
+  confirmation: string | null
+  imported_at: string
+}
+
 export interface User {
   id: string
   name: string
