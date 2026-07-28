@@ -151,6 +151,17 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
         <div className="max-w-4xl space-y-6">
           {/* 顧客情報 */}
           <Section title="顧客情報">
+            <div className="mb-4">
+              <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+                <input
+                  type="checkbox"
+                  checked={!!form.show_in_monthly}
+                  onChange={e => set('show_in_monthly', e.target.checked)}
+                  className="w-4 h-4 rounded accent-blue-600"
+                />
+                <span className="text-sm font-medium text-blue-700">月次進捗表に表示する</span>
+              </label>
+            </div>
             <div className="grid grid-cols-4 gap-4">
               <F label="顧客コード">
                 <input className={ic} value={form.code || ''} onChange={e => set('code', e.target.value)} />

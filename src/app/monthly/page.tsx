@@ -77,7 +77,7 @@ export default function MonthlyPage() {
     setLoading(true)
     const supabase = createClient()
     const [{ data: clientsData }, { data: progressData }] = await Promise.all([
-      supabase.from('clients').select('*').is('contract_end_date', null).order('code'),
+      supabase.from('clients').select('*').is('contract_end_date', null).eq('show_in_monthly', true).order('code'),
       supabase.from('monthly_progress').select('*').eq('year', year),
     ])
     setClients(clientsData || [])

@@ -59,6 +59,7 @@ export interface Client {
   directors: Director[]
   documents: ClientDocument[]
   exclude_productivity: string | null
+  show_in_monthly: boolean
   // 担当スタッフ
   primary_staff: string | null
   sub_staff: string | null
