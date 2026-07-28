@@ -6,14 +6,15 @@ import { createClient } from '@/lib/supabase'
 import { Users, ClipboardList, FileText, Calendar, Plus } from 'lucide-react'
 
 interface Stats {
-  totalClients: number
+  corporateCount: number
+  individualCount: number
   todaySchedules: number
   unreadReports: number
   monthlyCount: number
 }
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<Stats>({ totalClients: 0, todaySchedules: 0, unreadReports: 0, monthlyCount: 0 })
+  const [stats, setStats] = useState<Stats>({ corporateCount: 0, individualCount: 0, todaySchedules: 0, unreadReports: 0, monthlyCount: 0 })
   const [recentReports, setRecentReports] = useState<{ id: string; date: string; user_name: string; unread_check: string }[]>([])
   const [todayScheduleList, setTodayScheduleList] = useState<{ id: string; title: string; start_datetime: string; user_name: string }[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,14 +27,14 @@ export default function DashboardPage() {
     const currentYear = new Date().getFullYear()
 
     const [
-      { count: clientCount },
+      { data: activeClients },
       { count: scheduleCount },
       { count: unreadCount },
       { count: monthlyCount },
       { data: reports },
       { data: schedules },
     ] = await Promise.all([
-      supabase.from('clients').select('*', { count: 'exact', head: true }),
+      supabase.from('clients').select('entity_type').is('contract_end_date', null),
       supabase.from('schedules').select('*', { count: 'exact', head: true })
         .gte('start_datetime', today + 'T00:00:00')
         .lte('start_datetime', today + 'T23:59:59'),
@@ -45,8 +46,12 @@ export default function DashboardPage() {
         .order('start_datetime').limit(5),
     ])
 
+    const corporateCount = (activeClients || []).filter(c => c.entity_type !== '個人').length
+    const individualCount = (activeClients || []).filter(c => c.entity_type === '個人').length
+
     setStats({
-      totalClients: clientCount || 0,
+      corporateCount,
+      individualCount,
       todaySchedules: scheduleCount || 0,
       unreadReports: unreadCount || 0,
       monthlyCount: monthlyCount || 0,
@@ -57,7 +62,6 @@ export default function DashboardPage() {
   }
 
   const statCards = [
-    { label: '顧客数', value: stats.totalClients, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', href: '/clients' },
     { label: '今日の予定', value: stats.todaySchedules, icon: Calendar, color: 'text-purple-600', bg: 'bg-purple-50', href: '/schedules' },
     { label: '未読日報', value: stats.unreadReports, icon: FileText, color: 'text-red-500', bg: 'bg-red-50', href: '/daily-reports' },
     { label: '今年度の進捗記録', value: stats.monthlyCount, icon: ClipboardList, color: 'text-green-600', bg: 'bg-green-50', href: '/monthly' },
@@ -68,6 +72,18 @@ export default function DashboardPage() {
       <h1 className="text-2xl font-bold text-gray-800 mb-6">ダッシュボード</h1>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <Link href="/clients" className="bg-blue-50 rounded-xl p-5 hover:opacity-90 transition">
+          <Users className="text-blue-600 mb-3" size={24} />
+          {loading ? (
+            <div className="text-3xl font-bold text-gray-800">-</div>
+          ) : (
+            <div className="space-y-0.5">
+              <div className="text-xl font-bold text-gray-800">法人 <span className="text-2xl">{stats.corporateCount}</span>社</div>
+              <div className="text-xl font-bold text-gray-800">個人 <span className="text-2xl">{stats.individualCount}</span>人</div>
+            </div>
+          )}
+          <div className="text-sm text-gray-500 mt-1">顧客数</div>
+        </Link>
         {statCards.map(({ label, value, icon: Icon, color, bg, href }) => (
           <Link key={label} href={href} className={`${bg} rounded-xl p-5 hover:opacity-90 transition`}>
             <Icon className={`${color} mb-3`} size={24} />
