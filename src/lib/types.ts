@@ -88,6 +88,7 @@ export interface MonthlyProgress {
   monthly_material: Record<string, string | null>
   monthly_completion: Record<string, string | null>
   monthly_report: Record<string, string | null>
+  monthly_fee: Record<string, string | null>
   ledger_status: string | null
   report_status: string | null
   consumption_tax_filed: string | null

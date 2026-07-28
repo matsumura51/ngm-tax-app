@@ -7,15 +7,15 @@ import { Search, X } from 'lucide-react'
 
 const MONTHS = ['1','2','3','4','5','6','7','8','9','10','11','12']
 const MONTHLY_FIELDS = [
-  { key: 'monthly_contact',    label: '連絡' },
-  { key: 'monthly_material',   label: '資料収集' },
-  { key: 'monthly_input',      label: '入力' },
-  { key: 'monthly_completion', label: '月次完成' },
-  { key: 'monthly_report',     label: '報告' },
+  { key: 'monthly_contact',    label: '連絡',    type: 'date' },
+  { key: 'monthly_material',   label: '資料収集', type: 'date' },
+  { key: 'monthly_input',      label: '入力',    type: 'date' },
+  { key: 'monthly_completion', label: '月次完成', type: 'date' },
+  { key: 'monthly_report',     label: '報告',    type: 'date' },
+  { key: 'monthly_fee',        label: '報酬',    type: 'text' },
 ]
 const CON_TAX_OPTIONS = ['本則', '簡易', '免税', '2割特例']
 const EXISTS_OPTIONS = ['', '有り', '無し']
-
 type ActiveTab = '月次進捗' | '税務情報' | '決算業務'
 
 function fmtDate(s: string | null | undefined): string {
@@ -43,6 +43,12 @@ const SETTLE_FIELDS = [
   { key: 'director_change',           label: '役員変更' },
 ]
 
+// ヘッダー背景色
+const H1 = 'bg-[#5c3ea8]'
+const H2 = 'bg-[#7b52c4]'
+// スティッキー高さ: 1行目 py-2 + 11px font ≈ 32px
+const TOP2 = 'top-8'
+
 export default function MonthlyPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [progressMap, setProgressMap] = useState<Record<string, MonthlyProgress>>({})
@@ -52,15 +58,10 @@ export default function MonthlyPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('月次進捗')
   const [saving, setSaving] = useState(false)
 
-  // Monthly modal
   const [monthModal, setMonthModal] = useState<{ client: Client; month: number } | null>(null)
   const [monthDates, setMonthDates] = useState<Record<string, string>>({})
-
-  // Tax modal
   const [taxModal, setTaxModal] = useState<Client | null>(null)
   const [taxForm, setTaxForm] = useState<Record<string, string>>({})
-
-  // Settlement modal
   const [settleModal, setSettleModal] = useState<Client | null>(null)
   const [settleForm, setSettleForm] = useState<Record<string, string>>({})
 
@@ -96,7 +97,6 @@ export default function MonthlyPage() {
     return null
   }
 
-  // --- Monthly modal ---
   function openMonthModal(client: Client, month: number) {
     const p = prog(client.code)
     const dates: Record<string, string> = {}
@@ -127,24 +127,23 @@ export default function MonthlyPage() {
     setMonthModal(null)
   }
 
-  // --- Tax modal ---
   function openTaxModal(client: Client) {
     const p = prog(client.code)
     setTaxForm({
-      prev_consumption_tax:    p?.prev_consumption_tax    || client.consumption_tax || '',
-      consumption_tax:         p?.consumption_tax         || client.consumption_tax || '',
+      prev_consumption_tax:     p?.prev_consumption_tax     || client.consumption_tax || '',
+      consumption_tax:          p?.consumption_tax          || client.consumption_tax || '',
       prev_corp_interim_exists: p?.prev_corp_interim_exists || '',
-      prev_corp_interim_date:  p?.prev_corp_interim_date  || '',
-      corp_interim_exists:     p?.corp_interim_exists     || '',
-      corp_interim_date:       p?.corp_interim_date       || '',
-      prev_con_interim_exists: p?.prev_con_interim_exists || '',
-      prev_con_interim_1:      p?.prev_con_interim_1      || '',
-      prev_con_interim_2:      p?.prev_con_interim_2      || '',
-      prev_con_interim_3:      p?.prev_con_interim_3      || '',
-      con_interim_exists:      p?.con_interim_exists      || '',
-      con_interim_1:           p?.con_interim_1           || '',
-      con_interim_2:           p?.con_interim_2           || '',
-      con_interim_3:           p?.con_interim_3           || '',
+      prev_corp_interim_date:   p?.prev_corp_interim_date   || '',
+      corp_interim_exists:      p?.corp_interim_exists      || '',
+      corp_interim_date:        p?.corp_interim_date        || '',
+      prev_con_interim_exists:  p?.prev_con_interim_exists  || '',
+      prev_con_interim_1:       p?.prev_con_interim_1       || '',
+      prev_con_interim_2:       p?.prev_con_interim_2       || '',
+      prev_con_interim_3:       p?.prev_con_interim_3       || '',
+      con_interim_exists:       p?.con_interim_exists       || '',
+      con_interim_1:            p?.con_interim_1            || '',
+      con_interim_2:            p?.con_interim_2            || '',
+      con_interim_3:            p?.con_interim_3            || '',
     })
     setTaxModal(client)
   }
@@ -164,13 +163,10 @@ export default function MonthlyPage() {
     setTaxModal(null)
   }
 
-  // --- Settlement modal ---
   function openSettleModal(client: Client) {
     const p = prog(client.code)
     const form: Record<string, string> = {}
-    for (const f of SETTLE_FIELDS) {
-      form[f.key] = (p?.[f.key as keyof MonthlyProgress] as string | null) || ''
-    }
+    for (const f of SETTLE_FIELDS) form[f.key] = (p?.[f.key as keyof MonthlyProgress] as string | null) || ''
     setSettleForm(form)
     setSettleModal(client)
   }
@@ -194,21 +190,31 @@ export default function MonthlyPage() {
   const currentMonth = new Date().getMonth() + 1
   const prevYear = year - 1
 
-  function getMonthVal(code: string, field: string, month: string): string {
+  function getMonthVal(code: string, field: string, month: string, isDate: boolean): string {
     const p = prog(code)
     if (!p) return ''
     const obj = p[field as keyof MonthlyProgress] as Record<string, string | null> | undefined
-    return fmtDate(obj?.[month])
+    const v = obj?.[month] || ''
+    return isDate ? fmtDate(v) : v
   }
 
-  const thBase = 'px-2 py-2 text-center whitespace-nowrap font-medium'
-  const tdBase = 'px-2 py-2 text-center text-gray-700 text-xs'
-  const stickyCode = (even: boolean) => `sticky left-0 z-10 px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap border-r border-gray-200 ${even ? 'bg-white' : 'bg-gray-50'}`
-  const stickyName = (even: boolean) => `sticky left-20 z-10 px-3 py-2 font-medium text-xs text-gray-800 whitespace-nowrap border-r border-gray-200 max-w-[180px] truncate ${even ? 'bg-white' : 'bg-gray-50'}`
+  // 共通スティッキーセルスタイル
+  const thH1 = `sticky top-0 z-30 ${H1} text-white text-center whitespace-nowrap px-2 py-2 font-medium`
+  const thH2 = `sticky ${TOP2} z-30 ${H2} text-white text-center whitespace-nowrap px-1 py-1.5 font-normal`
+  const td = 'px-2 py-2 text-center text-gray-700 text-[11px]'
+
+  function stickyCode(even: boolean) {
+    return `sticky left-0 top-0 z-40 ${even ? 'bg-white' : 'bg-gray-50'} px-3 py-2 font-mono text-[11px] text-gray-600 whitespace-nowrap border-r border-gray-200`
+  }
+  function stickyName(even: boolean) {
+    return `sticky left-20 top-0 z-40 ${even ? 'bg-white' : 'bg-gray-50'} px-3 py-2 font-medium text-[11px] text-gray-800 whitespace-nowrap border-r border-gray-200 max-w-[180px] truncate`
+  }
+
+  const tableContainer = 'bg-white rounded-xl shadow overflow-x-auto'
+  const containerStyle = { maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' as const }
 
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex items-center gap-4 mb-5">
         <h1 className="text-2xl font-bold text-gray-800">月次進捗表</h1>
         <select value={year} onChange={e => setYear(Number(e.target.value))}
@@ -226,14 +232,11 @@ export default function MonthlyPage() {
         <span className="text-sm text-gray-500">{filtered.length}件</span>
       </div>
 
-      {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-4 gap-1">
         {(['月次進捗', '税務情報', '決算業務'] as ActiveTab[]).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className={`px-5 py-2.5 text-sm font-medium rounded-t-lg border-b-2 transition ${
-              activeTab === tab
-                ? 'border-blue-600 text-blue-600 bg-blue-50'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+              activeTab === tab ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}>
             {tab}
           </button>
@@ -242,26 +245,30 @@ export default function MonthlyPage() {
 
       {/* ===== 月次進捗 Tab ===== */}
       {activeTab === '月次進捗' && (
-        <div className="bg-white rounded-xl shadow overflow-x-auto">
+        <div className={tableContainer} style={containerStyle}>
           <table className="min-w-full border-collapse" style={{ fontSize: '11px' }}>
             <thead>
-              <tr className="bg-[#5c3ea8] text-white">
-                <th className="sticky left-0 z-20 bg-[#5c3ea8] px-3 py-2 text-left whitespace-nowrap w-20" rowSpan={2}>顧客コード</th>
-                <th className="sticky left-20 z-20 bg-[#5c3ea8] px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600" rowSpan={2}>顧客名</th>
+              {/* Row 1: 固定情報 + 月グループ */}
+              <tr className={`${H1} text-white`}>
+                <th className={`sticky left-0 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-20`} rowSpan={2}>顧客コード</th>
+                <th className={`sticky left-20 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600`} rowSpan={2}>顧客名</th>
+                <th className={`${thH1} w-14`} rowSpan={2}>決算月</th>
+                <th className={`${thH1} w-24`} rowSpan={2}>業種</th>
+                <th className={`${thH1} w-20`} rowSpan={2}>主担当</th>
+                <th className={`${thH1} w-14 border-r border-purple-600`} rowSpan={2}>消費税</th>
                 {MONTHS.map(m => (
-                  <th key={m} colSpan={5}
-                    className={`${thBase} border-l border-purple-600 ${String(currentMonth) === m ? 'bg-[#8b2252]' : ''}`}>
+                  <th key={m} colSpan={6}
+                    className={`${thH1} border-l border-purple-600 ${String(currentMonth) === m ? '!bg-[#8b2252]' : ''}`}>
                     {m}月分
                   </th>
                 ))}
               </tr>
-              <tr className="bg-[#7b52c4] text-white">
+              {/* Row 2: 各月の項目名 */}
+              <tr className={`${H2} text-white`}>
                 {MONTHS.map(m => (
                   MONTHLY_FIELDS.map(f => (
                     <th key={`${m}-${f.key}`}
-                      className={`px-1 py-1.5 text-center whitespace-nowrap font-normal border-l border-purple-500 min-w-[3rem] ${
-                        String(currentMonth) === m ? 'bg-[#a03268]' : ''
-                      }`}>
+                      className={`${thH2} min-w-[3rem] border-l border-purple-500 ${String(currentMonth) === m ? '!bg-[#a03268]' : ''}`}>
                       {f.label}
                     </th>
                   ))
@@ -270,28 +277,37 @@ export default function MonthlyPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={62} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
-              ) : filtered.map((c, ri) => (
-                <tr key={c.id} className={ri % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                  <td className={stickyCode(ri % 2 === 0)}>{c.code}</td>
-                  <td className={stickyName(ri % 2 === 0)}>{c.name}</td>
-                  {MONTHS.map(m => (
-                    MONTHLY_FIELDS.map((f, fi) => {
-                      const val = getMonthVal(c.code, f.key, m)
-                      const isCur = String(currentMonth) === m
-                      return (
-                        <td key={`${m}-${f.key}`}
-                          onClick={() => openMonthModal(c, parseInt(m))}
-                          className={`px-1 py-2 text-center cursor-pointer hover:bg-blue-50 transition text-gray-700 ${
-                            fi === 0 ? 'border-l border-gray-200' : ''
-                          } ${isCur ? 'bg-pink-50' : ''}`}>
-                          {val}
-                        </td>
-                      )
-                    })
-                  ))}
-                </tr>
-              ))}
+                <tr><td colSpan={78} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
+              ) : filtered.map((c, ri) => {
+                const even = ri % 2 === 0
+                const p = prog(c.code)
+                return (
+                  <tr key={c.id} className={even ? 'bg-white' : 'bg-gray-50'}>
+                    <td className={stickyCode(even)}>{c.code}</td>
+                    <td className={stickyName(even)}>{c.name}</td>
+                    <td className={td}>{c.fiscal_month === 0 ? '個人' : c.fiscal_month ? `${c.fiscal_month}月` : '-'}</td>
+                    <td className={td}>{c.industry || '-'}</td>
+                    <td className={td}>{c.primary_staff || p?.primary_staff || '-'}</td>
+                    <td className={`${td} border-r border-gray-200`}>{c.consumption_tax || '-'}</td>
+                    {MONTHS.map(m => (
+                      MONTHLY_FIELDS.map((f, fi) => {
+                        const val = getMonthVal(c.code, f.key, m, f.type === 'date')
+                        const isCur = String(currentMonth) === m
+                        const isFee = f.key === 'monthly_fee'
+                        return (
+                          <td key={`${m}-${f.key}`}
+                            onClick={() => openMonthModal(c, parseInt(m))}
+                            className={`px-1 py-2 text-center cursor-pointer hover:bg-blue-50 transition text-[11px] ${
+                              fi === 0 ? 'border-l border-gray-200' : ''
+                            } ${isCur ? 'bg-pink-50' : ''} ${isFee && val ? 'text-green-700 font-medium' : 'text-gray-700'}`}>
+                            {val}
+                          </td>
+                        )
+                      })
+                    ))}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -299,28 +315,28 @@ export default function MonthlyPage() {
 
       {/* ===== 税務情報 Tab ===== */}
       {activeTab === '税務情報' && (
-        <div className="bg-white rounded-xl shadow overflow-x-auto">
+        <div className={tableContainer} style={containerStyle}>
           <table className="min-w-full border-collapse" style={{ fontSize: '11px' }}>
             <thead>
-              <tr className="bg-[#5c3ea8] text-white">
-                <th className="sticky left-0 z-20 bg-[#5c3ea8] px-3 py-2 text-left whitespace-nowrap w-20">顧客コード</th>
-                <th className="sticky left-20 z-20 bg-[#5c3ea8] px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600">顧客名</th>
-                <th className={thBase}>決算月</th>
-                <th className={thBase}>業種</th>
-                <th className={`${thBase} border-l border-purple-600`}>{prevYear}<br/>消費税</th>
-                <th className={thBase}>{year}<br/>消費税</th>
-                <th className={`${thBase} border-l border-purple-600`}>{prevYear}期<br/>法人税中間有無</th>
-                <th className={thBase}>{prevYear}期<br/>法人税中間</th>
-                <th className={thBase}>{year}期<br/>法人税中間有無</th>
-                <th className={thBase}>{year}期<br/>法人税中間</th>
-                <th className={`${thBase} border-l border-purple-600`}>{prevYear}期<br/>消費税中間有無</th>
-                <th className={thBase}>{prevYear}期<br/>消費税中間①</th>
-                <th className={thBase}>{prevYear}期<br/>消費税中間②</th>
-                <th className={thBase}>{prevYear}期<br/>消費税中間③</th>
-                <th className={`${thBase} border-l border-purple-600`}>{year}期<br/>消費税中間有無</th>
-                <th className={thBase}>{year}期<br/>消費税中間①</th>
-                <th className={thBase}>{year}期<br/>消費税中間②</th>
-                <th className={thBase}>{year}期<br/>消費税中間③</th>
+              <tr className={`${H1} text-white`}>
+                <th className={`sticky left-0 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-20`}>顧客コード</th>
+                <th className={`sticky left-20 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600`}>顧客名</th>
+                <th className={thH1}>決算月</th>
+                <th className={thH1}>業種</th>
+                <th className={`${thH1} border-l border-purple-600`}>{prevYear}<br/>消費税</th>
+                <th className={thH1}>{year}<br/>消費税</th>
+                <th className={`${thH1} border-l border-purple-600`}>{prevYear}期<br/>法人税中間有無</th>
+                <th className={thH1}>{prevYear}期<br/>法人税中間</th>
+                <th className={thH1}>{year}期<br/>法人税中間有無</th>
+                <th className={thH1}>{year}期<br/>法人税中間</th>
+                <th className={`${thH1} border-l border-purple-600`}>{prevYear}期<br/>消費税中間有無</th>
+                <th className={thH1}>{prevYear}期<br/>消費税中間①</th>
+                <th className={thH1}>{prevYear}期<br/>消費税中間②</th>
+                <th className={thH1}>{prevYear}期<br/>消費税中間③</th>
+                <th className={`${thH1} border-l border-purple-600`}>{year}期<br/>消費税中間有無</th>
+                <th className={thH1}>{year}期<br/>消費税中間①</th>
+                <th className={thH1}>{year}期<br/>消費税中間②</th>
+                <th className={thH1}>{year}期<br/>消費税中間③</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -334,22 +350,22 @@ export default function MonthlyPage() {
                     className={`cursor-pointer hover:bg-blue-50 ${even ? 'bg-white' : 'bg-gray-50'}`}>
                     <td className={stickyCode(even)}>{c.code}</td>
                     <td className={stickyName(even)}>{c.name}</td>
-                    <td className={tdBase}>{c.fiscal_month === 0 ? '個人' : c.fiscal_month ? `${c.fiscal_month}月` : '-'}</td>
-                    <td className={tdBase}>{c.industry || '-'}</td>
-                    <td className={`${tdBase} border-l border-gray-100`}>{p?.prev_consumption_tax || c.consumption_tax || ''}</td>
-                    <td className={tdBase}>{p?.consumption_tax || c.consumption_tax || ''}</td>
-                    <td className={`${tdBase} border-l border-gray-100`}>{p?.prev_corp_interim_exists || ''}</td>
-                    <td className={tdBase}>{p?.prev_corp_interim_date || ''}</td>
-                    <td className={tdBase}>{p?.corp_interim_exists || ''}</td>
-                    <td className={tdBase}>{p?.corp_interim_date || ''}</td>
-                    <td className={`${tdBase} border-l border-gray-100`}>{p?.prev_con_interim_exists || ''}</td>
-                    <td className={tdBase}>{p?.prev_con_interim_1 || ''}</td>
-                    <td className={tdBase}>{p?.prev_con_interim_2 || ''}</td>
-                    <td className={tdBase}>{p?.prev_con_interim_3 || ''}</td>
-                    <td className={`${tdBase} border-l border-gray-100`}>{p?.con_interim_exists || ''}</td>
-                    <td className={tdBase}>{p?.con_interim_1 || ''}</td>
-                    <td className={tdBase}>{p?.con_interim_2 || ''}</td>
-                    <td className={tdBase}>{p?.con_interim_3 || ''}</td>
+                    <td className={td}>{c.fiscal_month === 0 ? '個人' : c.fiscal_month ? `${c.fiscal_month}月` : '-'}</td>
+                    <td className={td}>{c.industry || '-'}</td>
+                    <td className={`${td} border-l border-gray-100`}>{p?.prev_consumption_tax || c.consumption_tax || ''}</td>
+                    <td className={td}>{p?.consumption_tax || c.consumption_tax || ''}</td>
+                    <td className={`${td} border-l border-gray-100`}>{p?.prev_corp_interim_exists || ''}</td>
+                    <td className={td}>{p?.prev_corp_interim_date || ''}</td>
+                    <td className={td}>{p?.corp_interim_exists || ''}</td>
+                    <td className={td}>{p?.corp_interim_date || ''}</td>
+                    <td className={`${td} border-l border-gray-100`}>{p?.prev_con_interim_exists || ''}</td>
+                    <td className={td}>{p?.prev_con_interim_1 || ''}</td>
+                    <td className={td}>{p?.prev_con_interim_2 || ''}</td>
+                    <td className={td}>{p?.prev_con_interim_3 || ''}</td>
+                    <td className={`${td} border-l border-gray-100`}>{p?.con_interim_exists || ''}</td>
+                    <td className={td}>{p?.con_interim_1 || ''}</td>
+                    <td className={td}>{p?.con_interim_2 || ''}</td>
+                    <td className={td}>{p?.con_interim_3 || ''}</td>
                   </tr>
                 )
               })}
@@ -360,24 +376,24 @@ export default function MonthlyPage() {
 
       {/* ===== 決算業務 Tab ===== */}
       {activeTab === '決算業務' && (
-        <div className="bg-white rounded-xl shadow overflow-x-auto">
+        <div className={tableContainer} style={containerStyle}>
           <table className="min-w-full border-collapse" style={{ fontSize: '11px' }}>
             <thead>
-              <tr className="bg-[#5c3ea8] text-white">
-                <th className="sticky left-0 z-20 bg-[#5c3ea8] px-3 py-2 text-left whitespace-nowrap w-20">顧客コード</th>
-                <th className="sticky left-20 z-20 bg-[#5c3ea8] px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600">顧客名</th>
-                <th className={`${thBase} border-l border-purple-600`}>消費税判定</th>
-                <th className={thBase}>決算期<br/>お知らせ</th>
-                <th className={thBase}>資料収集</th>
-                <th className={thBase}>申告書作成</th>
-                <th className={thBase}>連絡</th>
-                <th className={thBase}>電子申告</th>
-                <th className={`${thBase} border-l border-purple-600`}>ダイレクト納付/<br/>納付書</th>
-                <th className={thBase}>総勘定元帳</th>
-                <th className={thBase}>決算報告書</th>
-                <th className={thBase}>消費税申告</th>
-                <th className={thBase}>請求書</th>
-                <th className={`${thBase} border-l border-purple-600`}>役員変更</th>
+              <tr className={`${H1} text-white`}>
+                <th className={`sticky left-0 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-20`}>顧客コード</th>
+                <th className={`sticky left-20 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600`}>顧客名</th>
+                <th className={`${thH1} border-l border-purple-600`}>消費税判定</th>
+                <th className={thH1}>決算期<br/>お知らせ</th>
+                <th className={thH1}>資料収集</th>
+                <th className={thH1}>申告書作成</th>
+                <th className={thH1}>連絡</th>
+                <th className={thH1}>電子申告</th>
+                <th className={`${thH1} border-l border-purple-600`}>ダイレクト納付/<br/>納付書</th>
+                <th className={thH1}>総勘定元帳</th>
+                <th className={thH1}>決算報告書</th>
+                <th className={thH1}>消費税申告</th>
+                <th className={thH1}>請求書</th>
+                <th className={`${thH1} border-l border-purple-600`}>役員変更</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -391,18 +407,18 @@ export default function MonthlyPage() {
                     className={`cursor-pointer hover:bg-blue-50 ${even ? 'bg-white' : 'bg-gray-50'}`}>
                     <td className={stickyCode(even)}>{c.code}</td>
                     <td className={stickyName(even)}>{c.name}</td>
-                    <td className={`${tdBase} border-l border-gray-100`}>{p?.settle_consumption_judged || ''}</td>
-                    <td className={tdBase}>{p?.settle_notice || ''}</td>
-                    <td className={tdBase}>{p?.settle_materials || ''}</td>
-                    <td className={tdBase}>{p?.settle_return_prepared || ''}</td>
-                    <td className={tdBase}>{p?.settle_contact || ''}</td>
-                    <td className={tdBase}>{p?.settle_filed || ''}</td>
-                    <td className={`${tdBase} border-l border-gray-100 whitespace-pre-line text-left`}>{p?.settle_payment || ''}</td>
-                    <td className={`${tdBase} whitespace-pre-line text-left`}>{p?.ledger_status || ''}</td>
-                    <td className={`${tdBase} whitespace-pre-line text-left`}>{p?.report_status || ''}</td>
-                    <td className={tdBase}>{p?.consumption_tax_filed || ''}</td>
-                    <td className={tdBase}>{p?.invoice_status || ''}</td>
-                    <td className={`${tdBase} border-l border-gray-100`}>{p?.director_change || ''}</td>
+                    <td className={`${td} border-l border-gray-100`}>{p?.settle_consumption_judged || ''}</td>
+                    <td className={td}>{p?.settle_notice || ''}</td>
+                    <td className={td}>{p?.settle_materials || ''}</td>
+                    <td className={td}>{p?.settle_return_prepared || ''}</td>
+                    <td className={td}>{p?.settle_contact || ''}</td>
+                    <td className={td}>{p?.settle_filed || ''}</td>
+                    <td className={`${td} border-l border-gray-100 text-left whitespace-pre-line`}>{p?.settle_payment || ''}</td>
+                    <td className={`${td} text-left whitespace-pre-line`}>{p?.ledger_status || ''}</td>
+                    <td className={`${td} text-left whitespace-pre-line`}>{p?.report_status || ''}</td>
+                    <td className={td}>{p?.consumption_tax_filed || ''}</td>
+                    <td className={td}>{p?.invoice_status || ''}</td>
+                    <td className={`${td} border-l border-gray-100`}>{p?.director_change || ''}</td>
                   </tr>
                 )
               })}
@@ -411,7 +427,7 @@ export default function MonthlyPage() {
         </div>
       )}
 
-      {/* ===== Monthly Modal ===== */}
+      {/* ===== 月次進捗 モーダル ===== */}
       {monthModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setMonthModal(null)}>
           <div className="bg-white rounded-xl shadow-xl p-6 w-80" onClick={e => e.stopPropagation()}>
@@ -426,9 +442,15 @@ export default function MonthlyPage() {
               {MONTHLY_FIELDS.map(f => (
                 <div key={f.key} className="flex items-center gap-3">
                   <label className="text-xs font-medium text-gray-500 w-16 shrink-0">{f.label}</label>
-                  <input type="date" value={monthDates[f.key] || ''}
-                    onChange={e => setMonthDates(d => ({ ...d, [f.key]: e.target.value }))}
-                    className={inp} />
+                  {f.type === 'date' ? (
+                    <input type="date" value={monthDates[f.key] || ''}
+                      onChange={e => setMonthDates(d => ({ ...d, [f.key]: e.target.value }))}
+                      className={inp} />
+                  ) : (
+                    <input type="text" value={monthDates[f.key] || ''}
+                      onChange={e => setMonthDates(d => ({ ...d, [f.key]: e.target.value }))}
+                      placeholder="例: 10,000" className={inp} />
+                  )}
                   {monthDates[f.key] && (
                     <button onClick={() => setMonthDates(d => ({ ...d, [f.key]: '' }))} className="text-gray-300 hover:text-gray-500 text-xs">✕</button>
                   )}
@@ -445,7 +467,7 @@ export default function MonthlyPage() {
         </div>
       )}
 
-      {/* ===== Tax Modal ===== */}
+      {/* ===== 税務情報 モーダル ===== */}
       {taxModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setTaxModal(null)}>
           <div className="bg-white rounded-xl shadow-xl p-6 w-[520px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -457,9 +479,8 @@ export default function MonthlyPage() {
               <button onClick={() => setTaxModal(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
             </div>
             <div className="space-y-5">
-              {/* 消費税 */}
               <div>
-                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 border-b pb-1">消費税</div>
+                <div className="text-xs font-semibold text-gray-500 mb-2 border-b pb-1">消費税</div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">{prevYear}消費税</label>
@@ -477,9 +498,8 @@ export default function MonthlyPage() {
                   </div>
                 </div>
               </div>
-              {/* 法人税中間 */}
               <div>
-                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 border-b pb-1">法人税中間</div>
+                <div className="text-xs font-semibold text-gray-500 mb-2 border-b pb-1">法人税中間</div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">{prevYear}期 有無</label>
@@ -503,9 +523,8 @@ export default function MonthlyPage() {
                   </div>
                 </div>
               </div>
-              {/* 消費税中間 */}
               <div>
-                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 border-b pb-1">消費税中間</div>
+                <div className="text-xs font-semibold text-gray-500 mb-2 border-b pb-1">消費税中間</div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">{prevYear}期 有無</label>
@@ -559,7 +578,7 @@ export default function MonthlyPage() {
         </div>
       )}
 
-      {/* ===== Settlement Modal ===== */}
+      {/* ===== 決算業務 モーダル ===== */}
       {settleModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSettleModal(null)}>
           <div className="bg-white rounded-xl shadow-xl p-6 w-[460px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
