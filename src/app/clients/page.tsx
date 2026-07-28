@@ -6,9 +6,18 @@ import { createClient } from '@/lib/supabase'
 import { Client } from '@/lib/types'
 import { Plus, Search, ChevronRight, Upload, Download } from 'lucide-react'
 
+const FISCAL_MONTHS = [
+  { value: '', label: 'すべて' },
+  { value: '0', label: '個人' },
+  ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}月` })),
+]
+
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [search, setSearch] = useState('')
+  const [staffFilter, setStaffFilter] = useState('')
+  const [fiscalFilter, setFiscalFilter] = useState('')
+  const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { load() }, [])
@@ -21,9 +30,16 @@ export default function ClientsPage() {
     setLoading(false)
   }
 
-  const filtered = clients.filter(c =>
-    c.name.includes(search) || c.code.includes(search)
-  )
+  const filtered = clients.filter(c => {
+    if (!showAll && c.contract_end_date) return false
+    if (search && !c.name.includes(search) && !c.code.includes(search)) return false
+    if (staffFilter && !(c.primary_staff || '').includes(staffFilter)) return false
+    if (fiscalFilter !== '') {
+      const fv = Number(fiscalFilter)
+      if (c.fiscal_month !== fv) return false
+    }
+    return true
+  })
 
   return (
     <div className="p-6">
@@ -51,15 +67,41 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      <div className="mb-4 relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+      <div className="mb-4 flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-48">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="顧客名・コードで検索"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
         <input
           type="text"
-          placeholder="顧客名・コードで検索"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="担当者で絞り込み"
+          value={staffFilter}
+          onChange={e => setStaffFilter(e.target.value)}
+          className="w-40 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+        <select
+          value={fiscalFilter}
+          onChange={e => setFiscalFilter(e.target.value)}
+          className="w-32 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          {FISCAL_MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+        </select>
+        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none whitespace-nowrap">
+          <input
+            type="checkbox"
+            checked={showAll}
+            onChange={e => setShowAll(e.target.checked)}
+            className="w-4 h-4 rounded"
+          />
+          契約終了を含む全て表示
+        </label>
+        <span className="text-xs text-gray-400">{filtered.length}件</span>
       </div>
 
       <div className="bg-white rounded-xl shadow overflow-hidden">
@@ -84,7 +126,11 @@ export default function ClientsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filtered.map(c => (
-                  <tr key={c.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => window.location.href = `/clients/${c.id}`}>
+                  <tr
+                    key={c.id}
+                    className={`hover:bg-gray-50 cursor-pointer ${c.contract_end_date ? 'opacity-50' : ''}`}
+                    onClick={() => window.location.href = `/clients/${c.id}`}
+                  >
                     <td className="px-4 py-3 font-mono text-gray-600">{c.code}</td>
                     <td className="px-4 py-3 font-medium text-gray-800">{c.name}</td>
                     <td className="px-4 py-3 text-gray-600">{c.entity_type || '-'}</td>
