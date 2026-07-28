@@ -25,6 +25,12 @@ function fmtDate(s: string | null | undefined): string {
   return s
 }
 
+function fmtFee(s: string | null | undefined): string {
+  if (!s) return ''
+  const n = parseInt(s.replace(/,/g, ''), 10)
+  return isNaN(n) ? '' : n.toLocaleString('ja-JP')
+}
+
 const inp = 'w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500'
 const sel = 'w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white'
 
@@ -195,7 +201,9 @@ export default function MonthlyPage() {
     if (!p) return ''
     const obj = p[field as keyof MonthlyProgress] as Record<string, string | null> | undefined
     const v = obj?.[month] || ''
-    return isDate ? fmtDate(v) : v
+    if (isDate) return fmtDate(v)
+    if (field === 'monthly_fee') return fmtFee(v)
+    return v
   }
 
   // 共通スティッキーセルスタイル
@@ -447,8 +455,12 @@ export default function MonthlyPage() {
                       onChange={e => setMonthDates(d => ({ ...d, [f.key]: e.target.value }))}
                       className={inp} />
                   ) : (
-                    <input type="text" value={monthDates[f.key] || ''}
-                      onChange={e => setMonthDates(d => ({ ...d, [f.key]: e.target.value }))}
+                    <input type="text" inputMode="numeric"
+                      value={fmtFee(monthDates[f.key])}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^0-9]/g, '')
+                        setMonthDates(d => ({ ...d, [f.key]: raw }))
+                      }}
                       placeholder="例: 10,000" className={inp} />
                   )}
                   {monthDates[f.key] && (
