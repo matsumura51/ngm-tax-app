@@ -156,5 +156,6 @@ export interface User {
   email: string | null
   role: string | null
   hire_date: string | null
+  leave_date: string | null
   division: string | null
 }

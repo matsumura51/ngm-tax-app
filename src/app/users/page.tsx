@@ -23,7 +23,7 @@ export default function UsersPage() {
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
-  const [form, setForm] = useState({ code: '', name: '', password: '', role: 'staff', department: '', hire_date: '', division: '' })
+  const [form, setForm] = useState({ code: '', name: '', password: '', role: 'staff', department: '', hire_date: '', leave_date: '', division: '' })
 
   useEffect(() => { checkAdminAndLoad() }, [])
 
@@ -74,7 +74,7 @@ export default function UsersPage() {
     }
 
     setShowModal(false)
-    setForm({ code: '', name: '', password: '', role: 'staff', department: '', hire_date: '', division: '' })
+    setForm({ code: '', name: '', password: '', role: 'staff', department: '', hire_date: '', leave_date: '', division: '' })
     await load()
     setSaving(false)
   }
@@ -162,6 +162,10 @@ export default function UsersPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">入社日</label>
                 <input type="date" className={inputClass} value={form.hire_date} onChange={e => set('hire_date', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">退社日</label>
+                <input type="date" className={inputClass} value={form.leave_date} onChange={e => set('leave_date', e.target.value)} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">部署</label>

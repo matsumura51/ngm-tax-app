@@ -14,7 +14,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params)
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
-  const [form, setForm] = useState({ name: '', code: '', department: '', role: 'staff', hire_date: '', division: '' })
+  const [form, setForm] = useState({ name: '', code: '', department: '', role: 'staff', hire_date: '', leave_date: '', division: '' })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -40,7 +40,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
     const { data } = await supabase.from('users').select('*').eq('id', id).single()
     if (data) {
       setUser(data)
-      setForm({ name: data.name || '', code: data.code || '', department: data.department || '', role: data.role || 'staff', hire_date: data.hire_date || '', division: data.division || '' })
+      setForm({ name: data.name || '', code: data.code || '', department: data.department || '', role: data.role || 'staff', hire_date: data.hire_date || '', leave_date: data.leave_date || '', division: data.division || '' })
     }
   }
 
@@ -53,6 +53,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
       department: form.department || null,
       role: form.role,
       hire_date: form.hire_date || null,
+      leave_date: form.leave_date || null,
       division: form.division || null,
     }).eq('id', id)
     if (error) alert('エラー: ' + error.message)
@@ -96,6 +97,10 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">入社日</label>
             <input type="date" className={inputClass} value={form.hire_date} onChange={e => setForm(f => ({ ...f, hire_date: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">退社日</label>
+            <input type="date" className={inputClass} value={form.leave_date} onChange={e => setForm(f => ({ ...f, leave_date: e.target.value }))} />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">部署</label>
