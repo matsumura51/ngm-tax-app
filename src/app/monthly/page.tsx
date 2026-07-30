@@ -112,12 +112,24 @@ export default function MonthlyPage() {
   async function importFromSheet() {
     setImporting(true)
     try {
-      const res = await fetch('/api/tax-schedules/import', { method: 'POST' })
+      // ブラウザからGoogleスプレッドシートのCSVを直接取得
+      const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc/gviz/tq?tqx=out:csv&gid=510339633'
+      const csvRes = await fetch(SHEET_URL)
+      if (!csvRes.ok) throw new Error(`スプレッドシート取得エラー: HTTP ${csvRes.status}`)
+      const csvText = await csvRes.text()
+      // CSVをAPIに送りDBへ保存
+      const res = await fetch('/api/tax-schedules/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv: csvText }),
+      })
       const json = await res.json()
       if (!res.ok) { alert('読み込みエラー: ' + json.error); return }
       setScheduleMonth(json.month)
       await loadTaxSchedules(json.month, json.year)
       alert(`${json.year}年${json.month}月分 ${json.count}件を読み込みました\n納付期限: ${json.deadline || '不明'}`)
+    } catch (e) {
+      alert('エラー: ' + String(e))
     } finally {
       setImporting(false)
     }
