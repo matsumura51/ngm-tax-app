@@ -14,8 +14,6 @@ const MONTHLY_FIELDS = [
   { key: 'monthly_report',     label: '報告',    type: 'date' },
   { key: 'monthly_fee',        label: '報酬',    type: 'text' },
 ]
-const CON_TAX_OPTIONS = ['本則', '簡易', '免税', '2割特例']
-const EXISTS_OPTIONS = ['', '有り', '無し']
 type ActiveTab = '月次進捗' | '税務情報' | '決算業務'
 
 function fmtDate(s: string | null | undefined): string {
@@ -32,7 +30,6 @@ function fmtFee(s: string | null | undefined): string {
 }
 
 const inp = 'w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500'
-const sel = 'w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white'
 
 const SETTLE_FIELDS = [
   { key: 'settle_consumption_judged', label: '消費税判定' },
@@ -66,12 +63,8 @@ export default function MonthlyPage() {
 
   const [monthModal, setMonthModal] = useState<{ client: Client; month: number } | null>(null)
   const [monthDates, setMonthDates] = useState<Record<string, string>>({})
-  const [taxModal, setTaxModal] = useState<Client | null>(null)
-  const [taxForm, setTaxForm] = useState<Record<string, string>>({})
   const [settleModal, setSettleModal] = useState<Client | null>(null)
   const [settleForm, setSettleForm] = useState<Record<string, string>>({})
-
-  const [taxSubTab, setTaxSubTab] = useState<'予定納税' | '消費税・中間'>('予定納税')
   const [taxSchedules, setTaxSchedules] = useState<TaxSchedule[]>([])
   const [scheduleMonth, setScheduleMonth] = useState(new Date().getMonth() + 1)
   const [scheduleInfo, setScheduleInfo] = useState<{ deadline: string | null; imported_at: string | null } | null>(null)
@@ -181,42 +174,6 @@ export default function MonthlyPage() {
     setMonthModal(null)
   }
 
-  function openTaxModal(client: Client) {
-    const p = prog(client.code)
-    setTaxForm({
-      prev_consumption_tax:     p?.prev_consumption_tax     || client.consumption_tax || '',
-      consumption_tax:          p?.consumption_tax          || client.consumption_tax || '',
-      prev_corp_interim_exists: p?.prev_corp_interim_exists || '',
-      prev_corp_interim_date:   p?.prev_corp_interim_date   || '',
-      corp_interim_exists:      p?.corp_interim_exists      || '',
-      corp_interim_date:        p?.corp_interim_date        || '',
-      prev_con_interim_exists:  p?.prev_con_interim_exists  || '',
-      prev_con_interim_1:       p?.prev_con_interim_1       || '',
-      prev_con_interim_2:       p?.prev_con_interim_2       || '',
-      prev_con_interim_3:       p?.prev_con_interim_3       || '',
-      con_interim_exists:       p?.con_interim_exists       || '',
-      con_interim_1:            p?.con_interim_1            || '',
-      con_interim_2:            p?.con_interim_2            || '',
-      con_interim_3:            p?.con_interim_3            || '',
-    })
-    setTaxModal(client)
-  }
-
-  async function saveTaxModal() {
-    if (!taxModal) return
-    setSaving(true)
-    let p = prog(taxModal.code)
-    if (!p) p = await ensureProgress(taxModal)
-    if (!p) { setSaving(false); return }
-    const supabase = createClient()
-    const updates: Record<string, string | null> = {}
-    for (const [k, v] of Object.entries(taxForm)) updates[k] = v || null
-    await supabase.from('monthly_progress').update(updates).eq('id', p.id)
-    setProgressMap(prev => ({ ...prev, [taxModal.code]: { ...p!, ...updates } }))
-    setSaving(false)
-    setTaxModal(null)
-  }
-
   function openSettleModal(client: Client) {
     const p = prog(client.code)
     const form: Record<string, string> = {}
@@ -242,7 +199,6 @@ export default function MonthlyPage() {
 
   const filtered = clients.filter(c => !search || c.name.includes(search) || c.code.includes(search))
   const currentMonth = new Date().getMonth() + 1
-  const prevYear = year - 1
 
   function getMonthVal(code: string, field: string, month: string, isDate: boolean): string {
     const p = prog(code)
@@ -368,155 +324,86 @@ export default function MonthlyPage() {
       {/* ===== 税務情報 Tab ===== */}
       {activeTab === '税務情報' && (
         <div>
-          {/* サブタブ */}
-          <div className="flex gap-1 mb-3">
-            {(['予定納税', '消費税・中間'] as const).map(t => (
-              <button key={t} onClick={() => setTaxSubTab(t)}
-                className={`px-4 py-1.5 text-xs font-medium rounded-full border transition ${
-                  taxSubTab === t ? 'bg-purple-700 text-white border-purple-700' : 'bg-white text-gray-500 border-gray-300 hover:border-purple-400'
-                }`}>
-                {t}
-              </button>
-            ))}
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-500 whitespace-nowrap">表示月:</span>
+              <select value={scheduleMonth} onChange={e => setScheduleMonth(Number(e.target.value))}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>{i + 1}月</option>
+                ))}
+              </select>
+            </div>
+            <button onClick={importFromSheet} disabled={importing}
+              className="flex items-center gap-1.5 bg-purple-700 hover:bg-purple-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
+              <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
+              {importing ? '読み込み中...' : 'スプレッドシートから読み込む'}
+            </button>
+            {scheduleInfo && (
+              <span className="text-xs text-gray-500">
+                納付期限: <span className="font-medium text-red-600">{scheduleInfo.deadline || '—'}</span>
+                　最終読み込み: {new Date(scheduleInfo.imported_at!).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}
+              </span>
+            )}
           </div>
 
-          {/* 予定納税サブタブ */}
-          {taxSubTab === '予定納税' && (
-            <div>
-              <div className="flex items-center gap-3 mb-3 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-500 whitespace-nowrap">表示月:</span>
-                  <select value={scheduleMonth} onChange={e => setScheduleMonth(Number(e.target.value))}
-                    className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
-                    {Array.from({ length: 12 }, (_, i) => (
-                      <option key={i + 1} value={i + 1}>{i + 1}月</option>
-                    ))}
-                  </select>
-                </div>
-                <button onClick={importFromSheet} disabled={importing}
-                  className="flex items-center gap-1.5 bg-purple-700 hover:bg-purple-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
-                  <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
-                  {importing ? '読み込み中...' : 'スプレッドシートから読み込む'}
-                </button>
-                {scheduleInfo && (
-                  <span className="text-xs text-gray-500">
-                    納付期限: <span className="font-medium text-red-600">{scheduleInfo.deadline || '—'}</span>
-                    　最終読み込み: {new Date(scheduleInfo.imported_at!).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}
-                  </span>
-                )}
-                {taxSchedules.length > 0 && (
-                  <span className="text-xs text-gray-400">{taxSchedules.length}件</span>
-                )}
-              </div>
-
-              <div className={tableContainer} style={containerStyle}>
-                <table className="min-w-full border-collapse" style={{ fontSize: '11px' }}>
-                  <thead>
-                    <tr className={`${H1} text-white`}>
-                      <th className={`sticky left-0 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44`}>顧客名</th>
-                      <th className={thH1}>税目</th>
-                      <th className={thH1}>納付額</th>
-                      <th className={thH1}>回数</th>
-                      <th className={`${thH1} text-red-200`}>期限</th>
-                      <th className={thH1}>納付方法</th>
-                      <th className={thH1}>送付日・申告日</th>
-                      <th className={thH1}>納付日</th>
-                      <th className={thH1}>確認</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {taxSchedules.length === 0 ? (
-                      <tr><td colSpan={9} className="text-center py-10 text-gray-400">
-                        {importing ? '読み込み中...' : '「スプレッドシートから読み込む」ボタンでデータを取得してください'}
-                      </td></tr>
-                    ) : taxSchedules
-                        .filter(s => !search || s.client_name.includes(search))
-                        .map((s, ri) => {
-                          const even = ri % 2 === 0
-                          return (
-                            <tr key={s.id} className={even ? 'bg-white' : 'bg-gray-50'}>
-                              <td className={`sticky left-0 z-10 ${even ? 'bg-white' : 'bg-gray-50'} px-3 py-2 font-medium text-gray-800 text-[11px] whitespace-nowrap border-r border-gray-200`}>
-                                {s.client_name}
-                                {s.matched_client_code && (
-                                  <span className="ml-1 text-purple-500 text-[10px]">[{s.matched_client_code}]</span>
-                                )}
-                              </td>
-                              <td className={td}>{s.tax_type || ''}</td>
-                              <td className="px-2 py-2 text-right text-gray-800 text-[11px] font-medium tabular-nums">{s.amount || ''}</td>
-                              <td className={td}>{s.installment || ''}</td>
-                              <td className="px-2 py-2 text-center text-red-600 font-medium text-[11px]">{s.deadline || ''}</td>
-                              <td className={td}>{s.payment_method || ''}</td>
-                              <td className={td}>{s.send_date || ''}</td>
-                              <td className={td}>{s.payment_date || ''}</td>
-                              <td className={`${td} ${s.confirmation ? 'text-green-600 font-medium' : ''}`}>{s.confirmation || ''}</td>
-                            </tr>
-                          )
-                        })
-                    }
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* 消費税・中間サブタブ */}
-          {taxSubTab === '消費税・中間' && (
-            <div className={tableContainer} style={containerStyle}>
-              <table className="min-w-full border-collapse" style={{ fontSize: '11px' }}>
-                <thead>
-                  <tr className={`${H1} text-white`}>
-                    <th className={`sticky left-0 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-20`}>顧客コード</th>
-                    <th className={`sticky left-20 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600`}>顧客名</th>
-                    <th className={thH1}>決算月</th>
-                    <th className={`${thH1} border-l border-purple-600`}>{prevYear}<br/>消費税</th>
-                    <th className={thH1}>{year}<br/>消費税</th>
-                    <th className={`${thH1} border-l border-purple-600`}>{prevYear}期<br/>法人税中間有無</th>
-                    <th className={thH1}>{prevYear}期<br/>法人税中間</th>
-                    <th className={thH1}>{year}期<br/>法人税中間有無</th>
-                    <th className={thH1}>{year}期<br/>法人税中間</th>
-                    <th className={`${thH1} border-l border-purple-600`}>{prevYear}期<br/>消費税中間有無</th>
-                    <th className={thH1}>{prevYear}期<br/>消費税中間①</th>
-                    <th className={thH1}>{prevYear}期<br/>消費税中間②</th>
-                    <th className={thH1}>{prevYear}期<br/>消費税中間③</th>
-                    <th className={`${thH1} border-l border-purple-600`}>{year}期<br/>消費税中間有無</th>
-                    <th className={thH1}>{year}期<br/>消費税中間①</th>
-                    <th className={thH1}>{year}期<br/>消費税中間②</th>
-                    <th className={thH1}>{year}期<br/>消費税中間③</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {loading ? (
-                    <tr><td colSpan={17} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
-                  ) : filtered.map((c, ri) => {
-                    const p = prog(c.code)
-                    const even = ri % 2 === 0
-                    return (
-                      <tr key={c.id} onClick={() => openTaxModal(c)}
-                        className={`cursor-pointer hover:bg-blue-50 ${even ? 'bg-white' : 'bg-gray-50'}`}>
+          <div className={tableContainer} style={containerStyle}>
+            <table className="min-w-full border-collapse" style={{ fontSize: '11px' }}>
+              <thead>
+                <tr className={`${H1} text-white`}>
+                  <th className={`sticky left-0 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-20`}>顧客コード</th>
+                  <th className={`sticky left-20 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600`}>顧客名</th>
+                  <th className={thH1}>税目</th>
+                  <th className={thH1}>納付額</th>
+                  <th className={thH1}>回数</th>
+                  <th className={`${thH1} text-red-200`}>期限</th>
+                  <th className={thH1}>納付方法</th>
+                  <th className={thH1}>送付日・申告日</th>
+                  <th className={thH1}>納付日</th>
+                  <th className={thH1}>確認</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {loading ? (
+                  <tr><td colSpan={10} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
+                ) : filtered.flatMap((c, ci) => {
+                  const even = ci % 2 === 0
+                  const bg = even ? 'bg-white' : 'bg-gray-50'
+                  const entries = taxSchedules.filter(s => s.matched_client_code === c.code)
+                  if (entries.length === 0) {
+                    return [(
+                      <tr key={c.id} className={bg}>
                         <td className={stickyCode(even)}>{c.code}</td>
                         <td className={stickyName(even)}>{c.name}</td>
-                        <td className={td}>{c.fiscal_month === 0 ? '個人' : c.fiscal_month ? `${c.fiscal_month}月` : '-'}</td>
-                        <td className={`${td} border-l border-gray-100`}>{p?.prev_consumption_tax || c.consumption_tax || ''}</td>
-                        <td className={td}>{p?.consumption_tax || c.consumption_tax || ''}</td>
-                        <td className={`${td} border-l border-gray-100`}>{p?.prev_corp_interim_exists || ''}</td>
-                        <td className={td}>{p?.prev_corp_interim_date || ''}</td>
-                        <td className={td}>{p?.corp_interim_exists || ''}</td>
-                        <td className={td}>{p?.corp_interim_date || ''}</td>
-                        <td className={`${td} border-l border-gray-100`}>{p?.prev_con_interim_exists || ''}</td>
-                        <td className={td}>{p?.prev_con_interim_1 || ''}</td>
-                        <td className={td}>{p?.prev_con_interim_2 || ''}</td>
-                        <td className={td}>{p?.prev_con_interim_3 || ''}</td>
-                        <td className={`${td} border-l border-gray-100`}>{p?.con_interim_exists || ''}</td>
-                        <td className={td}>{p?.con_interim_1 || ''}</td>
-                        <td className={td}>{p?.con_interim_2 || ''}</td>
-                        <td className={td}>{p?.con_interim_3 || ''}</td>
+                        <td className={td}></td>
+                        <td className="px-2 py-2 text-right text-gray-400 text-[11px] tabular-nums">0円</td>
+                        <td className={td}></td>
+                        <td className={td}></td>
+                        <td className={td}></td>
+                        <td className={td}></td>
+                        <td className={td}></td>
+                        <td className={td}></td>
                       </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                    )]
+                  }
+                  return entries.map((s, ei) => (
+                    <tr key={s.id} className={bg}>
+                      <td className={stickyCode(even)}>{ei === 0 ? c.code : ''}</td>
+                      <td className={stickyName(even)}>{ei === 0 ? c.name : ''}</td>
+                      <td className={td}>{s.tax_type || ''}</td>
+                      <td className="px-2 py-2 text-right text-gray-800 text-[11px] font-medium tabular-nums">{s.amount || ''}</td>
+                      <td className={td}>{s.installment || ''}</td>
+                      <td className="px-2 py-2 text-center text-red-600 font-medium text-[11px]">{s.deadline || ''}</td>
+                      <td className={td}>{s.payment_method || ''}</td>
+                      <td className={td}>{s.send_date || ''}</td>
+                      <td className={td}>{s.payment_date || ''}</td>
+                      <td className={`${td} ${s.confirmation ? 'text-green-600 font-medium' : ''}`}>{s.confirmation || ''}</td>
+                    </tr>
+                  ))
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -610,117 +497,6 @@ export default function MonthlyPage() {
             <div className="flex gap-2 mt-5">
               <button onClick={() => setMonthModal(null)} className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">キャンセル</button>
               <button onClick={saveMonthModal} disabled={saving} className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                {saving ? '保存中...' : '保存'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===== 税務情報 モーダル ===== */}
-      {taxModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setTaxModal(null)}>
-          <div className="bg-white rounded-xl shadow-xl p-6 w-[520px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-5">
-              <div>
-                <div className="font-bold text-gray-800">{taxModal.name}</div>
-                <div className="text-sm text-gray-500">{year}年度 税務情報</div>
-              </div>
-              <button onClick={() => setTaxModal(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
-            </div>
-            <div className="space-y-5">
-              <div>
-                <div className="text-xs font-semibold text-gray-500 mb-2 border-b pb-1">消費税</div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">{prevYear}消費税</label>
-                    <select value={taxForm.prev_consumption_tax || ''} onChange={e => setTaxForm(f => ({ ...f, prev_consumption_tax: e.target.value }))} className={sel}>
-                      <option value="">-</option>
-                      {CON_TAX_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">{year}消費税</label>
-                    <select value={taxForm.consumption_tax || ''} onChange={e => setTaxForm(f => ({ ...f, consumption_tax: e.target.value }))} className={sel}>
-                      <option value="">-</option>
-                      {CON_TAX_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-gray-500 mb-2 border-b pb-1">法人税中間</div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">{prevYear}期 有無</label>
-                    <select value={taxForm.prev_corp_interim_exists || ''} onChange={e => setTaxForm(f => ({ ...f, prev_corp_interim_exists: e.target.value }))} className={sel}>
-                      {EXISTS_OPTIONS.map(o => <option key={o} value={o}>{o || '-'}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">{prevYear}期 期日</label>
-                    <input value={taxForm.prev_corp_interim_date || ''} onChange={e => setTaxForm(f => ({ ...f, prev_corp_interim_date: e.target.value }))} placeholder="例: 2025/09" className={inp} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">{year}期 有無</label>
-                    <select value={taxForm.corp_interim_exists || ''} onChange={e => setTaxForm(f => ({ ...f, corp_interim_exists: e.target.value }))} className={sel}>
-                      {EXISTS_OPTIONS.map(o => <option key={o} value={o}>{o || '-'}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">{year}期 期日</label>
-                    <input value={taxForm.corp_interim_date || ''} onChange={e => setTaxForm(f => ({ ...f, corp_interim_date: e.target.value }))} placeholder="例: 2026/09" className={inp} />
-                  </div>
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-gray-500 mb-2 border-b pb-1">消費税中間</div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">{prevYear}期 有無</label>
-                    <select value={taxForm.prev_con_interim_exists || ''} onChange={e => setTaxForm(f => ({ ...f, prev_con_interim_exists: e.target.value }))} className={sel}>
-                      {EXISTS_OPTIONS.map(o => <option key={o} value={o}>{o || '-'}</option>)}
-                    </select>
-                  </div>
-                  <div />
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">{prevYear}期 ①</label>
-                    <input value={taxForm.prev_con_interim_1 || ''} onChange={e => setTaxForm(f => ({ ...f, prev_con_interim_1: e.target.value }))} placeholder="例: 2025/9" className={inp} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">{prevYear}期 ②</label>
-                    <input value={taxForm.prev_con_interim_2 || ''} onChange={e => setTaxForm(f => ({ ...f, prev_con_interim_2: e.target.value }))} placeholder="例: 2025/12" className={inp} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">{prevYear}期 ③</label>
-                    <input value={taxForm.prev_con_interim_3 || ''} onChange={e => setTaxForm(f => ({ ...f, prev_con_interim_3: e.target.value }))} placeholder="例: 2026/3" className={inp} />
-                  </div>
-                  <div />
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">{year}期 有無</label>
-                    <select value={taxForm.con_interim_exists || ''} onChange={e => setTaxForm(f => ({ ...f, con_interim_exists: e.target.value }))} className={sel}>
-                      {EXISTS_OPTIONS.map(o => <option key={o} value={o}>{o || '-'}</option>)}
-                    </select>
-                  </div>
-                  <div />
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">{year}期 ①</label>
-                    <input value={taxForm.con_interim_1 || ''} onChange={e => setTaxForm(f => ({ ...f, con_interim_1: e.target.value }))} placeholder="例: 2026/9" className={inp} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">{year}期 ②</label>
-                    <input value={taxForm.con_interim_2 || ''} onChange={e => setTaxForm(f => ({ ...f, con_interim_2: e.target.value }))} placeholder="例: 2026/12" className={inp} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">{year}期 ③</label>
-                    <input value={taxForm.con_interim_3 || ''} onChange={e => setTaxForm(f => ({ ...f, con_interim_3: e.target.value }))} placeholder="例: 2027/3" className={inp} />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-2 mt-6">
-              <button onClick={() => setTaxModal(null)} className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">キャンセル</button>
-              <button onClick={saveTaxModal} disabled={saving} className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
                 {saving ? '保存中...' : '保存'}
               </button>
             </div>
