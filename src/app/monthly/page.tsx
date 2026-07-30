@@ -68,7 +68,10 @@ export default function MonthlyPage() {
   const [taxSchedules, setTaxSchedules] = useState<TaxSchedule[]>([])
   const [scheduleInfo, setScheduleInfo] = useState<{ imported_at: string | null; count: number } | null>(null)
   const [importing, setImporting] = useState(false)
-  const [sheetUrl, setSheetUrl] = useState('https://docs.google.com/spreadsheets/d/1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc/gviz/tq?tqx=out:csv&gid=510339633')
+  const [sheets, setSheets] = useState<{ name: string; gid: string }[]>([])
+  const [selectedGid, setSelectedGid] = useState('510339633')
+
+  const SHEET_ID = '1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc'
 
   useEffect(() => { load() }, [year])
 
@@ -87,7 +90,10 @@ export default function MonthlyPage() {
   }
 
   useEffect(() => {
-    if (activeTab === '税務情報') loadTaxSchedules()
+    if (activeTab === '税務情報') {
+      loadTaxSchedules()
+      loadSheets()
+    }
   }, [activeTab, year])
 
   async function loadTaxSchedules(y = year) {
@@ -102,20 +108,36 @@ export default function MonthlyPage() {
     }
   }
 
-  // GoogleスプレッドシートのeditURLをgvizCSV URLに変換
-  function toGvizUrl(url: string): string {
-    const sheetMatch = url.match(/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)
-    const gidMatch = url.match(/[?&#]gid=(\d+)/)
-    if (sheetMatch && gidMatch) {
-      return `https://docs.google.com/spreadsheets/d/${sheetMatch[1]}/gviz/tq?tqx=out:csv&gid=${gidMatch[1]}`
+  async function loadSheets() {
+    try {
+      const res = await fetch(
+        `https://spreadsheets.google.com/feeds/worksheets/${SHEET_ID}/public/basic?alt=json`
+      )
+      if (!res.ok) return
+      const json = await res.json()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const entries: any[] = json.feed?.entry || []
+      const parsed = entries.map((e) => {
+        const name: string = e['title']?.['$t'] || ''
+        const links: Array<{ href: string }> = e['link'] || []
+        const vizLink = links.find(l => l.href?.includes('gviz/tq'))
+        const gidMatch = vizLink?.href?.match(/[?&#]gid=(\d+)/)
+        return { name, gid: gidMatch?.[1] || '' }
+      }).filter(s => s.gid)
+      if (parsed.length > 0) {
+        setSheets(parsed)
+        if (!parsed.find(s => s.gid === selectedGid)) setSelectedGid(parsed[0].gid)
+      }
+    } catch {
+      // シート一覧取得失敗時はデフォルトgidのまま使用
     }
-    return url
   }
 
   async function importFromSheet() {
     setImporting(true)
     try {
-      const csvRes = await fetch(toGvizUrl(sheetUrl))
+      const gvizUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${selectedGid}`
+      const csvRes = await fetch(gvizUrl)
       if (!csvRes.ok) throw new Error(`スプレッドシート取得エラー: HTTP ${csvRes.status}`)
       const csvText = await csvRes.text()
       const res = await fetch('/api/tax-schedules/import', {
@@ -333,28 +355,28 @@ export default function MonthlyPage() {
       {/* ===== 税務情報 Tab ===== */}
       {activeTab === '税務情報' && (
         <div>
-          <div className="flex flex-col gap-2 mb-3">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={sheetUrl}
-                onChange={e => setSheetUrl(e.target.value)}
-                placeholder="GoogleスプレッドシートのURL（月ごとのシートに切り替えて貼り付け）"
-                className="border border-gray-300 rounded-lg px-3 py-1.5 text-xs flex-1 min-w-0 text-gray-600"
-              />
-              <button onClick={importFromSheet} disabled={importing}
-                className="flex items-center gap-1.5 bg-purple-700 hover:bg-purple-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 whitespace-nowrap shrink-0">
-                <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
-                {importing ? '読み込み中...' : '読み込む'}
-              </button>
-            </div>
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            <select
+              value={selectedGid}
+              onChange={e => setSelectedGid(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm min-w-28"
+            >
+              {sheets.length === 0
+                ? <option value="510339633">（読み込み中...）</option>
+                : sheets.map(s => <option key={s.gid} value={s.gid}>{s.name}</option>)
+              }
+            </select>
+            <button onClick={importFromSheet} disabled={importing}
+              className="flex items-center gap-1.5 bg-purple-700 hover:bg-purple-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
+              <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
+              {importing ? '読み込み中...' : '読み込む'}
+            </button>
             {scheduleInfo && (
               <span className="text-xs text-gray-500">
-                合計 {scheduleInfo.count}件（年度内の全月累計）
+                合計 {scheduleInfo.count}件
                 　最終読み込み: {new Date(scheduleInfo.imported_at!).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}
               </span>
             )}
-            <p className="text-xs text-gray-400">各月のシートを開いてURLをコピーして貼り付け→読み込む、を月ごとに繰り返すと全月が反映されます</p>
           </div>
 
           <div className={tableContainer} style={containerStyle}>
