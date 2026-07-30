@@ -7,11 +7,10 @@ function decodeEscaped(s: string): string {
 }
 
 export async function GET() {
-  // 方法1: Google Sheets Feeds API v3（廃止予定だがパブリックシートでは動作することがある）
+  // 方法1: Google Sheets Feeds API v3
   try {
     const res = await fetch(
-      `https://spreadsheets.google.com/feeds/worksheets/${SHEET_ID}/public/basic?alt=json`,
-      { signal: AbortSignal.timeout(5000) }
+      `https://spreadsheets.google.com/feeds/worksheets/${SHEET_ID}/public/basic?alt=json`
     )
     if (res.ok) {
       const json = await res.json()
@@ -19,23 +18,20 @@ export async function GET() {
       const entries: any[] = json.feed?.entry || []
       const sheets = entries.map((e) => {
         const name: string = e['title']?.['$t'] || ''
-        const links: Array<{ rel: string; href: string }> = e['link'] || []
+        const links: Array<{ href: string }> = e['link'] || []
         const vizLink = links.find(l => l.href?.includes('gviz'))
         const gidMatch = vizLink?.href?.match(/[?&#]gid=(\d+)/)
         return { name, gid: gidMatch?.[1] || '' }
       }).filter(s => s.gid)
       if (sheets.length > 0) return NextResponse.json({ sheets })
     }
-  } catch { /* fallthrough */ }
+  } catch (_e) { /* fallthrough */ }
 
   // 方法2: スプレッドシートのHTMLからシート名・gidを抽出
   try {
     const res = await fetch(
       `https://docs.google.com/spreadsheets/d/${SHEET_ID}`,
-      {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-        signal: AbortSignal.timeout(8000),
-      }
+      { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } }
     )
     if (res.ok) {
       const html = await res.text()
@@ -49,9 +45,9 @@ export async function GET() {
         if (!sheets.find(s => s.gid === gid)) sheets.push({ gid, name })
       }
 
-      // パターン B: gid=NNN の直後に来るシート名テキスト
+      // パターン B: #gid=NNN の後のテキスト
       if (sheets.length === 0) {
-        const reB = /[#&?]gid=(\d+)[^>]*>\s*<[^>]+>\s*([^<]{1,40})\s*</g
+        const reB = /[#&?]gid=(\d+)[^>]*>\s*(?:<[^>]+>\s*)*([^<]{1,40})\s*</g
         while ((m = reB.exec(html)) !== null) {
           const gid = m[1], name = m[2].trim()
           if (name && !sheets.find(s => s.gid === gid)) sheets.push({ gid, name })
@@ -60,8 +56,8 @@ export async function GET() {
 
       if (sheets.length > 0) return NextResponse.json({ sheets })
     }
-  } catch { /* fallthrough */ }
+  } catch (_e) { /* fallthrough */ }
 
-  // フォールバック: 既知のgidを返す
+  // フォールバック
   return NextResponse.json({ sheets: [{ gid: '510339633', name: '6月' }] })
 }

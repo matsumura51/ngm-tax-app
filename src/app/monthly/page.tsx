@@ -111,15 +111,17 @@ export default function MonthlyPage() {
   async function loadSheets() {
     try {
       const res = await fetch('/api/tax-schedules/sheets')
-      if (!res.ok) return
       const json = await res.json()
       const parsed: { name: string; gid: string }[] = json.sheets || []
       if (parsed.length > 0) {
         setSheets(parsed)
         if (!parsed.find(s => s.gid === selectedGid)) setSelectedGid(parsed[0].gid)
+      } else {
+        // フォールバック: デフォルトのシートを表示
+        setSheets([{ gid: '510339633', name: '6月' }])
       }
     } catch {
-      // シート一覧取得失敗時はデフォルトgidのまま使用
+      setSheets([{ gid: '510339633', name: '6月' }])
     }
   }
 
