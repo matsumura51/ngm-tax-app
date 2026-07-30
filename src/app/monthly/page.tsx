@@ -110,20 +110,10 @@ export default function MonthlyPage() {
 
   async function loadSheets() {
     try {
-      const res = await fetch(
-        `https://spreadsheets.google.com/feeds/worksheets/${SHEET_ID}/public/basic?alt=json`
-      )
+      const res = await fetch('/api/tax-schedules/sheets')
       if (!res.ok) return
       const json = await res.json()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const entries: any[] = json.feed?.entry || []
-      const parsed = entries.map((e) => {
-        const name: string = e['title']?.['$t'] || ''
-        const links: Array<{ href: string }> = e['link'] || []
-        const vizLink = links.find(l => l.href?.includes('gviz/tq'))
-        const gidMatch = vizLink?.href?.match(/[?&#]gid=(\d+)/)
-        return { name, gid: gidMatch?.[1] || '' }
-      }).filter(s => s.gid)
+      const parsed: { name: string; gid: string }[] = json.sheets || []
       if (parsed.length > 0) {
         setSheets(parsed)
         if (!parsed.find(s => s.gid === selectedGid)) setSelectedGid(parsed[0].gid)
