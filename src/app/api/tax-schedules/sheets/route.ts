@@ -2,62 +2,40 @@ import { NextResponse } from 'next/server'
 
 const SHEET_ID = '1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc'
 
-function decodeEscaped(s: string): string {
-  return s.replace(/\\u([0-9a-fA-F]{4})/g, (_, c) => String.fromCharCode(parseInt(c, 16)))
+// 試行するシート名の候補（よくある月名パターン）
+const CANDIDATES = [
+  '1月', '2月', '3月', '4月', '5月', '6月',
+  '7月', '8月', '9月', '10月', '11月', '12月',
+]
+
+async function sheetExists(name: string): Promise<boolean> {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`
+    const res = await fetch(url)
+    if (!res.ok) return false
+    const text = await res.text()
+    // HTMLが返ってきたらシートなし、短すぎてもなし
+    if (text.startsWith('<!') || text.length < 10) return false
+    return true
+  } catch {
+    return false
+  }
 }
 
 export async function GET() {
-  // 方法1: Google Sheets Feeds API v3
-  try {
-    const res = await fetch(
-      `https://spreadsheets.google.com/feeds/worksheets/${SHEET_ID}/public/basic?alt=json`
-    )
-    if (res.ok) {
-      const json = await res.json()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const entries: any[] = json.feed?.entry || []
-      const sheets = entries.map((e) => {
-        const name: string = e['title']?.['$t'] || ''
-        const links: Array<{ href: string }> = e['link'] || []
-        const vizLink = links.find(l => l.href?.includes('gviz'))
-        const gidMatch = vizLink?.href?.match(/[?&#]gid=(\d+)/)
-        return { name, gid: gidMatch?.[1] || '' }
-      }).filter(s => s.gid)
-      if (sheets.length > 0) return NextResponse.json({ sheets })
-    }
-  } catch (_e) { /* fallthrough */ }
+  // 全候補を並列チェック
+  const checks = await Promise.all(
+    CANDIDATES.map(async (name) => ({ name, exists: await sheetExists(name) }))
+  )
+  const found = checks.filter(c => c.exists).map(c => ({ name: c.name }))
 
-  // 方法2: スプレッドシートのHTMLからシート名・gidを抽出
-  try {
-    const res = await fetch(
-      `https://docs.google.com/spreadsheets/d/${SHEET_ID}`,
-      { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } }
-    )
-    if (res.ok) {
-      const html = await res.text()
-      const sheets: { name: string; gid: string }[] = []
+  if (found.length > 0) {
+    return NextResponse.json({ sheets: found })
+  }
 
-      // パターン A: "sheetId":NNN ... "title":"TTT"
-      const reA = /"sheetId":(\d+)[^}]{0,300}?"title":"([^"\\]{1,60})"/g
-      let m
-      while ((m = reA.exec(html)) !== null) {
-        const gid = m[1], name = decodeEscaped(m[2])
-        if (!sheets.find(s => s.gid === gid)) sheets.push({ gid, name })
-      }
-
-      // パターン B: #gid=NNN の後のテキスト
-      if (sheets.length === 0) {
-        const reB = /[#&?]gid=(\d+)[^>]*>\s*(?:<[^>]+>\s*)*([^<]{1,40})\s*</g
-        while ((m = reB.exec(html)) !== null) {
-          const gid = m[1], name = m[2].trim()
-          if (name && !sheets.find(s => s.gid === gid)) sheets.push({ gid, name })
-        }
-      }
-
-      if (sheets.length > 0) return NextResponse.json({ sheets })
-    }
-  } catch (_e) { /* fallthrough */ }
-
-  // フォールバック
-  return NextResponse.json({ sheets: [{ gid: '510339633', name: '6月' }] })
+  // 何も見つからなければ全12ヶ月を選択肢として返す（手動で選んでもらう）
+  return NextResponse.json({
+    sheets: CANDIDATES.map(name => ({ name })),
+    fallback: true,
+  })
 }

@@ -68,8 +68,8 @@ export default function MonthlyPage() {
   const [taxSchedules, setTaxSchedules] = useState<TaxSchedule[]>([])
   const [scheduleInfo, setScheduleInfo] = useState<{ imported_at: string | null; count: number } | null>(null)
   const [importing, setImporting] = useState(false)
-  const [sheets, setSheets] = useState<{ name: string; gid: string }[]>([])
-  const [selectedGid, setSelectedGid] = useState('510339633')
+  const [sheets, setSheets] = useState<{ name: string }[]>([])
+  const [selectedSheet, setSelectedSheet] = useState('6月')
 
   const SHEET_ID = '1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc'
 
@@ -112,23 +112,22 @@ export default function MonthlyPage() {
     try {
       const res = await fetch('/api/tax-schedules/sheets')
       const json = await res.json()
-      const parsed: { name: string; gid: string }[] = json.sheets || []
+      const parsed: { name: string }[] = json.sheets || []
       if (parsed.length > 0) {
         setSheets(parsed)
-        if (!parsed.find(s => s.gid === selectedGid)) setSelectedGid(parsed[0].gid)
+        if (!parsed.find(s => s.name === selectedSheet)) setSelectedSheet(parsed[0].name)
       } else {
-        // フォールバック: デフォルトのシートを表示
-        setSheets([{ gid: '510339633', name: '6月' }])
+        setSheets([{ name: '6月' }])
       }
     } catch {
-      setSheets([{ gid: '510339633', name: '6月' }])
+      setSheets([{ name: '6月' }])
     }
   }
 
   async function importFromSheet() {
     setImporting(true)
     try {
-      const gvizUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${selectedGid}`
+      const gvizUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(selectedSheet)}`
       const csvRes = await fetch(gvizUrl)
       if (!csvRes.ok) throw new Error(`スプレッドシート取得エラー: HTTP ${csvRes.status}`)
       const csvText = await csvRes.text()
@@ -349,13 +348,13 @@ export default function MonthlyPage() {
         <div>
           <div className="flex items-center gap-3 mb-3 flex-wrap">
             <select
-              value={selectedGid}
-              onChange={e => setSelectedGid(e.target.value)}
+              value={selectedSheet}
+              onChange={e => setSelectedSheet(e.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm min-w-28"
             >
               {sheets.length === 0
-                ? <option value="510339633">（読み込み中...）</option>
-                : sheets.map(s => <option key={s.gid} value={s.gid}>{s.name}</option>)
+                ? <option value="6月">（読み込み中...）</option>
+                : sheets.map(s => <option key={s.name} value={s.name}>{s.name}</option>)
               }
             </select>
             <button onClick={importFromSheet} disabled={importing}
