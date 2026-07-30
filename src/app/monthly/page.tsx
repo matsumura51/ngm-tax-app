@@ -68,6 +68,7 @@ export default function MonthlyPage() {
   const [taxSchedules, setTaxSchedules] = useState<TaxSchedule[]>([])
   const [scheduleInfo, setScheduleInfo] = useState<{ imported_at: string | null; count: number } | null>(null)
   const [importing, setImporting] = useState(false)
+  const [sheetUrl, setSheetUrl] = useState('https://docs.google.com/spreadsheets/d/1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc/gviz/tq?tqx=out:csv&gid=510339633')
 
   useEffect(() => { load() }, [year])
 
@@ -101,11 +102,20 @@ export default function MonthlyPage() {
     }
   }
 
+  // GoogleスプレッドシートのeditURLをgvizCSV URLに変換
+  function toGvizUrl(url: string): string {
+    const sheetMatch = url.match(/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)
+    const gidMatch = url.match(/[?&#]gid=(\d+)/)
+    if (sheetMatch && gidMatch) {
+      return `https://docs.google.com/spreadsheets/d/${sheetMatch[1]}/gviz/tq?tqx=out:csv&gid=${gidMatch[1]}`
+    }
+    return url
+  }
+
   async function importFromSheet() {
     setImporting(true)
     try {
-      const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc/gviz/tq?tqx=out:csv&gid=510339633'
-      const csvRes = await fetch(SHEET_URL)
+      const csvRes = await fetch(toGvizUrl(sheetUrl))
       if (!csvRes.ok) throw new Error(`スプレッドシート取得エラー: HTTP ${csvRes.status}`)
       const csvText = await csvRes.text()
       const res = await fetch('/api/tax-schedules/import', {
@@ -115,11 +125,11 @@ export default function MonthlyPage() {
       })
       const json = await res.json()
       if (!res.ok) {
-        alert(`読み込みエラー: ${json.error}\n\n先頭3行:\n${JSON.stringify(json.debugRows, null, 2)}\ndataStart:${json.dataStart} totalRows:${json.totalRows}`)
+        alert(`読み込みエラー: ${json.error}\n\n先頭3行:\n${JSON.stringify(json.debugRows, null, 2)}`)
         return
       }
       await loadTaxSchedules(json.year)
-      alert(`${json.year}年度 ${json.count}件を読み込みました\n\n先頭3行: ${JSON.stringify(json.debugRows?.[0]?.slice(0,3))}`)
+      alert(`${json.year}年${json.month}月分 ${json.count}件を読み込みました`)
     } catch (e) {
       alert('エラー: ' + String(e))
     } finally {
@@ -323,18 +333,28 @@ export default function MonthlyPage() {
       {/* ===== 税務情報 Tab ===== */}
       {activeTab === '税務情報' && (
         <div>
-          <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <button onClick={importFromSheet} disabled={importing}
-              className="flex items-center gap-1.5 bg-purple-700 hover:bg-purple-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
-              <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
-              {importing ? '読み込み中...' : 'スプレッドシートから読み込む'}
-            </button>
+          <div className="flex flex-col gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={sheetUrl}
+                onChange={e => setSheetUrl(e.target.value)}
+                placeholder="GoogleスプレッドシートのURL（月ごとのシートに切り替えて貼り付け）"
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-xs flex-1 min-w-0 text-gray-600"
+              />
+              <button onClick={importFromSheet} disabled={importing}
+                className="flex items-center gap-1.5 bg-purple-700 hover:bg-purple-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 whitespace-nowrap shrink-0">
+                <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
+                {importing ? '読み込み中...' : '読み込む'}
+              </button>
+            </div>
             {scheduleInfo && (
               <span className="text-xs text-gray-500">
-                {scheduleInfo.count}件
+                合計 {scheduleInfo.count}件（年度内の全月累計）
                 　最終読み込み: {new Date(scheduleInfo.imported_at!).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}
               </span>
             )}
+            <p className="text-xs text-gray-400">各月のシートを開いてURLをコピーして貼り付け→読み込む、を月ごとに繰り返すと全月が反映されます</p>
           </div>
 
           <div className={tableContainer} style={containerStyle}>

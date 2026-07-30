@@ -104,15 +104,13 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // デバッグ情報（先頭3行）
-  const debugRows = rows.slice(0, 3).map(r => r.slice(0, 4))
-
-  await supabase.from('tax_schedules').delete().eq('year', year)
+  await supabase.from('tax_schedules').delete().eq('year', year).eq('month', month)
   if (records.length === 0) {
+    const debugRows = rows.slice(0, 3).map(r => r.slice(0, 4))
     return NextResponse.json({ error: 'インポートできる行が0件でした', debugRows, dataStart, totalRows: rows.length }, { status: 400 })
   }
   const { error } = await supabase.from('tax_schedules').insert(records)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  return NextResponse.json({ success: true, year, month, deadline, count: records.length, debugRows, dataStart })
+  return NextResponse.json({ success: true, year, month, deadline, count: records.length })
 }
