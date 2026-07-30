@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  await supabase.from('tax_schedules').delete().eq('year', year).eq('month', month)
+  await supabase.from('tax_schedules').delete().eq('year', year)
   const { error } = await supabase.from('tax_schedules').insert(records)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 

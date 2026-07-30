@@ -66,8 +66,7 @@ export default function MonthlyPage() {
   const [settleModal, setSettleModal] = useState<Client | null>(null)
   const [settleForm, setSettleForm] = useState<Record<string, string>>({})
   const [taxSchedules, setTaxSchedules] = useState<TaxSchedule[]>([])
-  const [scheduleMonth, setScheduleMonth] = useState(new Date().getMonth() + 1)
-  const [scheduleInfo, setScheduleInfo] = useState<{ deadline: string | null; imported_at: string | null } | null>(null)
+  const [scheduleInfo, setScheduleInfo] = useState<{ imported_at: string | null; count: number } | null>(null)
   const [importing, setImporting] = useState(false)
 
   useEffect(() => { load() }, [year])
@@ -88,15 +87,15 @@ export default function MonthlyPage() {
 
   useEffect(() => {
     if (activeTab === '税務情報') loadTaxSchedules()
-  }, [activeTab, year, scheduleMonth])
+  }, [activeTab, year])
 
-  async function loadTaxSchedules(m = scheduleMonth, y = year) {
+  async function loadTaxSchedules(y = year) {
     const supabase = createClient()
     const { data } = await supabase.from('tax_schedules')
-      .select('*').eq('year', y).eq('month', m).order('client_name')
+      .select('*').eq('year', y).order('month').order('client_name')
     setTaxSchedules(data || [])
     if (data && data.length > 0) {
-      setScheduleInfo({ deadline: data[0].deadline, imported_at: data[0].imported_at })
+      setScheduleInfo({ imported_at: data[0].imported_at, count: data.length })
     } else {
       setScheduleInfo(null)
     }
@@ -105,12 +104,10 @@ export default function MonthlyPage() {
   async function importFromSheet() {
     setImporting(true)
     try {
-      // ブラウザからGoogleスプレッドシートのCSVを直接取得
       const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc/gviz/tq?tqx=out:csv&gid=510339633'
       const csvRes = await fetch(SHEET_URL)
       if (!csvRes.ok) throw new Error(`スプレッドシート取得エラー: HTTP ${csvRes.status}`)
       const csvText = await csvRes.text()
-      // CSVをAPIに送りDBへ保存
       const res = await fetch('/api/tax-schedules/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -118,9 +115,8 @@ export default function MonthlyPage() {
       })
       const json = await res.json()
       if (!res.ok) { alert('読み込みエラー: ' + json.error); return }
-      setScheduleMonth(json.month)
-      await loadTaxSchedules(json.month, json.year)
-      alert(`${json.year}年${json.month}月分 ${json.count}件を読み込みました\n納付期限: ${json.deadline || '不明'}`)
+      await loadTaxSchedules(json.year)
+      alert(`${json.year}年度 ${json.count}件を読み込みました`)
     } catch (e) {
       alert('エラー: ' + String(e))
     } finally {
@@ -325,15 +321,6 @@ export default function MonthlyPage() {
       {activeTab === '税務情報' && (
         <div>
           <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-500 whitespace-nowrap">表示月:</span>
-              <select value={scheduleMonth} onChange={e => setScheduleMonth(Number(e.target.value))}
-                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
-                {Array.from({ length: 12 }, (_, i) => (
-                  <option key={i + 1} value={i + 1}>{i + 1}月</option>
-                ))}
-              </select>
-            </div>
             <button onClick={importFromSheet} disabled={importing}
               className="flex items-center gap-1.5 bg-purple-700 hover:bg-purple-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
               <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
@@ -341,7 +328,7 @@ export default function MonthlyPage() {
             </button>
             {scheduleInfo && (
               <span className="text-xs text-gray-500">
-                納付期限: <span className="font-medium text-red-600">{scheduleInfo.deadline || '—'}</span>
+                {scheduleInfo.count}件
                 　最終読み込み: {new Date(scheduleInfo.imported_at!).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}
               </span>
             )}
