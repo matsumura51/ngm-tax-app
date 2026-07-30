@@ -56,20 +56,43 @@ export async function POST(req: NextRequest) {
   const { data: clients } = await supabase.from('clients').select('id, code, name')
   const clientList = clients || []
 
+  // データ行の先頭から何行スキップするか自動検出
+  // 「顧客名」などの列ヘッダー行をスキップする
+  let dataStart = 1
+  for (let i = 1; i < Math.min(rows.length, 5); i++) {
+    const v = normalize(rows[i][0] || '')
+    if (v === '顧客名' || v === '顧客' || v === '氏名' || v === '社名' || v === '名称') {
+      dataStart = i + 1
+      break
+    }
+  }
+
   const records = []
-  for (let i = 1; i < rows.length; i++) {
+  let lastClientName = ''
+  let lastMatched: { id: string; code: string } | undefined
+
+  for (let i = dataStart; i < rows.length; i++) {
     const r = rows[i]
-    const clientName = r[0] || ''
+    const rawName = r[0] || ''
+
+    if (rawName) {
+      // 新しい顧客名が出たら更新
+      lastClientName = rawName
+      const normName = normalize(rawName)
+      lastMatched = clientList.find(c => normalize(c.name) === normName)
+        || clientList.find(c => normName.includes(normalize(c.name)) || normalize(c.name).includes(normName))
+    }
+
+    const clientName = lastClientName
     if (!clientName) continue
 
-    const normName = normalize(clientName)
-    const matched = clientList.find(c => normalize(c.name) === normName)
-      || clientList.find(c => normName.includes(normalize(c.name)) || normalize(c.name).includes(normName))
+    // 税目・納付額・回数が全て空の行はスキップ（空白行・区切り行）
+    if (!r[1] && !r[2] && !r[3]) continue
 
     records.push({
-      client_id: matched?.id || null,
+      client_id: lastMatched?.id || null,
       client_name: clientName,
-      matched_client_code: matched?.code || null,
+      matched_client_code: lastMatched?.code || null,
       year, month, deadline,
       tax_type:       r[1] || null,
       amount:         r[2] || null,
@@ -81,9 +104,15 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  // デバッグ情報（先頭3行）
+  const debugRows = rows.slice(0, 3).map(r => r.slice(0, 4))
+
   await supabase.from('tax_schedules').delete().eq('year', year)
+  if (records.length === 0) {
+    return NextResponse.json({ error: 'インポートできる行が0件でした', debugRows, dataStart, totalRows: rows.length }, { status: 400 })
+  }
   const { error } = await supabase.from('tax_schedules').insert(records)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  return NextResponse.json({ success: true, year, month, deadline, count: records.length })
+  return NextResponse.json({ success: true, year, month, deadline, count: records.length, debugRows, dataStart })
 }

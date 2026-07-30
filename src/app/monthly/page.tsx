@@ -114,9 +114,12 @@ export default function MonthlyPage() {
         body: JSON.stringify({ csv: csvText }),
       })
       const json = await res.json()
-      if (!res.ok) { alert('読み込みエラー: ' + json.error); return }
+      if (!res.ok) {
+        alert(`読み込みエラー: ${json.error}\n\n先頭3行:\n${JSON.stringify(json.debugRows, null, 2)}\ndataStart:${json.dataStart} totalRows:${json.totalRows}`)
+        return
+      }
       await loadTaxSchedules(json.year)
-      alert(`${json.year}年度 ${json.count}件を読み込みました`)
+      alert(`${json.year}年度 ${json.count}件を読み込みました\n\n先頭3行: ${JSON.stringify(json.debugRows?.[0]?.slice(0,3))}`)
     } catch (e) {
       alert('エラー: ' + String(e))
     } finally {
