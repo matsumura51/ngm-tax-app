@@ -59,6 +59,8 @@ export default function DailyReportNewPage() {
     total_hours: '',
   })
   const [details, setDetails] = useState([emptyDetail()])
+  const [clients, setClients] = useState<{ code: string; name: string }[]>([])
+  const [suggestions, setSuggestions] = useState<{ rowIndex: number; matches: { code: string; name: string }[] } | null>(null)
 
   useEffect(() => {
     async function loadUser() {
@@ -68,6 +70,8 @@ export default function DailyReportNewPage() {
         const { data } = await supabase.from('users').select('name').eq('id', user.id).single()
         setUserName(data?.name || user.email?.split('@')[0] || '')
       }
+      const { data: clientsData } = await supabase.from('clients').select('code, name').order('code')
+      setClients(clientsData || [])
     }
     loadUser()
   }, [])
@@ -83,6 +87,30 @@ export default function DailyReportNewPage() {
   useEffect(() => {
     setForm(f => ({ ...f, total_hours: sumWorkTimes(details) }))
   }, [details])
+
+  function selectClient(i: number, code: string, name: string) {
+    setDetails(d => d.map((row, idx) => idx === i ? { ...row, client_code: code, client_name: name } : row))
+    setSuggestions(null)
+  }
+
+  function onClientCodeChange(i: number, code: string) {
+    const found = clients.find(c => c.code === code)
+    if (found) {
+      setDetails(d => d.map((row, idx) => idx === i ? { ...row, client_code: code, client_name: found.name } : row))
+    } else {
+      setDetail(i, 'client_code', code)
+    }
+  }
+
+  function onClientNameChange(i: number, text: string) {
+    setDetail(i, 'client_name', text)
+    if (text.length >= 1) {
+      const matches = clients.filter(c => c.name.includes(text)).slice(0, 8)
+      setSuggestions(matches.length > 0 ? { rowIndex: i, matches } : null)
+    } else {
+      setSuggestions(null)
+    }
+  }
 
   function setDetail(i: number, field: string, value: string) {
     setDetails(d => d.map((row, idx) => {
@@ -190,10 +218,25 @@ export default function DailyReportNewPage() {
                     </select>
                   </td>
                   <td className="px-1 py-1">
-                    <input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_code || ''} onChange={e => setDetail(i, 'client_code', e.target.value)} />
+                    <input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_code || ''}
+                      onChange={e => onClientCodeChange(i, e.target.value)} />
                   </td>
-                  <td className="px-1 py-1">
-                    <input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_name || ''} onChange={e => setDetail(i, 'client_name', e.target.value)} />
+                  <td className="px-1 py-1 relative">
+                    <input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_name || ''}
+                      onChange={e => onClientNameChange(i, e.target.value)}
+                      onBlur={() => setTimeout(() => setSuggestions(null), 150)} />
+                    {suggestions?.rowIndex === i && (
+                      <div className="absolute left-0 top-full z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[220px] max-h-48 overflow-y-auto">
+                        {suggestions.matches.map(c => (
+                          <button key={c.code} type="button"
+                            onMouseDown={() => selectClient(i, c.code, c.name)}
+                            className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 flex items-center gap-2">
+                            <span className="font-mono text-gray-400 shrink-0">{c.code}</span>
+                            <span className="truncate">{c.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </td>
                   <td className="px-1 py-1">
                     <input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.report_content || ''} onChange={e => setDetail(i, 'report_content', e.target.value)} />
