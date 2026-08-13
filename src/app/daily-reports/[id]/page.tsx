@@ -7,7 +7,7 @@ import { ChevronLeft, Trash2, Plus } from 'lucide-react'
 import Link from 'next/link'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
-const TASK_TYPES = ['記帳', '決算', '確定申告', '相続税', '年末調整', '給与計算', '社会保険', '建設業', '医療法人', '訪問', '来所', '所内相談', 'チェック', '税務調査', '電話・メール', '環境整備', '朝礼', 'その他']
+const TASK_TYPES = ['記帳', 'チェック', '決算', '来所', '訪問', '所内相談', '電話・メール', '給与計算', '環境整備', '朝礼', '確定申告', '年末調整', '相続税', '建設業', '医療法人', '社会保険', '税務調査', 'その他']
 
 function calcWorkTime(start: string, end: string): string {
   if (!start || !end) return ''
