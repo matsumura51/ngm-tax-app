@@ -73,6 +73,7 @@ export default function MonthlyPage() {
   const [filterStaff, setFilterStaff] = useState('')
   const [filterFiscalMonth, setFilterFiscalMonth] = useState('')
   const [editingCell, setEditingCell] = useState<{ id: string; field: string; value: string } | null>(null)
+  const [filterTaxMonth, setFilterTaxMonth] = useState('')
 
   const SHEET_ID = '1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc'
 
@@ -426,6 +427,11 @@ export default function MonthlyPage() {
               <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
               {importing ? '読み込み中...' : '読み込む'}
             </button>
+            <select value={filterTaxMonth} onChange={e => setFilterTaxMonth(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+              <option value="">月（全て）</option>
+              {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={String(m)}>{m}月</option>)}
+            </select>
             {scheduleInfo && (
               <span className="text-xs text-gray-500">
                 合計 {scheduleInfo.count}件
@@ -456,7 +462,7 @@ export default function MonthlyPage() {
                 ) : filtered.flatMap((c, ci) => {
                   const even = ci % 2 === 0
                   const bg = even ? 'bg-white' : 'bg-gray-50'
-                  const entries = taxSchedules.filter(s => s.matched_client_code === c.code)
+                  const entries = taxSchedules.filter(s => s.matched_client_code === c.code && (!filterTaxMonth || s.month === parseInt(filterTaxMonth)))
                   if (entries.length === 0) {
                     return [(
                       <tr key={c.id} className={bg}>
