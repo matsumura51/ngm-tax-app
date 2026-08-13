@@ -56,9 +56,16 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
 
   async function deleteReport() {
     if (!confirm('この日報を削除しますか？')) return
-    const supabase = createClient()
-    await supabase.from('daily_report_details').delete().eq('report_id', id)
-    await supabase.from('daily_reports').delete().eq('id', id)
+    const res = await fetch('/api/daily-reports/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    if (!res.ok) {
+      const json = await res.json()
+      alert('削除エラー: ' + (json.error || '不明なエラー'))
+      return
+    }
     window.location.href = '/daily-reports'
   }
 
