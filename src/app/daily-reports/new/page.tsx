@@ -60,7 +60,7 @@ export default function DailyReportNewPage() {
   })
   const [details, setDetails] = useState([emptyDetail()])
   const [clients, setClients] = useState<{ code: string; name: string }[]>([])
-  const [suggestions, setSuggestions] = useState<{ rowIndex: number; matches: { code: string; name: string }[] } | null>(null)
+  const [suggestions, setSuggestions] = useState<{ rowIndex: number; matches: { code: string; name: string }[]; top: number; left: number } | null>(null)
 
   useEffect(() => {
     async function loadUser() {
@@ -102,11 +102,17 @@ export default function DailyReportNewPage() {
     }
   }
 
-  function onClientNameChange(i: number, text: string) {
+  function onClientNameChange(i: number, e: React.ChangeEvent<HTMLInputElement>) {
+    const text = e.target.value
     setDetail(i, 'client_name', text)
     if (text.length >= 1) {
       const matches = clients.filter(c => c.name.includes(text)).slice(0, 8)
-      setSuggestions(matches.length > 0 ? { rowIndex: i, matches } : null)
+      if (matches.length > 0) {
+        const rect = e.target.getBoundingClientRect()
+        setSuggestions({ rowIndex: i, matches, top: rect.bottom + 2, left: rect.left })
+      } else {
+        setSuggestions(null)
+      }
     } else {
       setSuggestions(null)
     }
@@ -221,22 +227,10 @@ export default function DailyReportNewPage() {
                     <input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_code || ''}
                       onChange={e => onClientCodeChange(i, e.target.value)} />
                   </td>
-                  <td className="px-1 py-1 relative">
+                  <td className="px-1 py-1">
                     <input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_name || ''}
-                      onChange={e => onClientNameChange(i, e.target.value)}
+                      onChange={e => onClientNameChange(i, e)}
                       onBlur={() => setTimeout(() => setSuggestions(null), 150)} />
-                    {suggestions?.rowIndex === i && (
-                      <div className="absolute left-0 top-full z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[220px] max-h-48 overflow-y-auto">
-                        {suggestions.matches.map(c => (
-                          <button key={c.code} type="button"
-                            onMouseDown={() => selectClient(i, c.code, c.name)}
-                            className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 flex items-center gap-2">
-                            <span className="font-mono text-gray-400 shrink-0">{c.code}</span>
-                            <span className="truncate">{c.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </td>
                   <td className="px-1 py-1">
                     <input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.report_content || ''} onChange={e => setDetail(i, 'report_content', e.target.value)} />
@@ -263,6 +257,20 @@ export default function DailyReportNewPage() {
           {saving ? '保存中...' : '保存'}
         </button>
       </div>
+
+      {suggestions && (
+        <div style={{ position: 'fixed', top: suggestions.top, left: suggestions.left, minWidth: '220px', zIndex: 9999 }}
+          className="bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {suggestions.matches.map(c => (
+            <button key={c.code} type="button"
+              onMouseDown={() => selectClient(suggestions.rowIndex, c.code, c.name)}
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 flex items-center gap-2">
+              <span className="font-mono text-gray-400 shrink-0">{c.code}</span>
+              <span className="truncate">{c.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

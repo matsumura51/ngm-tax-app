@@ -39,15 +39,59 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
   const [details, setDetails] = useState<DailyReportDetail[]>([])
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<Partial<DailyReport>>({})
+  const [clients, setClients] = useState<{ code: string; name: string }[]>([])
+  const [suggestions, setSuggestions] = useState<{ rowIndex: number; matches: { code: string; name: string }[]; top: number; left: number } | null>(null)
 
   useEffect(() => { load() }, [id])
 
   async function load() {
     const supabase = createClient()
-    const { data: r } = await supabase.from('daily_reports').select('*').eq('id', id).single()
-    const { data: d } = await supabase.from('daily_report_details').select('*').eq('report_id', id).order('sort_order')
+    const [{ data: r }, { data: d }, { data: clientsData }] = await Promise.all([
+      supabase.from('daily_reports').select('*').eq('id', id).single(),
+      supabase.from('daily_report_details').select('*').eq('report_id', id).order('sort_order'),
+      supabase.from('clients').select('code, name').order('code'),
+    ])
     if (r) { setReport(r); setForm(r) }
     setDetails(d || [])
+    setClients(clientsData || [])
+  }
+
+  async function deleteReport() {
+    if (!confirm('この日報を削除しますか？')) return
+    const supabase = createClient()
+    await supabase.from('daily_report_details').delete().eq('report_id', id)
+    await supabase.from('daily_reports').delete().eq('id', id)
+    router.push('/daily-reports')
+  }
+
+  function selectClient(i: number, code: string, name: string) {
+    setDetails(d => d.map((row, idx) => idx === i ? { ...row, client_code: code, client_name: name } : row))
+    setSuggestions(null)
+  }
+
+  function onClientCodeChange(i: number, code: string) {
+    const found = clients.find(c => c.code === code)
+    if (found) {
+      setDetails(d => d.map((row, idx) => idx === i ? { ...row, client_code: code, client_name: found.name } : row))
+    } else {
+      setRow(i, 'client_code', code)
+    }
+  }
+
+  function onClientNameChange(i: number, e: React.ChangeEvent<HTMLInputElement>) {
+    const text = e.target.value
+    setRow(i, 'client_name', text)
+    if (text.length >= 1) {
+      const matches = clients.filter(c => c.name.includes(text)).slice(0, 8)
+      if (matches.length > 0) {
+        const rect = e.target.getBoundingClientRect()
+        setSuggestions({ rowIndex: i, matches, top: rect.bottom + 2, left: rect.left })
+      } else {
+        setSuggestions(null)
+      }
+    } else {
+      setSuggestions(null)
+    }
   }
 
   async function save() {
@@ -113,6 +157,10 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
         {report.unread_check === '未チェック' && (
           <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">未読</span>
         )}
+        <button onClick={deleteReport}
+          className="ml-auto flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg">
+          <Trash2 size={14} /> 削除
+        </button>
       </div>
 
       <div className="bg-white rounded-xl shadow p-6 mb-4">
@@ -176,8 +224,8 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
                       {TASK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </td>
-                  <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_code || ''} onChange={e => setRow(i, 'client_code', e.target.value)} /></td>
-                  <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_name || ''} onChange={e => setRow(i, 'client_name', e.target.value)} /></td>
+                  <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_code || ''} onChange={e => onClientCodeChange(i, e.target.value)} /></td>
+                  <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_name || ''} onChange={e => onClientNameChange(i, e)} onBlur={() => setTimeout(() => setSuggestions(null), 150)} /></td>
                   <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.report_content || ''} onChange={e => setRow(i, 'report_content', e.target.value)} /></td>
                   <td className="px-1 py-1">
                     <button onClick={() => setDetails(d => d.filter((_, idx) => idx !== i))} className="text-gray-300 hover:text-red-400">
@@ -199,6 +247,20 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
           {saving ? '保存中...' : '保存'}
         </button>
       </div>
+
+      {suggestions && (
+        <div style={{ position: 'fixed', top: suggestions.top, left: suggestions.left, minWidth: '220px', zIndex: 9999 }}
+          className="bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {suggestions.matches.map(c => (
+            <button key={c.code} type="button"
+              onMouseDown={() => selectClient(suggestions.rowIndex, c.code, c.name)}
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 flex items-center gap-2">
+              <span className="font-mono text-gray-400 shrink-0">{c.code}</span>
+              <span className="truncate">{c.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
