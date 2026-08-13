@@ -74,6 +74,7 @@ export default function MonthlyPage() {
   const [filterFiscalMonth, setFilterFiscalMonth] = useState('')
   const [editingCell, setEditingCell] = useState<{ id: string; field: string; value: string } | null>(null)
   const [filterTaxMonth, setFilterTaxMonth] = useState('')
+  const [filterHasAmount, setFilterHasAmount] = useState(false)
 
   const SHEET_ID = '1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc'
 
@@ -432,6 +433,11 @@ export default function MonthlyPage() {
               <option value="">月（全て）</option>
               {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={String(m)}>{m}月</option>)}
             </select>
+            <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer select-none">
+              <input type="checkbox" checked={filterHasAmount} onChange={e => setFilterHasAmount(e.target.checked)}
+                className="w-4 h-4 accent-purple-700" />
+              納付額あり のみ表示
+            </label>
             {scheduleInfo && (
               <span className="text-xs text-gray-500">
                 合計 {scheduleInfo.count}件
@@ -464,6 +470,7 @@ export default function MonthlyPage() {
                   const bg = even ? 'bg-white' : 'bg-gray-50'
                   const entries = taxSchedules.filter(s => s.matched_client_code === c.code && (!filterTaxMonth || s.month === parseInt(filterTaxMonth)))
                   if (entries.length === 0) {
+                    if (filterHasAmount) return []
                     return [(
                       <tr key={c.id} className={bg}>
                         <td className={stickyCode(even)}>{c.code}</td>
