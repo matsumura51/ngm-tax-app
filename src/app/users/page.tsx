@@ -43,7 +43,7 @@ export default function UsersPage() {
 
   async function load() {
     const supabase = createClient()
-    const { data } = await supabase.from('users').select('*').order('name')
+    const { data } = await supabase.from('users').select('*').order('code')
     setUsers(data || [])
     setLoading(false)
   }
