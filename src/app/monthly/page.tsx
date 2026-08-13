@@ -70,6 +70,8 @@ export default function MonthlyPage() {
   const [importing, setImporting] = useState(false)
   const [sheets, setSheets] = useState<{ name: string }[]>([])
   const [selectedSheet, setSelectedSheet] = useState('6月')
+  const [filterStaff, setFilterStaff] = useState('')
+  const [filterFiscalMonth, setFilterFiscalMonth] = useState('')
 
   const SHEET_ID = '1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc'
 
@@ -219,7 +221,16 @@ export default function MonthlyPage() {
     setSettleModal(null)
   }
 
-  const filtered = clients.filter(c => !search || c.name.includes(search) || c.code.includes(search))
+  const staffOptions = Array.from(new Set(clients.map(c => c.primary_staff).filter(Boolean))).sort()
+  const filtered = clients.filter(c => {
+    if (search && !c.name.includes(search) && !c.code.includes(search)) return false
+    if (filterStaff && c.primary_staff !== filterStaff) return false
+    if (filterFiscalMonth !== '') {
+      const fm = filterFiscalMonth === '個人' ? 0 : parseInt(filterFiscalMonth)
+      if (c.fiscal_month !== fm) return false
+    }
+    return true
+  })
   const currentMonth = new Date().getMonth() + 1
 
   function getMonthVal(code: string, field: string, month: string, isDate: boolean): string {
@@ -263,6 +274,23 @@ export default function MonthlyPage() {
             onChange={e => setSearch(e.target.value)}
             className="border border-gray-300 rounded-lg pl-9 pr-4 py-2 text-sm w-64" />
         </div>
+        <select value={filterStaff} onChange={e => setFilterStaff(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700">
+          <option value="">担当者（全員）</option>
+          {staffOptions.map(s => <option key={s} value={s!}>{s}</option>)}
+        </select>
+        <select value={filterFiscalMonth} onChange={e => setFilterFiscalMonth(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700">
+          <option value="">決算月（全月）</option>
+          <option value="個人">個人</option>
+          {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={String(m)}>{m}月</option>)}
+        </select>
+        {(filterStaff || filterFiscalMonth) && (
+          <button onClick={() => { setFilterStaff(''); setFilterFiscalMonth('') }}
+            className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+            <X size={14} />絞り込み解除
+          </button>
+        )}
         <span className="text-sm text-gray-500">{filtered.length}件</span>
       </div>
 
