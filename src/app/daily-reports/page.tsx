@@ -3,16 +3,16 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-import { DailyReport } from '@/lib/types'
-import { Plus, ChevronRight } from 'lucide-react'
+import { DailyReport, DailyReportDetail } from '@/lib/types'
+import { Plus, ChevronRight, ChevronDown } from 'lucide-react'
 
 export default function DailyReportsPage() {
   const [reports, setReports] = useState<DailyReport[]>([])
   const [loading, setLoading] = useState(true)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [detailsCache, setDetailsCache] = useState<Record<string, DailyReportDetail[]>>({})
 
-  useEffect(() => {
-    load()
-  }, [])
+  useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
@@ -24,6 +24,19 @@ export default function DailyReportsPage() {
       .limit(50)
     setReports(data || [])
     setLoading(false)
+  }
+
+  async function toggleExpand(e: React.MouseEvent, reportId: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (expandedId === reportId) { setExpandedId(null); return }
+    setExpandedId(reportId)
+    if (!detailsCache[reportId]) {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('daily_report_details').select('*').eq('report_id', reportId).order('sort_order')
+      setDetailsCache(prev => ({ ...prev, [reportId]: data || [] }))
+    }
   }
 
   return (
@@ -47,8 +60,8 @@ export default function DailyReportsPage() {
           <ul className="divide-y divide-gray-100">
             {reports.map(r => (
               <li key={r.id}>
-                <Link href={`/daily-reports/${r.id}`} className="flex items-center px-6 py-4 hover:bg-gray-50 transition">
-                  <div className="flex-1">
+                <div className="flex items-center px-6 py-4 hover:bg-gray-50 transition">
+                  <Link href={`/daily-reports/${r.id}`} className="flex-1 min-w-0">
                     <div className="flex items-center gap-3">
                       <span className="font-semibold text-gray-800">{r.date}</span>
                       <span className="text-sm text-gray-500">{r.user_name}</span>
@@ -59,14 +72,49 @@ export default function DailyReportsPage() {
                     <p className="text-sm text-gray-500 mt-0.5 line-clamp-1">
                       {r.important_report || r.performance_activity || '（内容なし）'}
                     </p>
-                  </div>
-                  <div className="flex items-center gap-3">
+                  </Link>
+                  <div className="flex items-center gap-2 ml-3 shrink-0">
                     {r.total_hours && (
                       <span className="text-sm text-gray-400">{r.total_hours}</span>
                     )}
-                    <ChevronRight size={16} className="text-gray-300" />
+                    <button onClick={e => toggleExpand(e, r.id)}
+                      className="p-1 rounded hover:bg-gray-200 transition text-gray-400 hover:text-gray-600">
+                      {expandedId === r.id
+                        ? <ChevronDown size={16} />
+                        : <ChevronRight size={16} />}
+                    </button>
                   </div>
-                </Link>
+                </div>
+                {expandedId === r.id && (
+                  <div className="px-6 pb-3 bg-gray-50 border-t border-gray-100">
+                    {!detailsCache[r.id] ? (
+                      <p className="text-xs text-gray-400 py-2">読み込み中...</p>
+                    ) : detailsCache[r.id].length === 0 ? (
+                      <p className="text-xs text-gray-400 py-2">業務明細なし</p>
+                    ) : (
+                      <table className="w-full text-xs mt-2">
+                        <thead>
+                          <tr className="text-gray-400">
+                            <th className="text-left pb-1 w-16">時間</th>
+                            <th className="text-left pb-1 w-24">業務区分</th>
+                            <th className="text-left pb-1 w-32">顧客名</th>
+                            <th className="text-left pb-1">作業内容</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {detailsCache[r.id].map((d, i) => (
+                            <tr key={i} className="text-gray-600">
+                              <td className="py-1">{d.work_time || ''}</td>
+                              <td className="py-1">{d.task_type || ''}</td>
+                              <td className="py-1 truncate max-w-[128px]">{d.client_name || ''}</td>
+                              <td className="py-1 truncate">{d.report_content || ''}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
