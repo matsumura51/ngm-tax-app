@@ -148,7 +148,7 @@ export default function DailyReportNewPage() {
     if (error) { alert('エラー: ' + error.message); setSaving(false); return }
 
     const detailRows = details
-      .filter(d => d.task_type || d.client_name || d.report_content)
+      .filter(d => d.task_type || d.client_code || d.client_name || d.report_content || d.start_time || d.end_time)
       .map((d, i) => ({ ...d, report_id: report.id, sort_order: i }))
 
     if (detailRows.length > 0) {

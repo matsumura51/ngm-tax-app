@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, use } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { DailyReport, DailyReportDetail } from '@/lib/types'
 import { ChevronLeft, Trash2, Plus } from 'lucide-react'
@@ -34,7 +33,6 @@ function sumWorkTimes(rows: { work_time: string | null | undefined }[]): string 
 
 export default function DailyReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const router = useRouter()
   const [report, setReport] = useState<DailyReport | null>(null)
   const [details, setDetails] = useState<DailyReportDetail[]>([])
   const [saving, setSaving] = useState(false)
@@ -61,7 +59,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
     const supabase = createClient()
     await supabase.from('daily_report_details').delete().eq('report_id', id)
     await supabase.from('daily_reports').delete().eq('id', id)
-    router.push('/daily-reports')
+    window.location.href = '/daily-reports'
   }
 
   function selectClient(i: number, code: string, name: string) {
@@ -108,9 +106,17 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
     }).eq('id', id)
 
     await supabase.from('daily_report_details').delete().eq('report_id', id)
-    const rows = details.filter(d => d.task_type || d.client_name || d.report_content)
-      .map((d, i) => ({ ...d, report_id: id, sort_order: i, id: undefined }))
-    if (rows.length > 0) await supabase.from('daily_report_details').insert(rows)
+    const rows = details
+      .filter(d => d.task_type || d.client_code || d.client_name || d.report_content || d.start_time || d.end_time)
+      .map((d, i) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id: _id, ...rest } = d
+        return { ...rest, report_id: id, sort_order: i }
+      })
+    if (rows.length > 0) {
+      const { error } = await supabase.from('daily_report_details').insert(rows)
+      if (error) { alert('明細の保存エラー: ' + error.message); setSaving(false); return }
+    }
 
     setSaving(false)
     await load()
