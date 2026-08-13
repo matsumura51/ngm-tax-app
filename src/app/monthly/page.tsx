@@ -72,6 +72,7 @@ export default function MonthlyPage() {
   const [selectedSheet, setSelectedSheet] = useState('6月')
   const [filterStaff, setFilterStaff] = useState('')
   const [filterFiscalMonth, setFilterFiscalMonth] = useState('')
+  const [editingCell, setEditingCell] = useState<{ id: string; field: string; value: string } | null>(null)
 
   const SHEET_ID = '1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc'
 
@@ -150,6 +151,41 @@ export default function MonthlyPage() {
     } finally {
       setImporting(false)
     }
+  }
+
+  function saveCell() {
+    if (!editingCell) return
+    const { id, field, value } = editingCell
+    setEditingCell(null)
+    setTaxSchedules(prev => prev.map(s => s.id === id ? { ...s, [field]: value || null } : s))
+    const supabase = createClient()
+    supabase.from('tax_schedules').update({ [field]: value || null }).eq('id', id)
+  }
+
+  function edCell(s: TaxSchedule, field: 'payment_method' | 'send_date' | 'payment_date' | 'confirmation', extraClass = '') {
+    const isEditing = editingCell?.id === s.id && editingCell?.field === field
+    const val = (s[field] as string | null) || ''
+    if (isEditing) {
+      return (
+        <input
+          autoFocus
+          value={editingCell!.value}
+          onChange={e => setEditingCell(c => c ? { ...c, value: e.target.value } : null)}
+          onBlur={saveCell}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveCell() } else if (e.key === 'Escape') setEditingCell(null) }}
+          className="w-full px-1 py-0.5 text-[11px] border border-blue-400 rounded focus:outline-none"
+          style={{ minWidth: '60px' }}
+        />
+      )
+    }
+    return (
+      <span
+        onClick={() => setEditingCell({ id: s.id, field, value: val })}
+        className={`block w-full min-h-[1.2em] cursor-pointer ${extraClass}`}
+      >
+        {val}
+      </span>
+    )
   }
 
   function prog(code: string): MonthlyProgress | null { return progressMap[code] || null }
@@ -445,10 +481,10 @@ export default function MonthlyPage() {
                       <td className="px-2 py-2 text-right text-gray-800 text-[11px] font-medium tabular-nums">{s.amount || ''}</td>
                       <td className={td}>{s.installment || ''}</td>
                       <td className="px-2 py-2 text-center text-red-600 font-medium text-[11px]">{s.deadline || ''}</td>
-                      <td className={td}>{s.payment_method || ''}</td>
-                      <td className={td}>{s.send_date || ''}</td>
-                      <td className={td}>{s.payment_date || ''}</td>
-                      <td className={`${td} ${s.confirmation ? 'text-green-600 font-medium' : ''}`}>{s.confirmation || ''}</td>
+                      <td className={`${td} hover:bg-yellow-50`}>{edCell(s, 'payment_method')}</td>
+                      <td className={`${td} hover:bg-yellow-50`}>{edCell(s, 'send_date')}</td>
+                      <td className={`${td} hover:bg-yellow-50`}>{edCell(s, 'payment_date')}</td>
+                      <td className={`${td} hover:bg-yellow-50`}>{edCell(s, 'confirmation', s.confirmation ? 'text-green-600 font-medium' : '')}</td>
                     </tr>
                   ))
                 })}
