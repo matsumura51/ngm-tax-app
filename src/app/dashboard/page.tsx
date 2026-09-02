@@ -61,6 +61,19 @@ interface MonthlyItem {
 
 interface ReturnItem { client_code: string | null; client_name: string; staff_name: string | null; category: '決算業務' | '年末調整' | '確定申告' }
 
+interface TaxSchedItem {
+  id: string
+  client_name: string
+  tax_type: string | null
+  amount: string | null
+  installment: string | null
+  deadline: string | null
+  payment_method: string | null
+  send_date: string | null
+  payment_date: string | null
+  confirmation: string | null
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats>({ corporateCount: 0, individualCount: 0, todaySchedules: 0, unreadReports: 0 })
   const [todayScheduleList, setTodayScheduleList] = useState<{ id: string; title: string; start_datetime: string; end_datetime: string | null; user_name: string; facility: string | null; color: string | null }[]>([])
@@ -83,6 +96,11 @@ export default function DashboardPage() {
   const [returnModalOpen, setReturnModalOpen] = useState(false)
   const [returnModalStaff, setReturnModalStaff] = useState<string | null>(null)
 
+  const [taxSchedules, setTaxSchedules] = useState<TaxSchedItem[]>([])
+  const [taxSchedYear, setTaxSchedYear] = useState(new Date().getFullYear())
+  const [taxSchedMonth, setTaxSchedMonth] = useState(new Date().getMonth() + 1)
+  const [taxSchedLoading, setTaxSchedLoading] = useState(false)
+
   const now = new Date()
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
@@ -100,7 +118,7 @@ export default function DashboardPage() {
       setShowWithholding(localStorage.getItem('dash_show_withholding') === 'true')
       setShowTaxReturn(localStorage.getItem('dash_show_taxreturn') === 'true')
     } catch { /* ignore */ }
-    loadStats(); loadProgress()
+    loadStats(); loadProgress(); loadTaxSchedules(new Date().getFullYear(), new Date().getMonth() + 1)
   }, [])
 
   async function loadStats() {
@@ -275,6 +293,33 @@ export default function DashboardPage() {
   }
 
   // 担当者別集計
+  async function loadTaxSchedules(y: number, m: number) {
+    setTaxSchedLoading(true)
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('tax_schedules')
+      .select('id, client_name, tax_type, amount, installment, deadline, payment_method, send_date, payment_date, confirmation')
+      .eq('year', y)
+      .eq('month', m)
+      .order('client_name')
+    setTaxSchedules(data || [])
+    setTaxSchedLoading(false)
+  }
+
+  function updateTaxSched(id: string, field: 'confirmation' | 'payment_date' | 'send_date', value: string) {
+    setTaxSchedules(prev => prev.map(s => s.id === id ? { ...s, [field]: value || null } : s))
+    createClient().from('tax_schedules').update({ [field]: value || null }).eq('id', id)
+  }
+
+  function taxSchedNav(delta: number) {
+    let m = taxSchedMonth + delta
+    let y = taxSchedYear
+    if (m < 1) { m = 12; y-- }
+    if (m > 12) { m = 1; y++ }
+    setTaxSchedYear(y); setTaxSchedMonth(m)
+    loadTaxSchedules(y, m)
+  }
+
   function staffSummary(items: { primary_staff: string | null }[]) {
     const map: Record<string, number> = {}
     for (const item of items) {
@@ -956,6 +1001,81 @@ export default function DashboardPage() {
             </>
           )}
         </div>
+
+      {/* ── 予定納税一覧 ── */}
+      <div className="bg-white rounded-xl shadow overflow-hidden mt-8">
+        <div className="bg-indigo-50 border-b border-indigo-100 px-5 py-3 flex items-center justify-between flex-wrap gap-2">
+          <span className="font-bold text-indigo-700 text-sm">予定納税一覧</span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => taxSchedNav(-1)} className="px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs">◀</button>
+            <span className="text-sm font-bold text-gray-700 min-w-[72px] text-center">{taxSchedYear}年{taxSchedMonth}月</span>
+            <button onClick={() => taxSchedNav(1)} className="px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs">▶</button>
+          </div>
+        </div>
+
+        {taxSchedLoading ? (
+          <div className="text-center py-8 text-sm text-gray-400">読み込み中...</div>
+        ) : taxSchedules.length === 0 ? (
+          <div className="text-center py-8 text-sm text-gray-400">この月のデータがありません</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs text-gray-500">
+                <tr>
+                  <th className="text-left px-4 py-2 font-medium">顧客名</th>
+                  <th className="text-left px-4 py-2 font-medium">税目</th>
+                  <th className="text-right px-4 py-2 font-medium">金額</th>
+                  <th className="text-center px-4 py-2 font-medium">期限</th>
+                  <th className="text-center px-4 py-2 font-medium">支払方法</th>
+                  <th className="text-center px-4 py-2 font-medium">送付日</th>
+                  <th className="text-center px-4 py-2 font-medium">支払日</th>
+                  <th className="text-center px-4 py-2 font-medium w-28">確認</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {taxSchedules.map(s => (
+                  <tr key={s.id} className={`hover:bg-gray-50 ${s.confirmation === '済' ? 'opacity-60' : ''}`}>
+                    <td className="px-4 py-2 font-medium text-gray-800">{s.client_name}</td>
+                    <td className="px-4 py-2 text-gray-600">{s.tax_type || ''}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-gray-800">{s.amount || ''}</td>
+                    <td className="px-4 py-2 text-center text-gray-600 text-xs">{s.deadline || ''}</td>
+                    <td className="px-4 py-2 text-center text-gray-600 text-xs">{s.payment_method || ''}</td>
+                    <td className="px-4 py-2 text-center text-gray-600 text-xs">
+                      <input
+                        type="date"
+                        className="border border-gray-200 rounded px-1 py-0.5 text-xs w-[108px]"
+                        value={s.send_date || ''}
+                        onChange={e => updateTaxSched(s.id, 'send_date', e.target.value)}
+                      />
+                    </td>
+                    <td className="px-4 py-2 text-center text-gray-600 text-xs">
+                      <input
+                        type="date"
+                        className="border border-gray-200 rounded px-1 py-0.5 text-xs w-[108px]"
+                        value={s.payment_date || ''}
+                        onChange={e => updateTaxSched(s.id, 'payment_date', e.target.value)}
+                      />
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <select
+                        className={`border rounded px-2 py-0.5 text-xs w-full ${s.confirmation === '済' ? 'border-green-300 bg-green-50 text-green-700 font-bold' : s.confirmation === '要確認' ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-200 text-gray-600'}`}
+                        value={s.confirmation || ''}
+                        onChange={e => updateTaxSched(s.id, 'confirmation', e.target.value)}
+                      >
+                        <option value="">未</option>
+                        <option value="済">済</option>
+                        <option value="要確認">要確認</option>
+                        <option value="口座振替">口座振替</option>
+                        <option value="不要">不要</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       </div>
     </div>
