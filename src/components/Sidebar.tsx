@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { LayoutDashboard, FileText, Calendar, ClipboardList, LogOut, Users, UserCog, AlertCircle, HelpCircle, BarChart2, Receipt, Landmark, ListChecks, BookOpen, X } from 'lucide-react'
 
@@ -27,17 +26,9 @@ interface SidebarProps {
   onClose?: () => void
 }
 
-export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
+export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const [isMobile, setIsMobile] = useState(false)
-
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768)
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [])
 
   async function handleLogout() {
     const supabase = createClient()
@@ -49,18 +40,8 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
     onClose?.()
   }
 
-  const sidebarStyle: React.CSSProperties = isMobile
-    ? {
-        transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
-        transition: 'transform 300ms ease-in-out',
-      }
-    : {}
-
   return (
-    <aside
-      className="fixed md:sticky top-0 left-0 z-40 h-screen w-64 md:w-56 bg-blue-800 text-white flex flex-col shrink-0"
-      style={sidebarStyle}
-    >
+    <aside className={`app-sidebar fixed md:sticky top-0 left-0 z-40 h-screen w-64 md:w-56 bg-blue-800 text-white flex flex-col shrink-0${isOpen ? ' open' : ''}`}>
       <div className="px-6 py-5 border-b border-blue-700 flex items-center justify-between">
         <div>
           <div className="font-bold text-lg leading-tight">業務管理</div>
