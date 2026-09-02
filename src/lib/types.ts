@@ -183,6 +183,8 @@ export interface Schedule {
   no_deadline: boolean
   recurring_id: number | null
   facility: string | null
+  companions: string | null
+  break_minutes: number | null
   created_at: string
 }
 

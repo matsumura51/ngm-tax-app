@@ -316,15 +316,22 @@ function SchedulesContent() {
                     <div className="space-y-0.5">
                       {scheds.map(s => {
                         const facs = s.facility ? s.facility.split(',').map(f => f.trim()).filter(f => f) : []
+                        const comps = (s as Schedule & { companions?: string | null }).companions
+                          ? ((s as Schedule & { companions?: string | null }).companions!).split(',').map(c => c.trim()).filter(c => c)
+                          : []
+                        const breakMin = (s as Schedule & { break_minutes?: number | null }).break_minutes
                         return (
                           <Link key={s.id} href={`/schedules/${s.id}`}>
                             <div className="text-xs px-1.5 py-1 rounded leading-snug hover:opacity-80 transition"
                               style={colorStyle(s.color)}>
                               <div className="opacity-80 text-[10px] font-medium whitespace-nowrap">
                                 {formatTime(s.start_datetime)}{s.end_datetime ? ` - ${formatTime(s.end_datetime)}` : ''}
+                                {breakMin ? <span className="ml-1 opacity-70">休{breakMin}分</span> : null}
                               </div>
                               {s.user_name && (
-                                <div className="truncate font-bold text-[11px]">{s.user_name}</div>
+                                <div className="truncate font-bold text-[11px]">
+                                  {s.user_name}{comps.length > 0 ? `・${comps.join('・')}` : ''}
+                                </div>
                               )}
                               <div className="truncate text-[11px]">{s.title}</div>
                               {facs.length > 0 && (

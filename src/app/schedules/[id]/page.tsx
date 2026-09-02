@@ -53,6 +53,10 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
   const [suggestions, setSuggestions] = useState<{ matches: { id: string; code: string; name: string }[]; top: number; left: number } | null>(null)
   const [autoTitle, setAutoTitle] = useState(false)
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([])
+  const [allUsers, setAllUsers] = useState<{ id: string; name: string }[]>([])
+  const [selectedCompanions, setSelectedCompanions] = useState<string[]>([])
+  const [breakMinutes, setBreakMinutes] = useState('')
+  const [currentUserId, setCurrentUserId] = useState('')
 
   function toggleFacility(f: string) {
     setSelectedFacilities(prev =>
@@ -70,11 +74,15 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
 
   async function load() {
     const supabase = createClient()
-    const [{ data: s }, { data: clientsData }] = await Promise.all([
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) setCurrentUserId(user.id)
+    const [{ data: s }, { data: clientsData }, { data: usersData }] = await Promise.all([
       supabase.from('schedules').select('*').eq('id', id).single(),
       supabase.from('clients').select('id, code, name').order('code'),
+      supabase.from('users').select('id, name').order('name'),
     ])
     setClients(clientsData || [])
+    setAllUsers(usersData || [])
     if (s) {
       setSchedule(s)
       const start = new Date(s.start_datetime)
@@ -84,6 +92,8 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
       const title = s.title || ''
       setAutoTitle(title === makeAutoTitle(clientName, color))
       setSelectedFacilities(s.facility ? s.facility.split(',').map((f: string) => f.trim()) : [])
+      setSelectedCompanions(s.companions ? s.companions.split(',').map((c: string) => c.trim()) : [])
+      setBreakMinutes(s.break_minutes != null ? String(s.break_minutes) : '')
       setForm({
         title,
         date: start.toISOString().split('T')[0],
@@ -188,6 +198,8 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
       client_code: form.client_code || null,
       memo: form.memo || null,
       facility: selectedFacilities.length > 0 ? selectedFacilities.join(',') : null,
+      companions: selectedCompanions.length > 0 ? selectedCompanions.join(',') : null,
+      break_minutes: breakMinutes ? parseInt(breakMinutes, 10) : null,
     }).eq('id', id)
     if (error) alert('エラー: ' + error.message)
     setSaving(false)
@@ -292,6 +304,48 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
                 </label>
               ))}
             </div>
+          </div>
+
+          {/* 同行者 */}
+          {allUsers.filter(u => u.id !== currentUserId).length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">同行者</label>
+              <div className="flex flex-wrap gap-2">
+                {allUsers.filter(u => u.id !== currentUserId).map(u => (
+                  <label key={u.id} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs border cursor-pointer transition select-none ${
+                    selectedCompanions.includes(u.name)
+                      ? 'bg-purple-100 text-purple-700 border-purple-300'
+                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                  }`}>
+                    <input type="checkbox" className="sr-only"
+                      checked={selectedCompanions.includes(u.name)}
+                      onChange={() => setSelectedCompanions(prev =>
+                        prev.includes(u.name) ? prev.filter(n => n !== u.name) : [...prev, u.name]
+                      )} />
+                    {u.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 休憩時間 */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              休憩時間（分）
+              {breakMinutes && form.start_time && form.end_time && (() => {
+                const start = form.start_time.split(':').map(Number)
+                const end = form.end_time.split(':').map(Number)
+                const totalMin = (end[0] * 60 + end[1]) - (start[0] * 60 + start[1])
+                const net = totalMin - parseInt(breakMinutes, 10)
+                if (net > 0) return <span className="ml-2 text-indigo-600 font-normal">→ 実質 {Math.floor(net / 60)}:{String(net % 60).padStart(2, '0')}</span>
+                return null
+              })()}
+            </label>
+            <input type="number" min="0" max="480" className={inputClass + ' w-32'}
+              value={breakMinutes}
+              onChange={e => setBreakMinutes(e.target.value)}
+              placeholder="例: 60" />
           </div>
 
           {/* タイトル */}
