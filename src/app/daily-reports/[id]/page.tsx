@@ -296,6 +296,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
                 <th className="px-2 py-2 text-left w-20">終了</th>
                 <th className="px-2 py-2 text-left w-20">時間</th>
                 <th className="px-2 py-2 text-left w-28">業務区分</th>
+                <th className="px-2 py-2 text-left w-28">処理年月</th>
                 <th className="px-2 py-2 text-left w-24">顧客コード</th>
                 <th className="px-2 py-2 text-left w-36">顧客名</th>
                 <th className="px-2 py-2 text-left">作業内容</th>
@@ -314,6 +315,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
                       {TASK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </td>
+                  <td className="px-1 py-1"><input type="month" className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.subject || ''} onChange={e => setRow(i, 'subject', e.target.value)} /></td>
                   <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_code || ''} onChange={e => onClientCodeChange(i, e.target.value)} /></td>
                   <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_name || ''} onChange={e => onClientNameChange(i, e)} onBlur={() => setTimeout(() => setSuggestions(null), 150)} /></td>
                   <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.report_content || ''} onChange={e => setRow(i, 'report_content', e.target.value)} /></td>
