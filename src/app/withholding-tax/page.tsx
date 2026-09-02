@@ -48,23 +48,34 @@ export default function WithholdingTaxPage() {
   async function loadWithholding() {
     setLoading(true)
     const supabase = createClient()
+    // 当年・前年の2年分を取得し、クライアントごとに最新年を採用
     const { data: records } = await supabase
       .from('withholding_records')
-      .select('id, client_code, client_name, client_id')
-      .eq('year', year)
+      .select('id, client_code, client_name, client_id, year')
+      .in('year', [year, year - 1])
+      .order('year', { ascending: false })
       .order('client_name')
 
     if (!records || records.length === 0) { setSummaries([]); setLoading(false); return }
 
+    // 同一client_codeで複数年ある場合は最新年のみ残す
+    const seenCodes = new Set<string>()
+    const deduped = records.filter(r => {
+      const key = r.client_code || r.client_name
+      if (seenCodes.has(key)) return false
+      seenCodes.add(key)
+      return true
+    })
+
     // client_idがnullのレコードはclient_codeでclientsテーブルからIDを補完
-    const missingCodes = records.filter(r => !r.client_id && r.client_code).map(r => r.client_code)
+    const missingCodes = deduped.filter(r => !r.client_id && r.client_code).map(r => r.client_code)
     const codeToId: Record<string, string> = {}
     if (missingCodes.length > 0) {
       const { data: clients } = await supabase.from('clients').select('id, code').in('code', missingCodes)
       for (const c of (clients || [])) codeToId[c.code] = c.id
     }
 
-    const recordIds = records.map(r => r.id)
+    const recordIds = deduped.map(r => r.id)
     const { data: items } = await supabase
       .from('withholding_record_items')
       .select('record_id, monthly_data')
@@ -81,7 +92,7 @@ export default function WithholdingTaxPage() {
       }
     }
 
-    setSummaries(records.map(r => ({
+    setSummaries(deduped.map(r => ({
       client_id: r.client_id || (r.client_code ? codeToId[r.client_code] || null : null),
       client_code: r.client_code || '',
       client_name: r.client_name,
