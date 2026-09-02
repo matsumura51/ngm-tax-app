@@ -721,7 +721,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-bold text-gray-800">{b.title}</span>
                       <span className="text-xs text-gray-400">
-                        {b.created_by} · {new Date(b.created_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
+                        {b.created_by} · {new Date(b.created_at).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </span>
                       {b.is_read_by_me && (
                         <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">自分は確認済み</span>

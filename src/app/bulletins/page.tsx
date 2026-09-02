@@ -182,7 +182,7 @@ export default function BulletinsPage() {
                               )}
                             </div>
                             <div className="text-xs text-gray-400 mb-2">
-                              {b.created_by} · {new Date(b.created_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
+                              {b.created_by} · {new Date(b.created_at).toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </div>
                             {b.content && (
                               <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{b.content}</p>
@@ -259,7 +259,7 @@ export default function BulletinsPage() {
                               </span>
                             </div>
                             <div className="text-xs text-gray-400 mb-2">
-                              {b.created_by} · {new Date(b.created_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
+                              {b.created_by} · {new Date(b.created_at).toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </div>
                             {b.content && (
                               <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">{b.content}</p>
