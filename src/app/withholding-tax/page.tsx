@@ -96,20 +96,18 @@ export default function WithholdingTaxPage() {
   async function loadTaxFees() {
     setLoading(true)
     const supabase = createClient()
-    // 3年分を取得（年度と月次進捗の年がずれる場合に対応）
+    // 年フィルターなし・全期間取得（月次進捗のyearと選択年がずれる場合に対応）
     const { data } = await supabase
       .from('monthly_progress')
       .select('client_code, client_name, monthly_fee, year')
-      .in('year', [year - 2, year - 1, year])
+      .gte('year', 2020)
       .order('year', { ascending: false })
-      .order('client_code')
 
-    // 同一client_codeで複数年レコードがある場合、最も新しい年のうち報酬があるものを使う
-    const seen = new Set<string>()
-    const rows: TaxFeeRow[] = []
+    // client_codeごとに「報酬合計が最大のレコード」を採用
+    const bestMap: Record<string, { client_name: string; monthly: Record<string, number>; total: number; year: number }> = {}
 
     for (const p of (data || [])) {
-      const feeObj: Record<string, string | number | null> = p.monthly_fee || {}
+      const feeObj: Record<string, string | number | null> = (p.monthly_fee as Record<string, string | number | null>) || {}
       const monthly: Record<string, number> = {}
       let total = 0
       for (const m of MONTHS) {
@@ -117,13 +115,17 @@ export default function WithholdingTaxPage() {
         monthly[m] = amt
         total += amt
       }
-      if (total > 0 && !seen.has(p.client_code)) {
-        seen.add(p.client_code)
-        rows.push({ client_code: p.client_code, client_name: p.client_name, monthly, total, year: p.year })
+      if (total === 0) continue
+      const existing = bestMap[p.client_code]
+      if (!existing || total > existing.total) {
+        bestMap[p.client_code] = { client_name: p.client_name, monthly, total, year: p.year }
       }
     }
 
-    rows.sort((a, b) => a.client_code.localeCompare(b.client_code))
+    const rows: TaxFeeRow[] = Object.entries(bestMap)
+      .map(([client_code, v]) => ({ client_code, ...v }))
+      .sort((a, b) => a.client_code.localeCompare(b.client_code))
+
     setTaxFees(rows)
     setLoading(false)
   }
