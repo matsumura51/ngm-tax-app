@@ -149,9 +149,15 @@ function SchedulesContent() {
 
   function daySchedules(date: Date, userId?: string): Schedule[] {
     const ds = toDateStr(date)
+    const userName = userId ? users.find(u => u.id === userId)?.name : undefined
     return schedules.filter(s => {
       if (toDateStr(new Date(s.start_datetime)) !== ds) return false
-      if (userId && s.user_id !== userId) return false
+      if (userId) {
+        const isOwner = s.user_id === userId
+        const companionNames = s.companions ? s.companions.split(',').map(c => c.trim()) : []
+        const isCompanion = !!userName && companionNames.includes(userName)
+        if (!isOwner && !isCompanion) return false
+      }
       if (facilityFilter && !s.facility?.split(',').map(f => f.trim()).includes(facilityFilter)) return false
       return true
     })
@@ -241,20 +247,29 @@ function SchedulesContent() {
                       </div>
                     )}
                     <div className="space-y-0.5">
-                      {scheds.slice(0, 4).map(s => (
-                        <Link key={s.id} href={`/schedules/${s.id}`}>
-                          <div className="text-xs px-1.5 py-1 rounded leading-snug hover:opacity-80 transition"
-                            style={colorStyle(s.color)}>
-                            <div className="opacity-80 text-[10px] font-medium whitespace-nowrap">
-                              {formatTime(s.start_datetime)}{s.end_datetime ? ` - ${formatTime(s.end_datetime)}` : ''}
+                      {scheds.slice(0, 4).map(s => {
+                        const comps = s.companions ? s.companions.split(',').map(c => c.trim()).filter(c => c) : []
+                        const filterUserName = selectedUserId !== 'all' ? users.find(u => u.id === selectedUserId)?.name : undefined
+                        const isCompanionEvent = !!filterUserName && s.user_id !== selectedUserId && comps.includes(filterUserName)
+                        return (
+                          <Link key={s.id} href={`/schedules/${s.id}`}>
+                            <div className={`text-xs px-1.5 py-1 rounded leading-snug hover:opacity-80 transition ${isCompanionEvent ? 'ring-1 ring-white/60' : ''}`}
+                              style={colorStyle(s.color)}>
+                              <div className="opacity-80 text-[10px] font-medium whitespace-nowrap">
+                                {formatTime(s.start_datetime)}{s.end_datetime ? ` - ${formatTime(s.end_datetime)}` : ''}
+                                {s.break_minutes ? <span className="ml-1 opacity-70">休{s.break_minutes}分</span> : null}
+                              </div>
+                              {s.user_name && (
+                                <div className="truncate font-bold text-[11px]">
+                                  {isCompanionEvent && <span className="opacity-70 font-normal">同行: </span>}
+                                  {s.user_name}{comps.length > 0 ? `・${comps.join('・')}` : ''}
+                                </div>
+                              )}
+                              <div className="truncate text-[11px]">{s.title}</div>
                             </div>
-                            {s.user_name && (
-                              <div className="truncate font-bold text-[11px]">{s.user_name}</div>
-                            )}
-                            <div className="truncate text-[11px]">{s.title}</div>
-                          </div>
-                        </Link>
-                      ))}
+                          </Link>
+                        )
+                      })}
                       {scheds.length > 4 && <div className="text-gray-400 pl-1 text-[10px]">+{scheds.length - 4}件</div>}
                     </div>
                     {calcTotal(scheds) && <div className="text-right text-[9px] text-gray-400 mt-0.5">{calcTotal(scheds)}</div>}
@@ -316,13 +331,13 @@ function SchedulesContent() {
                     <div className="space-y-0.5">
                       {scheds.map(s => {
                         const facs = s.facility ? s.facility.split(',').map(f => f.trim()).filter(f => f) : []
-                        const comps = (s as Schedule & { companions?: string | null }).companions
-                          ? ((s as Schedule & { companions?: string | null }).companions!).split(',').map(c => c.trim()).filter(c => c)
-                          : []
-                        const breakMin = (s as Schedule & { break_minutes?: number | null }).break_minutes
+                        const comps = s.companions ? s.companions.split(',').map(c => c.trim()).filter(c => c) : []
+                        const breakMin = s.break_minutes
+                        // この行のユーザーが同行者として登録されているか（主担当でない場合）
+                        const isCompanionEvent = s.user_id !== user.id && comps.includes(user.name)
                         return (
                           <Link key={s.id} href={`/schedules/${s.id}`}>
-                            <div className="text-xs px-1.5 py-1 rounded leading-snug hover:opacity-80 transition"
+                            <div className={`text-xs px-1.5 py-1 rounded leading-snug hover:opacity-80 transition ${isCompanionEvent ? 'ring-1 ring-white/60' : ''}`}
                               style={colorStyle(s.color)}>
                               <div className="opacity-80 text-[10px] font-medium whitespace-nowrap">
                                 {formatTime(s.start_datetime)}{s.end_datetime ? ` - ${formatTime(s.end_datetime)}` : ''}
@@ -330,6 +345,7 @@ function SchedulesContent() {
                               </div>
                               {s.user_name && (
                                 <div className="truncate font-bold text-[11px]">
+                                  {isCompanionEvent && <span className="opacity-70 font-normal">同行: </span>}
                                   {s.user_name}{comps.length > 0 ? `・${comps.join('・')}` : ''}
                                 </div>
                               )}
@@ -444,13 +460,22 @@ function SchedulesContent() {
                   const left = minutesToPct(startMin)
                   const width = Math.max(minutesToPct(endMin) - left, 1.5)
                   const facilities = s.facility ? s.facility.split(',').map(f => f.trim()) : []
+                  const comps = s.companions ? s.companions.split(',').map(c => c.trim()).filter(c => c) : []
+                  const isCompanionEvent = s.user_id !== user.id
+                  const breakLabel = s.break_minutes ? ` 休${s.break_minutes}分` : ''
                   return (
                     <Link key={s.id} href={`/schedules/${s.id}`}
-                      title={`${formatTime(s.start_datetime)}-${s.end_datetime ? formatTime(s.end_datetime) : ''} ${s.client_name ? s.client_name + '：' : ''}${s.title}`}
+                      title={`${formatTime(s.start_datetime)}-${s.end_datetime ? formatTime(s.end_datetime) : ''}${breakLabel} ${s.client_name ? s.client_name + '：' : ''}${s.title}`}
                       className="absolute top-1 bottom-1 rounded text-xs overflow-hidden px-1.5 py-1 leading-snug hover:opacity-80 transition"
                       style={{ left: `${left}%`, width: `${width}%`, ...colorStyle(s.color) }}>
-                      <div className="opacity-80 text-[10px] font-medium whitespace-nowrap">{formatTime(s.start_datetime)}{s.end_datetime ? `-${formatTime(s.end_datetime)}` : ''}</div>
-                      <div className="truncate font-bold text-[11px]">{s.user_name}</div>
+                      <div className="opacity-80 text-[10px] font-medium whitespace-nowrap">
+                        {formatTime(s.start_datetime)}{s.end_datetime ? `-${formatTime(s.end_datetime)}` : ''}
+                        {s.break_minutes ? <span className="ml-1 opacity-70">休{s.break_minutes}分</span> : null}
+                      </div>
+                      <div className="truncate font-bold text-[11px]">
+                        {isCompanionEvent && <span className="opacity-70 font-normal">同行: </span>}
+                        {s.user_name}{comps.length > 0 ? `・${comps.join('・')}` : ''}
+                      </div>
                       <div className="truncate text-[11px]">{s.title}</div>
                       {facilities.length > 0 && (
                         <div className="flex flex-wrap gap-0.5 mt-0.5">
