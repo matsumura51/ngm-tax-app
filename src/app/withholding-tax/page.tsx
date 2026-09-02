@@ -55,6 +55,14 @@ export default function WithholdingTaxPage() {
 
     if (!records || records.length === 0) { setSummaries([]); setLoading(false); return }
 
+    // client_idがnullのレコードはclient_codeでclientsテーブルからIDを補完
+    const missingCodes = records.filter(r => !r.client_id && r.client_code).map(r => r.client_code)
+    const codeToId: Record<string, string> = {}
+    if (missingCodes.length > 0) {
+      const { data: clients } = await supabase.from('clients').select('id, code').in('code', missingCodes)
+      for (const c of (clients || [])) codeToId[c.code] = c.id
+    }
+
     const recordIds = records.map(r => r.id)
     const { data: items } = await supabase
       .from('withholding_record_items')
@@ -73,7 +81,7 @@ export default function WithholdingTaxPage() {
     }
 
     setSummaries(records.map(r => ({
-      client_id: r.client_id,
+      client_id: r.client_id || (r.client_code ? codeToId[r.client_code] || null : null),
       client_code: r.client_code || '',
       client_name: r.client_name,
       record_id: r.id,
