@@ -74,8 +74,23 @@ interface TaxSchedItem {
   confirmation: string | null
 }
 
+interface DashBulletin {
+  id: string
+  title: string
+  content: string | null
+  created_by: string | null
+  created_at: string
+  read_count: number
+  is_read_by_me: boolean
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats>({ corporateCount: 0, individualCount: 0, todaySchedules: 0, unreadReports: 0 })
+  const [bulletins, setBulletins] = useState<DashBulletin[]>([])
+  const [activeUserCount, setActiveUserCount] = useState(0)
+  const [currentUserId, setCurrentUserId] = useState('')
+  const [currentUserName, setCurrentUserName] = useState('')
+  const [bulletinConfirming, setBulletinConfirming] = useState<string | null>(null)
   const [todayScheduleList, setTodayScheduleList] = useState<{ id: string; title: string; start_datetime: string; end_datetime: string | null; user_name: string; facility: string | null; color: string | null }[]>([])
   const [settleItems, setSettleItems] = useState<SettleItem[]>([])
   const [monthlyItems, setMonthlyItems] = useState<MonthlyItem[]>([])
@@ -118,7 +133,7 @@ export default function DashboardPage() {
       setShowWithholding(localStorage.getItem('dash_show_withholding') === 'true')
       setShowTaxReturn(localStorage.getItem('dash_show_taxreturn') === 'true')
     } catch { /* ignore */ }
-    loadStats(); loadProgress(); loadTaxSchedules(new Date().getFullYear(), new Date().getMonth() + 1)
+    loadStats(); loadProgress(); loadTaxSchedules(new Date().getFullYear(), new Date().getMonth() + 1); loadBulletins()
   }, [])
 
   async function loadStats() {
@@ -156,6 +171,46 @@ export default function DashboardPage() {
     setStats({ corporateCount, individualCount, todaySchedules: scheduleCount || 0, unreadReports: unreadCount || 0 })
     setTodayScheduleList(schedules || [])
     setLoading(false)
+  }
+
+  async function loadBulletins() {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    const myId = user?.id || ''
+    setCurrentUserId(myId)
+    if (myId) {
+      const { data: u } = await supabase.from('users').select('name').eq('id', myId).maybeSingle()
+      setCurrentUserName(u?.name || '')
+    }
+    const [{ data: bData }, { data: rData }, { data: uData }] = await Promise.all([
+      supabase.from('bulletins').select('*').order('created_at', { ascending: false }),
+      supabase.from('bulletin_reads').select('bulletin_id, user_id'),
+      supabase.from('users').select('id').is('leave_date', null),
+    ])
+    const totalActive = (uData || []).length
+    setActiveUserCount(totalActive)
+    const mapped: DashBulletin[] = (bData || []).map(b => {
+      const bReads = (rData || []).filter(r => r.bulletin_id === b.id)
+      return {
+        id: b.id, title: b.title, content: b.content, created_by: b.created_by, created_at: b.created_at,
+        read_count: bReads.length,
+        is_read_by_me: bReads.some(r => r.user_id === myId),
+      }
+    })
+    // ダッシュボードには全員未確認のもののみ表示
+    setBulletins(mapped.filter(b => b.read_count < totalActive))
+  }
+
+  async function confirmBulletin(bulletinId: string) {
+    setBulletinConfirming(bulletinId)
+    const supabase = createClient()
+    await supabase.from('bulletin_reads').upsert({
+      bulletin_id: bulletinId,
+      user_id: currentUserId,
+      user_name: currentUserName,
+    }, { onConflict: 'bulletin_id,user_id' })
+    await loadBulletins()
+    setBulletinConfirming(null)
   }
 
   async function loadProgress() {
@@ -646,6 +701,59 @@ export default function DashboardPage() {
           </div>
         )
       })()}
+
+      {/* 掲示板 */}
+      {bulletins.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-base">📋</span>
+              <h2 className="font-bold text-gray-700">掲示板</h2>
+              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">{bulletins.length}件 確認待ち</span>
+            </div>
+            <a href="/bulletins" className="text-xs text-blue-600 hover:underline">過去の掲示板</a>
+          </div>
+          <div className="space-y-3">
+            {bulletins.map(b => (
+              <div key={b.id} className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="font-bold text-gray-800">{b.title}</span>
+                      <span className="text-xs text-gray-400">
+                        {b.created_by} · {new Date(b.created_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
+                      </span>
+                      {b.is_read_by_me && (
+                        <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">自分は確認済み</span>
+                      )}
+                    </div>
+                    {b.content && (
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed mb-2">{b.content}</p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 bg-amber-100 rounded-full h-1.5 max-w-[160px]">
+                        <div className="bg-amber-400 h-full rounded-full transition-all"
+                          style={{ width: `${activeUserCount > 0 ? (b.read_count / activeUserCount) * 100 : 0}%` }} />
+                      </div>
+                      <span className="text-xs text-gray-500">{b.read_count}/{activeUserCount}名確認済み</span>
+                    </div>
+                  </div>
+                  {!b.is_read_by_me ? (
+                    <button
+                      onClick={() => confirmBulletin(b.id)}
+                      disabled={bulletinConfirming === b.id}
+                      className="shrink-0 px-3 py-1.5 text-xs bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg transition disabled:opacity-50">
+                      {bulletinConfirming === b.id ? '...' : '確認済み'}
+                    </button>
+                  ) : (
+                    <span className="shrink-0 px-2 py-1 text-xs bg-green-100 text-green-600 rounded-lg">✓ 確認済み</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 会議室・アクア タイムライン（全幅） */}
       <div className="bg-white rounded-xl shadow p-5 mb-6">

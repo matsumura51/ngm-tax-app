@@ -3,10 +3,11 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { LayoutDashboard, FileText, Calendar, ClipboardList, LogOut, Users, UserCog, AlertCircle, HelpCircle, BarChart2, Receipt, Landmark, ListChecks, BookOpen, X } from 'lucide-react'
+import { LayoutDashboard, FileText, Calendar, ClipboardList, LogOut, Users, UserCog, AlertCircle, HelpCircle, BarChart2, Receipt, Landmark, ListChecks, BookOpen, X, MessageSquare } from 'lucide-react'
 
 const nav = [
   { href: '/dashboard', label: 'ダッシュボード', icon: LayoutDashboard },
+  { href: '/bulletins', label: '掲示板', icon: MessageSquare },
   { href: '/clients', label: '顧客カルテ', icon: Users },
   { href: '/monthly', label: '月次進捗表', icon: ClipboardList },
   { href: '/daily-reports', label: '日報', icon: FileText },
