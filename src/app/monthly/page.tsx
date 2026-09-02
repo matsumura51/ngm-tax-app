@@ -394,6 +394,75 @@ function MonthlyContent() {
     for (const [k, v] of Object.entries(settleForm)) updates[k] = v || null
     await supabase.from('monthly_progress').update(updates).eq('id', p.id)
     setProgressMap(prev => ({ ...prev, [settleModal.code]: { ...p!, ...updates } }))
+
+    // 2026年7月決算以降は月次進捗の決算業務から予定納税を自動生成
+    const progYear = p.year
+    const fm = settleModal.fiscal_month
+    const isAutoTarget = fm !== null && fm !== 0 &&
+      (progYear > 2026 || (progYear === 2026 && fm >= 7))
+
+    if (isAutoTarget) {
+      const merged = { ...p, ...updates }
+      const corpAmt = merged.settle_corp_tax_amount as string | null
+      const conAmt = merged.settle_con_tax_amount as string | null
+      const conCount = merged.settle_con_tax_installments as string | null
+      const nextCorp = merged.settle_next_corp_interim as string | null
+      const nextCon = merged.settle_next_con_interim as string | null
+
+      const rawMonth = fm + 6
+      const taxMonth = rawMonth > 12 ? rawMonth - 12 : rawMonth
+      const taxYear = rawMonth > 12 ? progYear + 1 : progYear
+
+      type TaxRow = { tax_type: string; amount: string; installment: string }
+      const toInsert: TaxRow[] = []
+
+      if (corpAmt) {
+        const base = parseInt(corpAmt.replace(/[^0-9]/g, ''), 10)
+        if (!isNaN(base) && base > 0) {
+          const interim = nextCorp
+            ? parseInt(nextCorp.replace(/[^0-9]/g, ''), 10)
+            : Math.floor(base / 2)
+          toInsert.push({ tax_type: '法人税中間', amount: interim.toLocaleString('ja-JP') + '円', installment: '年1回' })
+        }
+      }
+      if (conAmt && conCount && conCount !== '0') {
+        const base = parseInt(conAmt.replace(/[^0-9]/g, ''), 10)
+        const count = parseInt(conCount, 10)
+        if (!isNaN(base) && base > 0 && !isNaN(count) && count > 0) {
+          const perAmount = nextCon
+            ? parseInt(nextCon.replace(/[^0-9]/g, ''), 10)
+            : Math.floor(base / (count === 1 ? 2 : count === 3 ? 4 : 12))
+          toInsert.push({ tax_type: '消費税中間', amount: perAmount.toLocaleString('ja-JP') + '円', installment: `年${count}回` })
+        }
+      }
+
+      if (toInsert.length > 0) {
+        await supabase.from('tax_schedules')
+          .delete()
+          .eq('matched_client_code', p.client_code)
+          .eq('year', taxYear)
+          .eq('month', taxMonth)
+          .in('tax_type', ['法人税中間', '消費税中間'])
+        const now = new Date().toISOString()
+        await supabase.from('tax_schedules').insert(toInsert.map(t => ({
+          client_id: null,
+          client_name: p!.client_name,
+          matched_client_code: p!.client_code,
+          year: taxYear,
+          month: taxMonth,
+          deadline: `${taxMonth}月末`,
+          tax_type: t.tax_type,
+          amount: t.amount,
+          installment: t.installment,
+          payment_method: null,
+          send_date: null,
+          payment_date: null,
+          confirmation: null,
+          imported_at: now,
+        })))
+      }
+    }
+
     setSaving(false)
     setSettleModal(null)
   }
