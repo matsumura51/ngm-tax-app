@@ -215,6 +215,7 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
 
   function autoCalcTax(m: string) {
     if (form.exempt) return
+    if (form.monthly[m]?.tax) return  // 手入力済みの場合は上書きしない
     const gross = parseAmt(form.monthly[m]?.gross || '')
     if (!gross) return
     const tax = Math.floor(gross * 0.1021)
