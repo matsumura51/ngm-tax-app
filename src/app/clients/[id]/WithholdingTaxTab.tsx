@@ -26,11 +26,18 @@ function fmtAmt(raw: string | number): string {
 function parseAmt(s: string): number {
   return parseInt(s.replace(/[^0-9]/g, '') || '0') || 0
 }
+function parseFee(s: string | number | null | undefined): number {
+  if (s === null || s === undefined || s === '') return 0
+  if (typeof s === 'number') return s
+  const n = parseInt(String(s).replace(/,/g, ''), 10)
+  return isNaN(n) ? 0 : n
+}
 
 type MonthData = { date: string; gross: string; tax: string }
 type FormData = {
   payee_name: string
   payee_type: string
+  exempt: boolean
   monthly: Record<string, MonthData>
 }
 
@@ -38,11 +45,13 @@ function emptyForm(): FormData {
   return {
     payee_name: '',
     payee_type: '社労士',
+    exempt: false,
     monthly: Object.fromEntries(MONTHS.map(m => [String(m), { date: '', gross: '', tax: '' }])),
   }
 }
 
 function itemToForm(item: WithholdingRecordItem): FormData {
+  const exempt = !!((item.monthly_data as Record<string, unknown>)._exempt)
   const monthly: Record<string, MonthData> = {}
   for (const m of MONTHS) {
     const d = item.monthly_data?.[String(m)]
@@ -55,15 +64,20 @@ function itemToForm(item: WithholdingRecordItem): FormData {
   return {
     payee_name: item.payee_name || '',
     payee_type: item.payee_type || '社労士',
+    exempt,
     monthly,
   }
 }
 
+function itemIsExempt(item: WithholdingRecordItem): boolean {
+  return !!((item.monthly_data as Record<string, unknown>)?._exempt)
+}
 function itemAnnualGross(item: WithholdingRecordItem): number {
-  return Object.values(item.monthly_data || {}).reduce((s, d) => s + (d.gross || 0), 0)
+  return MONTHS.reduce((s, m) => s + (item.monthly_data?.[String(m)]?.gross || 0), 0)
 }
 function itemAnnualTax(item: WithholdingRecordItem): number {
-  return Object.values(item.monthly_data || {}).reduce((s, d) => s + (d.tax || 0), 0)
+  if (itemIsExempt(item)) return 0
+  return MONTHS.reduce((s, m) => s + (item.monthly_data?.[String(m)]?.tax || 0), 0)
 }
 
 interface Props {
@@ -81,20 +95,54 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<FormData>(emptyForm())
   const [saving, setSaving] = useState(false)
+  const [taxFeeMonthly, setTaxFeeMonthly] = useState<Record<string, number>>({})
+  const [taxFeeTotal, setTaxFeeTotal] = useState(0)
 
   useEffect(() => { load() }, [year, clientId])
 
   async function load() {
     setLoading(true)
     const supabase = createClient()
+
+    // 社労士等レコード読み込み
     let q = supabase.from('withholding_records').select('id').eq('year', year)
     if (clientCode) q = q.eq('client_code', clientCode)
     else q = q.eq('client_id', clientId)
     const { data: rec } = await q.maybeSingle()
-    if (!rec) { setRecordId(null); setItems([]); setLoading(false); return }
-    setRecordId(rec.id)
-    const { data } = await supabase.from('withholding_record_items').select('*').eq('record_id', rec.id).order('sort_order')
-    setItems(data || [])
+    if (!rec) { setRecordId(null); setItems([]) }
+    else {
+      setRecordId(rec.id)
+      const { data } = await supabase.from('withholding_record_items').select('*').eq('record_id', rec.id).order('sort_order')
+      setItems(data || [])
+    }
+
+    // 月次進捗から税理士報酬を読み込み（年度ずれ対応：当年・前年の中で報酬がある方）
+    let feeData: Record<string, string | number | null> | null = null
+    for (const y of [year, year - 1]) {
+      let fq = supabase.from('monthly_progress').select('monthly_fee').eq('year', y)
+      if (clientCode) fq = fq.eq('client_code', clientCode)
+      else fq = fq.eq('client_id', clientId)
+      const { data: prog } = await fq.maybeSingle()
+      if (prog?.monthly_fee) {
+        const total = MONTHS.reduce((s, m) => s + parseFee((prog.monthly_fee as Record<string, string | null>)?.[String(m)]), 0)
+        if (total > 0) { feeData = prog.monthly_fee as Record<string, string | null>; break }
+      }
+    }
+    if (feeData) {
+      const monthly: Record<string, number> = {}
+      let total = 0
+      for (const m of MONTHS) {
+        const n = parseFee(feeData[String(m)])
+        monthly[String(m)] = n
+        total += n
+      }
+      setTaxFeeMonthly(monthly)
+      setTaxFeeTotal(total)
+    } else {
+      setTaxFeeMonthly({})
+      setTaxFeeTotal(0)
+    }
+
     setLoading(false)
   }
 
@@ -124,15 +172,16 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
       setRecordId(recId)
     }
 
-    const monthly_data: Record<string, { date: string; gross: number; tax: number }> = {}
+    const monthly_data: Record<string, unknown> = {}
     for (const m of MONTHS) {
       const d = form.monthly[String(m)]
       monthly_data[String(m)] = {
         date: d.date,
         gross: parseAmt(d.gross),
-        tax: parseAmt(d.tax),
+        tax: form.exempt ? 0 : parseAmt(d.tax),
       }
     }
+    if (form.exempt) monthly_data._exempt = true
 
     const payload = {
       record_id: recId,
@@ -164,8 +213,8 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
     setForm(f => ({ ...f, monthly: { ...f.monthly, [m]: { ...f.monthly[m], [field]: value } } }))
   }
 
-  // 源泉税額を自動計算（10.21%）してtaxにセット
   function autoCalcTax(m: string) {
+    if (form.exempt) return
     const gross = parseAmt(form.monthly[m]?.gross || '')
     if (!gross) return
     const tax = Math.floor(gross * 0.1021)
@@ -179,37 +228,35 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
 
   function handlePrint() {
     const title = `源泉所得税集計　令和${reiwa}年（${year}年）　${clientName}`
-
     const monthHeaders = MONTHS.map(m => `<th colspan="2" class="mhd">${m}月</th>`).join('')
     const monthSubHeaders = MONTHS.map(() =>
       `<th class="num s">支払</th><th class="num s tax">源泉</th>`
     ).join('')
-
     const dataRows = items.map((item, idx) => {
       const gross = itemAnnualGross(item)
       const tax = itemAnnualTax(item)
+      const exempt = itemIsExempt(item)
       const monthCells = MONTHS.map(m => {
         const d = item.monthly_data?.[String(m)]
-        const g = d?.gross || 0, t = d?.tax || 0
+        const g = d?.gross || 0, t = exempt ? 0 : (d?.tax || 0)
         return `<td class="num${g ? '' : ' zero'}">${g ? g.toLocaleString('ja-JP') : '—'}</td><td class="num tax${t ? '' : ' zero'}">${t ? t.toLocaleString('ja-JP') : '—'}</td>`
       }).join('')
       const bg = idx % 2 === 1 ? ' class="alt"' : ''
+      const exemptBadge = exempt ? '（非対象）' : ''
       return `<tr${bg}>
         <td class="name">${item.payee_name || '—'}</td>
-        <td class="kind">${item.payee_type || ''}</td>
+        <td class="kind">${item.payee_type || ''}${exemptBadge}</td>
         ${monthCells}
         <td class="total">${gross > 0 ? gross.toLocaleString('ja-JP') : '—'}</td>
-        <td class="total tax">${tax > 0 ? tax.toLocaleString('ja-JP') : '—'}</td>
+        <td class="total tax">${!exempt && tax > 0 ? tax.toLocaleString('ja-JP') : '—'}</td>
         <td class="total net">${gross > 0 ? (gross - tax).toLocaleString('ja-JP') : '—'}</td>
       </tr>`
     }).join('')
-
     const footMonths = MONTHS.map(m => {
       const g = items.reduce((s, it) => s + (it.monthly_data?.[String(m)]?.gross || 0), 0)
-      const t = items.reduce((s, it) => s + (it.monthly_data?.[String(m)]?.tax || 0), 0)
+      const t = items.reduce((s, it) => s + (itemIsExempt(it) ? 0 : (it.monthly_data?.[String(m)]?.tax || 0)), 0)
       return `<td class="num foot">${g > 0 ? g.toLocaleString('ja-JP') : ''}</td><td class="num tax foot">${t > 0 ? t.toLocaleString('ja-JP') : ''}</td>`
     }).join('')
-
     const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>${title}</title>
     <style>
     @page{size:A4 landscape;margin:8mm}
@@ -271,11 +318,12 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
     for (const item of items) {
       const gross = itemAnnualGross(item)
       const tax = itemAnnualTax(item)
+      const exempt = itemIsExempt(item)
       rows.push([
-        item.payee_name || '', item.payee_type || '',
+        item.payee_name || '', `${item.payee_type || ''}${exempt ? '（非対象）' : ''}`,
         ...MONTHS.flatMap(m => {
           const d = item.monthly_data?.[String(m)]
-          const g = d?.gross || 0, t = d?.tax || 0
+          const g = d?.gross || 0, t = exempt ? 0 : (d?.tax || 0)
           return [d?.date || '', g, t, g - t]
         }),
         gross, tax, gross - tax,
@@ -289,9 +337,8 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
     XLSX.writeFile(wb, `源泉集計_令和${reiwa}年_${clientName}.xlsx`)
   }
 
-  // フォームの月別プレビュー合計
   const formGross = MONTHS.reduce((s, m) => s + parseAmt(form.monthly[String(m)]?.gross || ''), 0)
-  const formTax = MONTHS.reduce((s, m) => s + parseAmt(form.monthly[String(m)]?.tax || ''), 0)
+  const formTax = form.exempt ? 0 : MONTHS.reduce((s, m) => s + parseAmt(form.monthly[String(m)]?.tax || ''), 0)
 
   return (
     <div className="bg-white rounded-xl shadow overflow-hidden max-w-4xl">
@@ -327,73 +374,121 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
 
       {loading ? (
         <div className="text-center py-10 text-gray-400">読み込み中...</div>
-      ) : items.length === 0 ? (
-        <div className="text-center py-10 text-gray-400">源泉集計データがありません</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs text-gray-500 border-b">
-              <tr>
-                <th className="text-left px-4 py-2">支払先</th>
-                <th className="text-left px-4 py-2">種別</th>
-                <th className="text-right px-4 py-2">年間支払金額</th>
-                <th className="text-right px-4 py-2">年間源泉税額</th>
-                <th className="text-right px-4 py-2">差引支払額</th>
-                <th className="px-3 py-2 w-10"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {items.map(item => {
-                const gross = itemAnnualGross(item)
-                const tax = itemAnnualTax(item)
-                return (
-                  <tr key={item.id} className="hover:bg-gray-50 group cursor-pointer" onClick={() => openEdit(item)}>
-                    <td className="px-4 py-2.5 font-medium text-gray-800">{item.payee_name || '—'}</td>
+        <>
+          {/* ── 社労士等 支払先一覧 ── */}
+          {items.length === 0 ? (
+            <div className="text-center py-6 text-gray-400 text-sm">源泉集計データがありません</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs text-gray-500 border-b">
+                  <tr>
+                    <th className="text-left px-4 py-2">支払先</th>
+                    <th className="text-left px-4 py-2">種別</th>
+                    <th className="text-right px-4 py-2">年間支払金額</th>
+                    <th className="text-right px-4 py-2">年間源泉税額</th>
+                    <th className="text-right px-4 py-2">差引支払額</th>
+                    <th className="px-3 py-2 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {items.map(item => {
+                    const gross = itemAnnualGross(item)
+                    const tax = itemAnnualTax(item)
+                    const exempt = itemIsExempt(item)
+                    return (
+                      <tr key={item.id} className="hover:bg-gray-50 group cursor-pointer" onClick={() => openEdit(item)}>
+                        <td className="px-4 py-2.5 font-medium text-gray-800">{item.payee_name || '—'}</td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {item.payee_type && (
+                              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                                {item.payee_type}
+                              </span>
+                            )}
+                            {exempt && (
+                              <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                                源泉非対象
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-700">
+                          {gross > 0 ? gross.toLocaleString('ja-JP') + '円' : '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono text-red-600">
+                          {!exempt && tax > 0 ? tax.toLocaleString('ja-JP') + '円' : '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono font-bold text-gray-800">
+                          {gross > 0 ? (gross - tax).toLocaleString('ja-JP') + '円' : '—'}
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          <button onClick={e => { e.stopPropagation(); deleteItem(item.id) }}
+                            className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400">
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                  <tr>
+                    <td colSpan={2} className="px-4 py-2 font-bold text-gray-700 text-xs">
+                      令和{year - 2018}年 合計
+                    </td>
+                    <td className="px-4 py-2 text-right font-bold font-mono text-gray-800">
+                      {totalGross > 0 ? totalGross.toLocaleString('ja-JP') + '円' : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-right font-bold font-mono text-red-700">
+                      {totalTax > 0 ? totalTax.toLocaleString('ja-JP') + '円' : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-right font-bold font-mono text-gray-900">
+                      {totalNet > 0 ? totalNet.toLocaleString('ja-JP') + '円' : '—'}
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {/* ── 税理士報酬（月次進捗より自動取得） ── */}
+          {taxFeeTotal > 0 && (
+            <div className="border-t border-indigo-100 bg-indigo-50/40">
+              <div className="px-4 py-2 flex items-center gap-2">
+                <span className="text-xs font-medium text-indigo-700">税理士報酬（月次進捗から自動取得）</span>
+                <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">源泉非対象</span>
+              </div>
+              <table className="w-full text-sm">
+                <tbody>
+                  <tr className="bg-white/60">
+                    <td className="px-4 py-2.5 font-medium text-indigo-800">和み税理士法人</td>
                     <td className="px-4 py-2.5">
-                      {item.payee_type && (
-                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
-                          {item.payee_type}
-                        </span>
-                      )}
+                      <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">税理士</span>
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono text-gray-700">
-                      {gross > 0 ? gross.toLocaleString('ja-JP') + '円' : '—'}
+                      {taxFeeTotal.toLocaleString('ja-JP')}円
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-red-600">
-                      {tax > 0 ? tax.toLocaleString('ja-JP') + '円' : '—'}
-                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-gray-400">—</td>
                     <td className="px-4 py-2.5 text-right font-mono font-bold text-gray-800">
-                      {gross > 0 ? (gross - tax).toLocaleString('ja-JP') + '円' : '—'}
+                      {taxFeeTotal.toLocaleString('ja-JP')}円
                     </td>
-                    <td className="px-3 py-2.5 text-center">
-                      <button onClick={e => { e.stopPropagation(); deleteItem(item.id) }}
-                        className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400">
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
+                    <td className="w-10"></td>
                   </tr>
-                )
-              })}
-            </tbody>
-            <tfoot className="bg-gray-50 border-t-2 border-gray-200">
-              <tr>
-                <td colSpan={2} className="px-4 py-2 font-bold text-gray-700 text-xs">
-                  令和{year - 2018}年 合計
-                </td>
-                <td className="px-4 py-2 text-right font-bold font-mono text-gray-800">
-                  {totalGross > 0 ? totalGross.toLocaleString('ja-JP') + '円' : '—'}
-                </td>
-                <td className="px-4 py-2 text-right font-bold font-mono text-red-700">
-                  {totalTax > 0 ? totalTax.toLocaleString('ja-JP') + '円' : '—'}
-                </td>
-                <td className="px-4 py-2 text-right font-bold font-mono text-gray-900">
-                  {totalNet > 0 ? totalNet.toLocaleString('ja-JP') + '円' : '—'}
-                </td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+                </tbody>
+              </table>
+              <div className="px-4 pb-2.5">
+                <div className="flex gap-3 text-xs text-indigo-600">
+                  {MONTHS.map(m => taxFeeMonthly[String(m)] > 0 ? (
+                    <span key={m}>{m}月: {taxFeeMonthly[String(m)].toLocaleString('ja-JP')}円</span>
+                  ) : null)}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* 追加・編集モーダル */}
@@ -421,11 +516,28 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
                 </div>
               </div>
 
+              {/* 源泉対象/非対象トグル */}
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-medium text-gray-500">源泉徴収</span>
+                <button
+                  onClick={() => setForm(f => ({ ...f, exempt: false }))}
+                  className={`px-4 py-1.5 text-xs rounded-full font-medium border transition-colors ${!form.exempt ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}>
+                  源泉対象（10.21%）
+                </button>
+                <button
+                  onClick={() => setForm(f => ({ ...f, exempt: true }))}
+                  className={`px-4 py-1.5 text-xs rounded-full font-medium border transition-colors ${form.exempt ? 'bg-gray-600 text-white border-gray-600' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}>
+                  源泉非対象
+                </button>
+              </div>
+
               {/* 月次グリッド */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-medium text-gray-500">月次支払</label>
-                  <span className="text-xs text-gray-400">支払金額入力後、源泉欄をクリックで自動計算（10.21%）</span>
+                  {!form.exempt && (
+                    <span className="text-xs text-gray-400">支払金額入力後、源泉欄をクリックで自動計算（10.21%）</span>
+                  )}
                 </div>
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <table className="w-full text-sm">
@@ -434,14 +546,14 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
                         <th className="px-2 py-1.5 text-center w-10">月</th>
                         <th className="px-2 py-1.5 text-center w-24">支払日</th>
                         <th className="px-2 py-1.5 text-center">支払金額</th>
-                        <th className="px-2 py-1.5 text-center">源泉税額</th>
+                        <th className={`px-2 py-1.5 text-center ${form.exempt ? 'text-gray-300' : ''}`}>源泉税額</th>
                         <th className="px-2 py-1.5 text-center w-28">差引支払額</th>
                       </tr>
                     </thead>
                     <tbody>
                       {MONTHS.map(m => {
                         const gross = parseAmt(form.monthly[String(m)]?.gross || '')
-                        const tax = parseAmt(form.monthly[String(m)]?.tax || '')
+                        const tax = form.exempt ? 0 : parseAmt(form.monthly[String(m)]?.tax || '')
                         const net = gross - tax
                         return (
                           <tr key={m} className={m % 2 === 0 ? 'bg-gray-50/50' : ''}>
@@ -459,11 +571,17 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
                                 placeholder="0" />
                             </td>
                             <td className="px-1 py-0.5">
-                              <input className="border border-gray-200 rounded px-1.5 py-1 text-xs text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-400 text-red-600"
-                                value={fmtAmt(form.monthly[String(m)]?.tax || '')}
-                                onChange={e => setMonth(String(m), 'tax', sanitizeAmt(e.target.value))}
-                                onFocus={() => autoCalcTax(String(m))}
-                                placeholder="0" />
+                              {form.exempt ? (
+                                <div className="border border-gray-100 bg-gray-50 rounded px-1.5 py-1 text-xs text-right w-full text-gray-300">
+                                  —
+                                </div>
+                              ) : (
+                                <input className="border border-gray-200 rounded px-1.5 py-1 text-xs text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-400 text-red-600"
+                                  value={fmtAmt(form.monthly[String(m)]?.tax || '')}
+                                  onChange={e => setMonth(String(m), 'tax', sanitizeAmt(e.target.value))}
+                                  onFocus={() => autoCalcTax(String(m))}
+                                  placeholder="0" />
+                              )}
                             </td>
                             <td className="px-2 py-0.5 text-right text-xs font-mono text-gray-600">
                               {net > 0 ? net.toLocaleString('ja-JP') : '—'}
@@ -477,15 +595,17 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
               </div>
 
               {/* 合計プレビュー */}
-              <div className="bg-indigo-50 rounded-lg px-4 py-2.5">
+              <div className={`rounded-lg px-4 py-2.5 ${form.exempt ? 'bg-gray-50' : 'bg-indigo-50'}`}>
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
                     <div className="text-xs text-indigo-400 mb-0.5">年間支払合計</div>
                     <div className="font-bold text-indigo-700 text-sm">{formGross.toLocaleString('ja-JP')}円</div>
                   </div>
                   <div>
-                    <div className="text-xs text-red-400 mb-0.5">年間源泉税合計</div>
-                    <div className="font-bold text-red-600 text-sm">{formTax.toLocaleString('ja-JP')}円</div>
+                    <div className={`text-xs mb-0.5 ${form.exempt ? 'text-gray-400' : 'text-red-400'}`}>年間源泉税合計</div>
+                    <div className={`font-bold text-sm ${form.exempt ? 'text-gray-400' : 'text-red-600'}`}>
+                      {form.exempt ? '非対象' : `${formTax.toLocaleString('ja-JP')}円`}
+                    </div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-0.5">差引支払合計</div>

@@ -146,7 +146,6 @@ export default function WithholdingTaxPage() {
   const grandGross = filteredSummaries.reduce((s, r) => s + r.total_gross, 0)
   const grandTax = filteredSummaries.reduce((s, r) => s + r.total_tax, 0)
   const grandFeeTotal = filteredFees.reduce((s, r) => s + r.total, 0)
-  const grandFeeTax = filteredFees.reduce((s, r) => s + Math.floor(r.total * 0.1021), 0)
 
   return (
     <div className="p-6">
@@ -184,12 +183,10 @@ export default function WithholdingTaxPage() {
           </div>
         )}
         {tab === '税理士報酬' && (
-          <div className="ml-auto flex gap-6 text-sm">
+          <div className="ml-auto flex gap-4 items-center text-sm">
+            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">源泉非対象</span>
             <span className="text-gray-500">
               年間支払合計：<span className="font-bold text-gray-900 ml-1">{grandFeeTotal.toLocaleString('ja-JP')}円</span>
-            </span>
-            <span className="text-gray-500">
-              年間源泉合計：<span className="font-bold text-red-600 ml-1">{grandFeeTax.toLocaleString('ja-JP')}円</span>
             </span>
           </div>
         )}
@@ -275,7 +272,8 @@ export default function WithholdingTaxPage() {
         <div className="bg-white rounded-xl shadow overflow-hidden">
           <div className="bg-indigo-50 border-b border-indigo-100 px-5 py-3 flex items-center gap-3">
             <span className="font-bold text-indigo-700 text-sm">税理士報酬の支払調書</span>
-            <span className="text-xs text-gray-500">受取人：和み税理士法人　— 月次進捗表の報酬から自動集計（源泉10.21%）</span>
+            <span className="text-xs text-gray-500">受取人：和み税理士法人　— 月次進捗表の報酬から自動集計</span>
+            <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">源泉非対象</span>
           </div>
           {loading ? (
             <div className="text-center py-12 text-gray-400">読み込み中...</div>
@@ -292,29 +290,18 @@ export default function WithholdingTaxPage() {
                   <th className="px-4 py-3 text-left">顧客名</th>
                   <th className="px-4 py-3 text-left w-24">顧客コード</th>
                   <th className="px-4 py-3 text-right w-40">年間支払金額</th>
-                  <th className="px-4 py-3 text-right w-40">年間源泉税額</th>
-                  <th className="px-4 py-3 text-right w-40">差引支払額</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredFees.map(r => {
-                  const tax = Math.floor(r.total * 0.1021)
-                  return (
-                    <tr key={r.client_code || r.client_name} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-800">{r.client_name}</td>
-                      <td className="px-4 py-3 font-mono text-gray-500 text-xs">{r.client_code}</td>
-                      <td className="px-4 py-3 text-right font-mono text-gray-700">
-                        {r.total > 0 ? r.total.toLocaleString('ja-JP') + '円' : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-red-600 font-bold">
-                        {tax > 0 ? tax.toLocaleString('ja-JP') + '円' : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono font-bold text-gray-800">
-                        {r.total > 0 ? (r.total - tax).toLocaleString('ja-JP') + '円' : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
+                {filteredFees.map(r => (
+                  <tr key={r.client_code || r.client_name} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-800">{r.client_name}</td>
+                    <td className="px-4 py-3 font-mono text-gray-500 text-xs">{r.client_code}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-gray-800">
+                      {r.total > 0 ? r.total.toLocaleString('ja-JP') + '円' : '—'}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
               <tfoot className="bg-gray-50 border-t-2 border-gray-200">
                 <tr>
@@ -323,12 +310,6 @@ export default function WithholdingTaxPage() {
                   </td>
                   <td className="px-4 py-3 text-right font-bold font-mono text-gray-900">
                     {grandFeeTotal.toLocaleString('ja-JP')}円
-                  </td>
-                  <td className="px-4 py-3 text-right font-bold font-mono text-red-700">
-                    {grandFeeTax.toLocaleString('ja-JP')}円
-                  </td>
-                  <td className="px-4 py-3 text-right font-bold font-mono text-gray-900">
-                    {(grandFeeTotal - grandFeeTax).toLocaleString('ja-JP')}円
                   </td>
                 </tr>
               </tfoot>
