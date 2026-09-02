@@ -1,10 +1,6 @@
-import Sidebar from '@/components/Sidebar'
+import AppLayout from '@/components/AppLayout'
 
-export default function WithholdingTaxLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-auto">{children}</main>
-    </div>
-  )
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return <AppLayout>{children}</AppLayout>
 }
+
