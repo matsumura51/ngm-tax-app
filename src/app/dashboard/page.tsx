@@ -80,6 +80,7 @@ interface DashBulletin {
   content: string | null
   created_by: string | null
   created_at: string
+  post_date: string | null
   read_count: number
   is_read_by_me: boolean
 }
@@ -192,7 +193,7 @@ export default function DashboardPage() {
     const mapped: DashBulletin[] = (bData || []).map(b => {
       const bReads = (rData || []).filter(r => r.bulletin_id === b.id)
       return {
-        id: b.id, title: b.title, content: b.content, created_by: b.created_by, created_at: b.created_at,
+        id: b.id, title: b.title, content: b.content, created_by: b.created_by, created_at: b.created_at, post_date: b.post_date ?? null,
         read_count: bReads.length,
         is_read_by_me: bReads.some(r => r.user_id === myId),
       }
@@ -721,7 +722,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-bold text-gray-800">{b.title}</span>
                       <span className="text-xs text-gray-400">
-                        {b.created_by} · {new Date(b.created_at).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {b.created_by} · {new Date(b.post_date || b.created_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
                       </span>
                       {b.is_read_by_me && (
                         <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">自分は確認済み</span>

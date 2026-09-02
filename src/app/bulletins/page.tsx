@@ -10,6 +10,7 @@ interface Bulletin {
   content: string | null
   created_by: string | null
   created_at: string
+  post_date: string | null
 }
 
 interface BulletinRead {
@@ -28,7 +29,8 @@ export default function BulletinsPage() {
   const [currentUserName, setCurrentUserName] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ title: '', content: '' })
+  const today = new Date().toISOString().split('T')[0]
+  const [form, setForm] = useState({ title: '', content: '', post_date: today })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { load() }, [])
@@ -58,6 +60,11 @@ export default function BulletinsPage() {
     return reads.filter(r => r.bulletin_id === bulletinId)
   }
 
+  function fmtDate(b: Bulletin) {
+    const src = b.post_date || b.created_at
+    return new Date(src).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })
+  }
+
   function isReadByMe(bulletinId: string) {
     return reads.some(r => r.bulletin_id === bulletinId && r.user_id === currentUserId)
   }
@@ -84,8 +91,9 @@ export default function BulletinsPage() {
       title: form.title.trim(),
       content: form.content.trim() || null,
       created_by: currentUserName || currentUserId,
+      post_date: form.post_date || null,
     })
-    setForm({ title: '', content: '' })
+    setForm({ title: '', content: '', post_date: today })
     setShowForm(false)
     setSaving(false)
     await load()
@@ -126,6 +134,11 @@ export default function BulletinsPage() {
           <h2 className="text-sm font-bold text-amber-800 mb-3">新規掲示板投稿</h2>
           <div className="space-y-3">
             <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">掲示日</label>
+              <input type="date" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                value={form.post_date} onChange={e => setForm(f => ({ ...f, post_date: e.target.value }))} />
+            </div>
+            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">タイトル <span className="text-red-500">*</span></label>
               <input className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                 value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
@@ -139,7 +152,7 @@ export default function BulletinsPage() {
                 placeholder="掲示板の内容を入力" />
             </div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => { setShowForm(false); setForm({ title: '', content: '' }) }}
+              <button onClick={() => { setShowForm(false); setForm({ title: '', content: '', post_date: today }) }}
                 className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
                 キャンセル
               </button>
@@ -182,7 +195,7 @@ export default function BulletinsPage() {
                               )}
                             </div>
                             <div className="text-xs text-gray-400 mb-2">
-                              {b.created_by} · {new Date(b.created_at).toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              {b.created_by} · {fmtDate(b)}
                             </div>
                             {b.content && (
                               <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{b.content}</p>
@@ -259,7 +272,7 @@ export default function BulletinsPage() {
                               </span>
                             </div>
                             <div className="text-xs text-gray-400 mb-2">
-                              {b.created_by} · {new Date(b.created_at).toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              {b.created_by} · {fmtDate(b)}
                             </div>
                             {b.content && (
                               <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">{b.content}</p>
