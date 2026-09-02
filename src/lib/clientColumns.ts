@@ -17,6 +17,7 @@ export const CLIENT_COLUMNS: ColumnDef[] = [
   { key: 'consumption_tax',    label: '消費税',                 group: '顧客情報' },
   { key: 'year_end_adjustment',label: '年調有無',               group: '顧客情報' },
   { key: 'notification_send',  label: '申告のお知らせ送付',     group: '顧客情報' },
+  { key: 'jumin_tax',          label: '住民税',                 group: '顧客情報' },
   // 代表者情報
   { key: 'representative',     label: '代表者名',               group: '代表者情報' },
   { key: 'honorific',          label: '敬称',                   group: '代表者情報' },

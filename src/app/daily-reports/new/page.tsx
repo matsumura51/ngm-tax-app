@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { DailyReportDetail } from '@/lib/types'
-import { ChevronLeft, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, Plus, Trash2, ChevronDown, Calendar } from 'lucide-react'
 import Link from 'next/link'
+import { Schedule } from '@/lib/types'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const TASK_TYPES = ['記帳', 'チェック', '決算', '来所', '訪問', '所内相談', '電話・メール', '給与計算', '環境整備', '朝礼', '確定申告', '年末調整', '相続税', '建設業', '医療法人', '社会保険', '税務調査', 'その他']
@@ -61,6 +62,8 @@ export default function DailyReportNewPage() {
   const [details, setDetails] = useState([emptyDetail()])
   const [clients, setClients] = useState<{ code: string; name: string }[]>([])
   const [suggestions, setSuggestions] = useState<{ rowIndex: number; matches: { code: string; name: string }[]; top: number; left: number } | null>(null)
+  const [daySchedules, setDaySchedules] = useState<Schedule[]>([])
+  const [showScheduleImport, setShowScheduleImport] = useState(false)
 
   useEffect(() => {
     async function loadUser() {
@@ -75,6 +78,51 @@ export default function DailyReportNewPage() {
     }
     loadUser()
   }, [])
+
+  useEffect(() => {
+    async function loadSchedules() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data } = await supabase.from('schedules').select('*')
+        .eq('user_id', user.id)
+        .gte('start_datetime', form.date + 'T00:00:00')
+        .lte('start_datetime', form.date + 'T23:59:59')
+        .order('start_datetime')
+      setDaySchedules(data || [])
+      if ((data || []).length > 0) setShowScheduleImport(true)
+    }
+    if (form.date) loadSchedules()
+  }, [form.date])
+
+  function colorToTaskType(color: string | null): string {
+    switch (color) {
+      case '外出': return '訪問'
+      case '来客（顧問先）': return '来所'
+      case '来客（業者）': return '来所'
+      case '所内ミーティング': return '所内相談'
+      default: return ''
+    }
+  }
+
+  function importSchedule(s: Schedule) {
+    const startTime = new Date(s.start_datetime).toTimeString().slice(0, 5)
+    const endTime = s.end_datetime ? new Date(s.end_datetime).toTimeString().slice(0, 5) : ''
+    const newRow = {
+      ...emptyDetail(),
+      start_time: startTime,
+      end_time: endTime,
+      work_time: calcWorkTime(startTime, endTime),
+      client_code: s.client_code || '',
+      client_name: s.client_name || '',
+      report_content: s.title || '',
+      task_type: colorToTaskType(s.color),
+    }
+    setDetails(d => {
+      const isEmpty = d.length === 1 && !d[0].start_time && !d[0].end_time && !d[0].task_type && !d[0].client_name && !d[0].report_content
+      return isEmpty ? [newRow] : [...d, newRow]
+    })
+  }
 
   function addDetail() {
     setDetails(d => [...d, emptyDetail()])
@@ -155,7 +203,7 @@ export default function DailyReportNewPage() {
       await supabase.from('daily_report_details').insert(detailRows)
     }
 
-    router.push(`/daily-reports/${report.id}`)
+    router.push('/daily-reports')
   }
 
   return (
@@ -183,6 +231,47 @@ export default function DailyReportNewPage() {
           </div>
         </div>
       </div>
+
+      {/* スケジュール取込パネル */}
+      {daySchedules.length > 0 && (
+        <div className="mb-4 border border-blue-100 rounded-xl overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowScheduleImport(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-2.5 bg-blue-50 text-sm font-medium text-blue-700 hover:bg-blue-100 transition"
+          >
+            <span className="flex items-center gap-2">
+              <Calendar size={14} />
+              この日のスケジュールから取込（{daySchedules.length}件）
+            </span>
+            <ChevronDown size={14} className={`transition-transform ${showScheduleImport ? 'rotate-180' : ''}`} />
+          </button>
+          {showScheduleImport && (
+            <div className="p-3 space-y-1.5 bg-white">
+              {daySchedules.map(s => {
+                const start = new Date(s.start_datetime).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+                const end = s.end_datetime ? new Date(s.end_datetime).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : ''
+                return (
+                  <div key={s.id} className="flex items-center gap-3 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-xs">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-gray-400 shrink-0">{start}{end ? ` - ${end}` : ''}</span>
+                      {s.client_name && <span className="ml-2 font-medium text-gray-700">{s.client_name}：</span>}
+                      <span className="text-gray-600">{s.title}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => importSchedule(s)}
+                      className="shrink-0 px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-medium transition"
+                    >
+                      取込
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow p-6 mb-4">
         <div className="flex justify-between items-center mb-3">

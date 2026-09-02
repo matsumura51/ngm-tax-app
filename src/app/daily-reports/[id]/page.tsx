@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState, use } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { DailyReport, DailyReportDetail } from '@/lib/types'
-import { ChevronLeft, Trash2, Plus } from 'lucide-react'
+import { ChevronLeft, Trash2, Plus, ChevronDown, Calendar } from 'lucide-react'
 import Link from 'next/link'
+import { Schedule } from '@/lib/types'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const TASK_TYPES = ['記帳', 'チェック', '決算', '来所', '訪問', '所内相談', '電話・メール', '給与計算', '環境整備', '朝礼', '確定申告', '年末調整', '相続税', '建設業', '医療法人', '社会保険', '税務調査', 'その他']
@@ -33,12 +35,15 @@ function sumWorkTimes(rows: { work_time: string | null | undefined }[]): string 
 
 export default function DailyReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const router = useRouter()
   const [report, setReport] = useState<DailyReport | null>(null)
   const [details, setDetails] = useState<DailyReportDetail[]>([])
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<Partial<DailyReport>>({})
   const [clients, setClients] = useState<{ code: string; name: string }[]>([])
   const [suggestions, setSuggestions] = useState<{ rowIndex: number; matches: { code: string; name: string }[]; top: number; left: number } | null>(null)
+  const [daySchedules, setDaySchedules] = useState<Schedule[]>([])
+  const [showScheduleImport, setShowScheduleImport] = useState(false)
 
   useEffect(() => { load() }, [id])
 
@@ -52,6 +57,48 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
     if (r) { setReport(r); setForm(r) }
     setDetails(d || [])
     setClients(clientsData || [])
+  }
+
+  useEffect(() => {
+    const date = form.date
+    const userId = report?.user_id
+    if (!date || !userId) return
+    async function loadSchedules() {
+      const supabase = createClient()
+      const { data } = await supabase.from('schedules').select('*')
+        .eq('user_id', userId)
+        .gte('start_datetime', date + 'T00:00:00')
+        .lte('start_datetime', date + 'T23:59:59')
+        .order('start_datetime')
+      setDaySchedules(data || [])
+      if ((data || []).length > 0) setShowScheduleImport(true)
+    }
+    loadSchedules()
+  }, [form.date, report?.user_id])
+
+  function colorToTaskType(color: string | null): string {
+    switch (color) {
+      case '外出': return '訪問'
+      case '来客（顧問先）': return '来所'
+      case '来客（業者）': return '来所'
+      case '所内ミーティング': return '所内相談'
+      default: return ''
+    }
+  }
+
+  function importSchedule(s: Schedule) {
+    const startTime = new Date(s.start_datetime).toTimeString().slice(0, 5)
+    const endTime = s.end_datetime ? new Date(s.end_datetime).toTimeString().slice(0, 5) : ''
+    const newRow: DailyReportDetail = {
+      id: '', report_id: id, sort_order: details.length,
+      start_time: startTime, end_time: endTime,
+      work_time: calcWorkTime(startTime, endTime),
+      task_type: colorToTaskType(s.color),
+      client_code: s.client_code || null, client_name: s.client_name || null,
+      task_code: null, task_name: null, report_type: null,
+      report_content: s.title || null, details: null, subject: null,
+    }
+    setDetails(d => [...d, newRow])
   }
 
   async function deleteReport() {
@@ -126,7 +173,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
     }
 
     setSaving(false)
-    await load()
+    router.push('/daily-reports')
   }
 
   function addRow() {
@@ -191,18 +238,48 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
             <input className={inputClass + ' bg-gray-50 text-gray-600'} value={form.total_hours || ''} readOnly tabIndex={-1} placeholder="自動計算" />
           </div>
         </div>
-        <div className="mb-4">
-          <label className="block text-xs font-medium text-gray-500 mb-1">所長コメント</label>
-          <textarea className={inputClass + ' resize-none'} rows={2} value={form.manager_comment || ''} onChange={e => setForm(f => ({ ...f, manager_comment: e.target.value }))} />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">チェック状態</label>
-          <select className="border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.unread_check || '未チェック'} onChange={e => setForm(f => ({ ...f, unread_check: e.target.value }))}>
-            <option value="未チェック">未チェック</option>
-            <option value="チェック済">チェック済</option>
-          </select>
-        </div>
       </div>
+
+      {/* スケジュール取込パネル */}
+      {daySchedules.length > 0 && (
+        <div className="mb-4 border border-blue-100 rounded-xl overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowScheduleImport(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-2.5 bg-blue-50 text-sm font-medium text-blue-700 hover:bg-blue-100 transition"
+          >
+            <span className="flex items-center gap-2">
+              <Calendar size={14} />
+              この日のスケジュールから取込（{daySchedules.length}件）
+            </span>
+            <ChevronDown size={14} className={`transition-transform ${showScheduleImport ? 'rotate-180' : ''}`} />
+          </button>
+          {showScheduleImport && (
+            <div className="p-3 space-y-1.5 bg-white">
+              {daySchedules.map(s => {
+                const start = new Date(s.start_datetime).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+                const end = s.end_datetime ? new Date(s.end_datetime).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : ''
+                return (
+                  <div key={s.id} className="flex items-center gap-3 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-xs">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-gray-400">{start}{end ? ` - ${end}` : ''}</span>
+                      {s.client_name && <span className="ml-2 font-medium text-gray-700">{s.client_name}：</span>}
+                      <span className="text-gray-600">{s.title}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => importSchedule(s)}
+                      className="shrink-0 px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-medium transition"
+                    >
+                      取込
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow p-6 mb-4">
         <div className="flex justify-between items-center mb-3">

@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { MonthlyProgress, Client, TaxSchedule } from '@/lib/types'
 import { Search, X, RefreshCw } from 'lucide-react'
@@ -31,20 +32,51 @@ function fmtFee(s: string | null | undefined): string {
 
 const inp = 'w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500'
 
-const SETTLE_FIELDS = [
-  { key: 'settle_consumption_judged', label: '消費税判定' },
-  { key: 'settle_notice',             label: '決算期お知らせ' },
-  { key: 'settle_materials',          label: '資料収集' },
-  { key: 'settle_return_prepared',    label: '申告書作成' },
-  { key: 'settle_contact',            label: '連絡' },
-  { key: 'settle_filed',              label: '電子申告' },
-  { key: 'settle_payment',            label: 'ダイレクト納付/納付書' },
-  { key: 'ledger_status',             label: '総勘定元帳' },
-  { key: 'report_status',             label: '決算報告書' },
-  { key: 'consumption_tax_filed',     label: '消費税申告' },
-  { key: 'invoice_status',            label: '請求書' },
-  { key: 'director_change',           label: '役員変更' },
+const SETTLE_FIELDS: { key: string; label: string; placeholder?: string; type?: string }[] = [
+  { key: 'settle_consumption_judged', label: '消費税判定',           placeholder: '例: 課税／免税' },
+  { key: 'settle_materials',          label: '資料収集',              placeholder: '例: 3/20' },
+  { key: 'settle_return_prepared',    label: '申告書作成',            placeholder: '例: 4/5' },
+  { key: 'settle_contact',            label: '連絡',                  placeholder: '例: 4/10' },
+  { key: 'settle_filed',              label: '電子申告',              placeholder: '例: 4/15' },
+  { key: 'settle_payment',            label: 'ダイレクト納付/納付書',  placeholder: '例: 4/20' },
+  { key: 'settle_return_docs',        label: '返却書類',               type: 'checkbox' },
+  { key: 'director_change',           label: '役員変更',              placeholder: '例: なし' },
 ]
+const SETTLE_TAX_FIELDS = [
+  { key: 'settle_corp_tax_amount',        label: '法人税確定額' },
+  { key: 'settle_con_tax_amount',         label: '消費税確定額' },
+  { key: 'settle_con_tax_installments',   label: '消費税中間回数' },
+  { key: 'settle_next_corp_interim',      label: '来期法人税中間（手動）' },
+  { key: 'settle_next_con_interim',       label: '来期消費税中間（手動）' },
+]
+const CON_INSTALLMENT_OPTIONS = [
+  { value: '0',  label: '0回（中間申告不要）' },
+  { value: '1',  label: '年1回' },
+  { value: '3',  label: '年3回' },
+  { value: '11', label: '年11回' },
+]
+
+function calcInterim(amountStr: string | null | undefined): string {
+  if (!amountStr) return ''
+  const n = parseInt(amountStr.replace(/[^0-9]/g, ''), 10)
+  if (isNaN(n) || n === 0) return ''
+  return Math.floor(n / 2).toLocaleString('ja-JP') + '円'
+}
+function calcConInterimDetail(amountStr: string | null | undefined, installments: string | null | undefined): { perAmount: string; count: number } | null {
+  if (!amountStr || !installments || installments === '0' || installments === '') return null
+  const n = parseInt(amountStr.replace(/[^0-9]/g, ''), 10)
+  if (isNaN(n) || n === 0) return null
+  const count = parseInt(installments, 10)
+  if (isNaN(count) || count === 0) return null
+  // 年1回: 確定額÷2、年3回: 確定額÷4、年11回: 確定額÷12
+  const divisor = count === 1 ? 2 : count === 3 ? 4 : 12
+  return { perAmount: Math.floor(n / divisor).toLocaleString('ja-JP') + '円', count }
+}
+function fmtAmount(s: string | null | undefined): string {
+  if (!s) return ''
+  const n = parseInt(s.replace(/[^0-9]/g, ''), 10)
+  return isNaN(n) ? '' : n.toLocaleString('ja-JP') + '円'
+}
 
 // ヘッダー背景色
 const H1 = 'bg-[#5c3ea8]'
@@ -52,13 +84,16 @@ const H2 = 'bg-[#7b52c4]'
 // スティッキー高さ: 1行目 py-2 + 11px font ≈ 32px
 const TOP2 = 'top-8'
 
-export default function MonthlyPage() {
+function MonthlyContent() {
+  const searchParams = useSearchParams()
   const [clients, setClients] = useState<Client[]>([])
   const [progressMap, setProgressMap] = useState<Record<string, MonthlyProgress>>({})
   const [loading, setLoading] = useState(true)
   const [year, setYear] = useState(new Date().getFullYear())
   const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState<ActiveTab>('月次進捗')
+  const [highlightClientId, setHighlightClientId] = useState<string | null>(null)
+  const highlightRef = useRef<HTMLTableRowElement | null>(null)
   const [saving, setSaving] = useState(false)
 
   const [monthModal, setMonthModal] = useState<{ client: Client; month: number } | null>(null)
@@ -68,26 +103,57 @@ export default function MonthlyPage() {
   const [taxSchedules, setTaxSchedules] = useState<TaxSchedule[]>([])
   const [scheduleInfo, setScheduleInfo] = useState<{ imported_at: string | null; count: number } | null>(null)
   const [importing, setImporting] = useState(false)
+  const [generating, setGenerating] = useState(false)
   const [sheets, setSheets] = useState<{ name: string }[]>([])
   const [selectedSheet, setSelectedSheet] = useState('6月')
   const [filterStaff, setFilterStaff] = useState('')
+  const [filterDivision, setFilterDivision] = useState('')
   const [filterFiscalMonth, setFilterFiscalMonth] = useState('')
   const [editingCell, setEditingCell] = useState<{ id: string; field: string; value: string } | null>(null)
   const [filterTaxMonth, setFilterTaxMonth] = useState('')
+  const [allUsers, setAllUsers] = useState<{ name: string; division: string | null }[]>([])
   const [filterHasAmount, setFilterHasAmount] = useState(false)
 
   const SHEET_ID = '1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc'
+
+  // URLパラムでタブ切替・行ハイライト
+  useEffect(() => {
+    const tab = searchParams.get('tab') as ActiveTab | null
+    const highlight = searchParams.get('highlight')
+    if (tab && ['月次進捗', '税務情報', '決算業務'].includes(tab)) setActiveTab(tab)
+    if (highlight) setHighlightClientId(highlight)
+  }, [searchParams])
+
+  // ローディング完了後にスクロール＋モーダル自動オープン
+  useEffect(() => {
+    if (!loading && highlightClientId) {
+      setTimeout(() => {
+        if (highlightRef.current) {
+          highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+        // 決算業務タブでは入力モーダルを自動で開く
+        if (activeTab === '決算業務') {
+          const c = clients.find(cl => cl.id === highlightClientId)
+          if (c) openSettleModal(c)
+        }
+        // ハイライトを3秒後に消す
+        setTimeout(() => setHighlightClientId(null), 3000)
+      }, 200)
+    }
+  }, [loading, highlightClientId])
 
   useEffect(() => { load() }, [year])
 
   async function load() {
     setLoading(true)
     const supabase = createClient()
-    const [{ data: clientsData }, { data: progressData }] = await Promise.all([
+    const [{ data: clientsData }, { data: progressData }, { data: usersData }] = await Promise.all([
       supabase.from('clients').select('*').is('contract_end_date', null).eq('show_in_monthly', true).order('code'),
       supabase.from('monthly_progress').select('*').eq('year', year),
+      supabase.from('users').select('name, division').order('name'),
     ])
     setClients(clientsData || [])
+    setAllUsers(usersData || [])
     const map: Record<string, MonthlyProgress> = {}
     for (const p of (progressData || [])) map[p.client_code] = p
     setProgressMap(map)
@@ -152,6 +218,79 @@ export default function MonthlyPage() {
       alert('エラー: ' + String(e))
     } finally {
       setImporting(false)
+    }
+  }
+
+  async function generateFromSettle() {
+    setGenerating(true)
+    try {
+      const supabase = createClient()
+      const prevYear = year - 1
+      const { data: prevProgress } = await supabase
+        .from('monthly_progress')
+        .select('*')
+        .eq('year', prevYear)
+      if (!prevProgress || prevProgress.length === 0) {
+        alert(`${prevYear}年度の決算業務データが見つかりません`)
+        return
+      }
+      // 当年の法人税中間・消費税中間レコードをすべて削除してから再生成
+      await supabase.from('tax_schedules').delete().eq('year', year)
+        .in('tax_type', ['法人税中間', '消費税中間'])
+      const now = new Date().toISOString()
+      const toInsert: Omit<TaxSchedule, 'id'>[] = []
+      for (const p of prevProgress) {
+        const clientName = p.client_name || ''
+        const clientCode = p.client_code
+        // 法人税中間
+        if (p.settle_corp_tax_amount) {
+          const base = parseInt(p.settle_corp_tax_amount.replace(/[^0-9]/g, ''), 10)
+          if (!isNaN(base) && base > 0) {
+            const interim = p.settle_next_corp_interim
+              ? parseInt(p.settle_next_corp_interim.replace(/[^0-9]/g, ''), 10)
+              : Math.floor(base / 2)
+            toInsert.push({
+              client_id: null, client_name: clientName,
+              matched_client_code: clientCode,
+              year, month: 0, tax_type: '法人税中間',
+              amount: interim.toLocaleString('ja-JP') + '円',
+              installment: '年1回',
+              deadline: null, payment_method: null,
+              send_date: null, payment_date: null,
+              confirmation: null, imported_at: now,
+            })
+          }
+        }
+        // 消費税中間
+        if (p.settle_con_tax_amount && p.settle_con_tax_installments && p.settle_con_tax_installments !== '0') {
+          const base = parseInt(p.settle_con_tax_amount.replace(/[^0-9]/g, ''), 10)
+          const count = parseInt(p.settle_con_tax_installments, 10)
+          if (!isNaN(base) && base > 0 && !isNaN(count) && count > 0) {
+            const perAmount = p.settle_next_con_interim
+              ? parseInt(p.settle_next_con_interim.replace(/[^0-9]/g, ''), 10)
+              : Math.floor(base / (count === 1 ? 2 : count === 3 ? 4 : 12))
+            toInsert.push({
+              client_id: null, client_name: clientName,
+              matched_client_code: clientCode,
+              year, month: 0, tax_type: '消費税中間',
+              amount: perAmount.toLocaleString('ja-JP') + '円',
+              installment: `年${count}回`,
+              deadline: null, payment_method: null,
+              send_date: null, payment_date: null,
+              confirmation: null, imported_at: now,
+            })
+          }
+        }
+      }
+      if (toInsert.length > 0) {
+        await supabase.from('tax_schedules').insert(toInsert)
+      }
+      await loadTaxSchedules(year)
+      alert(`${prevYear}年度の決算業務から ${toInsert.length}件の予定納税データを生成しました`)
+    } catch (e) {
+      alert('エラー: ' + String(e))
+    } finally {
+      setGenerating(false)
     }
   }
 
@@ -239,7 +378,7 @@ export default function MonthlyPage() {
   function openSettleModal(client: Client) {
     const p = prog(client.code)
     const form: Record<string, string> = {}
-    for (const f of SETTLE_FIELDS) form[f.key] = (p?.[f.key as keyof MonthlyProgress] as string | null) || ''
+    for (const f of [...SETTLE_FIELDS, ...SETTLE_TAX_FIELDS]) form[f.key] = (p?.[f.key as keyof MonthlyProgress] as string | null) || ''
     setSettleForm(form)
     setSettleModal(client)
   }
@@ -259,9 +398,12 @@ export default function MonthlyPage() {
     setSettleModal(null)
   }
 
-  const staffOptions = Array.from(new Set(clients.map(c => c.primary_staff).filter(Boolean))).sort()
+  const divisionOptions = Array.from(new Set(allUsers.map(u => u.division).filter(Boolean))).sort() as string[]
+  const staffInDivision = filterDivision ? allUsers.filter(u => u.division === filterDivision).map(u => u.name) : null
+  const staffOptions = Array.from(new Set(clients.map(c => c.primary_staff).filter(s => !staffInDivision || staffInDivision.includes(s || '')).filter(Boolean))).sort()
   const filtered = clients.filter(c => {
     if (search && !c.name.includes(search) && !c.code.includes(search)) return false
+    if (filterDivision && staffInDivision && !staffInDivision.includes(c.primary_staff || '')) return false
     if (filterStaff && c.primary_staff !== filterStaff) return false
     if (filterFiscalMonth !== '') {
       const fm = filterFiscalMonth === '個人' ? 0 : parseInt(filterFiscalMonth)
@@ -298,8 +440,13 @@ export default function MonthlyPage() {
 
   return (
     <div className="p-6">
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold text-gray-800 mb-1">月次進捗表</h1>
+        <p className="text-xs text-gray-500 leading-relaxed">
+          資料収集をした日は必ず入力して下さい。「入力」は入力が終わった日です。「月次完成」は所長チェックが終わりその訂正が終わった日です。「報告」は訪問または資料を郵送した日です。毎月の報酬も入力して下さい。
+        </p>
+      </div>
       <div className="flex items-center gap-4 mb-5">
-        <h1 className="text-2xl font-bold text-gray-800">月次進捗表</h1>
         <select value={year} onChange={e => setYear(Number(e.target.value))}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
           {[2023, 2024, 2025, 2026, 2027].map(y => (
@@ -312,9 +459,16 @@ export default function MonthlyPage() {
             onChange={e => setSearch(e.target.value)}
             className="border border-gray-300 rounded-lg pl-9 pr-4 py-2 text-sm w-64" />
         </div>
+        {divisionOptions.length > 0 && (
+          <select value={filterDivision} onChange={e => { setFilterDivision(e.target.value); setFilterStaff('') }}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700">
+            <option value="">所属（全チーム）</option>
+            {divisionOptions.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+        )}
         <select value={filterStaff} onChange={e => setFilterStaff(e.target.value)}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700">
-          <option value="">担当者（全員）</option>
+          <option value="">{filterDivision ? `${filterDivision}の全員` : '担当者（全員）'}</option>
           {staffOptions.map(s => <option key={s} value={s!}>{s}</option>)}
         </select>
         <select value={filterFiscalMonth} onChange={e => setFilterFiscalMonth(e.target.value)}
@@ -323,8 +477,8 @@ export default function MonthlyPage() {
           <option value="個人">個人</option>
           {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={String(m)}>{m}月</option>)}
         </select>
-        {(filterStaff || filterFiscalMonth) && (
-          <button onClick={() => { setFilterStaff(''); setFilterFiscalMonth('') }}
+        {(filterStaff || filterFiscalMonth || filterDivision) && (
+          <button onClick={() => { setFilterStaff(''); setFilterFiscalMonth(''); setFilterDivision('') }}
             className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
             <X size={14} />絞り込み解除
           </button>
@@ -379,8 +533,11 @@ export default function MonthlyPage() {
               ) : filtered.map((c, ri) => {
                 const even = ri % 2 === 0
                 const p = prog(c.code)
+                const isHL = c.id === highlightClientId
                 return (
-                  <tr key={c.id} className={even ? 'bg-white' : 'bg-gray-50'}>
+                  <tr key={c.id}
+                    ref={isHL ? highlightRef : null}
+                    className={isHL ? 'bg-orange-100 outline outline-2 outline-orange-400' : even ? 'bg-white' : 'bg-gray-50'}>
                     <td className={stickyCode(even)}>{c.code}</td>
                     <td className={stickyName(even)}>{c.name}</td>
                     <td className={td}>{c.fiscal_month === 0 ? '個人' : c.fiscal_month ? `${c.fiscal_month}月` : '-'}</td>
@@ -412,22 +569,93 @@ export default function MonthlyPage() {
       {/* ===== 税務情報 Tab ===== */}
       {activeTab === '税務情報' && (
         <div>
+          {/* 予定納税額サマリー（当年度決算業務から来期を確認） */}
+          {(() => {
+            const rows = filtered.filter(c => {
+              const p = prog(c.code)
+              return p?.settle_corp_tax_amount || p?.settle_con_tax_amount || p?.settle_next_corp_interim || p?.settle_next_con_interim
+            })
+            if (rows.length === 0) return null
+            return (
+              <div className="mb-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                  予定納税額プレビュー — {year}年度決算業務から来期（{year + 1}年）中間を確認
+                </h3>
+                <div className="bg-white rounded-xl shadow overflow-x-auto">
+                  <table className="min-w-full border-collapse" style={{ fontSize: '11px' }}>
+                    <thead>
+                      <tr className={`${H1} text-white`}>
+                        <th className={`sticky left-0 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-20`}>顧客コード</th>
+                        <th className={`sticky left-20 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600`}>顧客名</th>
+                        <th className={thH1}>法人税<br/>確定額</th>
+                        <th className={thH1}>来期法人税<br/>中間（年1回）</th>
+                        <th className={`${thH1} border-l border-purple-600`}>消費税<br/>確定額</th>
+                        <th className={thH1}>回数</th>
+                        <th className={thH1}>来期消費税<br/>中間（1回分）</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {rows.map((c, ri) => {
+                        const p = prog(c.code)
+                        const even = ri % 2 === 0
+                        const bg = even ? 'bg-white' : 'bg-gray-50'
+                        const corpInterim = p?.settle_next_corp_interim ? fmtAmount(p.settle_next_corp_interim) : calcInterim(p?.settle_corp_tax_amount)
+                        const conDetail = calcConInterimDetail(p?.settle_con_tax_amount, p?.settle_con_tax_installments)
+                        const conInterim = p?.settle_next_con_interim ? fmtAmount(p.settle_next_con_interim) : (conDetail?.perAmount || '')
+                        const conCount = p?.settle_con_tax_installments && p.settle_con_tax_installments !== '0'
+                          ? `年${p.settle_con_tax_installments}回`
+                          : p?.settle_con_tax_installments === '0' ? '不要' : ''
+                        return (
+                          <tr key={c.id} className={bg}>
+                            <td className={stickyCode(even)}>{c.code}</td>
+                            <td className={stickyName(even)}>{c.name}</td>
+                            <td className={`${td} tabular-nums text-right`}>{fmtAmount(p?.settle_corp_tax_amount)}</td>
+                            <td className={`${td} tabular-nums text-right font-semibold text-blue-700`}>
+                              {corpInterim}
+                              {p?.settle_next_corp_interim && <span className="ml-1 text-gray-400 font-normal text-[10px]">手動</span>}
+                            </td>
+                            <td className={`${td} tabular-nums text-right border-l border-gray-200`}>{fmtAmount(p?.settle_con_tax_amount)}</td>
+                            <td className={`${td} text-center`}>{conCount}</td>
+                            <td className={`${td} tabular-nums text-right font-semibold text-blue-700`}>
+                              {conInterim}
+                              {p?.settle_next_con_interim && <span className="ml-1 text-gray-400 font-normal text-[10px]">手動</span>}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          })()}
+
           <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <select
-              value={selectedSheet}
-              onChange={e => setSelectedSheet(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm min-w-28"
-            >
-              {sheets.length === 0
-                ? <option value="6月">（読み込み中...）</option>
-                : sheets.map(s => <option key={s.name} value={s.name}>{s.name}</option>)
-              }
-            </select>
-            <button onClick={importFromSheet} disabled={importing}
-              className="flex items-center gap-1.5 bg-purple-700 hover:bg-purple-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
-              <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
-              {importing ? '読み込み中...' : '読み込む'}
-            </button>
+            {year <= 2026 ? (
+              <>
+                <select
+                  value={selectedSheet}
+                  onChange={e => setSelectedSheet(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm min-w-28"
+                >
+                  {sheets.length === 0
+                    ? <option value="6月">（読み込み中...）</option>
+                    : sheets.map(s => <option key={s.name} value={s.name}>{s.name}</option>)
+                  }
+                </select>
+                <button onClick={importFromSheet} disabled={importing}
+                  className="flex items-center gap-1.5 bg-purple-700 hover:bg-purple-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
+                  <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
+                  {importing ? '読み込み中...' : 'スプレッドシートから読み込む'}
+                </button>
+              </>
+            ) : (
+              <button onClick={generateFromSettle} disabled={generating}
+                className="flex items-center gap-1.5 bg-blue-700 hover:bg-blue-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
+                <RefreshCw size={13} className={generating ? 'animate-spin' : ''} />
+                {generating ? '生成中...' : `決算業務（${year - 1}年度）から予定を生成`}
+              </button>
+            )}
             <select value={filterTaxMonth} onChange={e => setFilterTaxMonth(e.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
               <option value="">月（全て）</option>
@@ -516,17 +744,17 @@ export default function MonthlyPage() {
                 <th className={`sticky left-0 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-20`}>顧客コード</th>
                 <th className={`sticky left-20 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600`}>顧客名</th>
                 <th className={`${thH1} border-l border-purple-600`}>消費税判定</th>
-                <th className={thH1}>決算期<br/>お知らせ</th>
                 <th className={thH1}>資料収集</th>
                 <th className={thH1}>申告書作成</th>
                 <th className={thH1}>連絡</th>
                 <th className={thH1}>電子申告</th>
                 <th className={`${thH1} border-l border-purple-600`}>ダイレクト納付/<br/>納付書</th>
-                <th className={thH1}>総勘定元帳</th>
-                <th className={thH1}>決算報告書</th>
-                <th className={thH1}>消費税申告</th>
-                <th className={thH1}>請求書</th>
+                <th className={thH1}>返却書類</th>
                 <th className={`${thH1} border-l border-purple-600`}>役員変更</th>
+                <th className={`${thH1} border-l border-purple-600`}>法人税<br/>確定額</th>
+                <th className={thH1}>消費税<br/>確定額</th>
+                <th className={thH1}>来期<br/>法人税中間</th>
+                <th className={thH1}>来期<br/>消費税中間</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -535,23 +763,35 @@ export default function MonthlyPage() {
               ) : filtered.map((c, ri) => {
                 const p = prog(c.code)
                 const even = ri % 2 === 0
+                const isHL = c.id === highlightClientId
                 return (
-                  <tr key={c.id} onClick={() => openSettleModal(c)}
-                    className={`cursor-pointer hover:bg-blue-50 ${even ? 'bg-white' : 'bg-gray-50'}`}>
+                  <tr key={c.id}
+                    ref={isHL ? highlightRef : null}
+                    onClick={() => openSettleModal(c)}
+                    className={`cursor-pointer hover:bg-blue-50 ${isHL ? 'bg-orange-100 outline outline-2 outline-orange-400' : even ? 'bg-white' : 'bg-gray-50'}`}>
                     <td className={stickyCode(even)}>{c.code}</td>
                     <td className={stickyName(even)}>{c.name}</td>
                     <td className={`${td} border-l border-gray-100`}>{p?.settle_consumption_judged || ''}</td>
-                    <td className={td}>{p?.settle_notice || ''}</td>
                     <td className={td}>{p?.settle_materials || ''}</td>
                     <td className={td}>{p?.settle_return_prepared || ''}</td>
                     <td className={td}>{p?.settle_contact || ''}</td>
                     <td className={td}>{p?.settle_filed || ''}</td>
                     <td className={`${td} border-l border-gray-100 text-left whitespace-pre-line`}>{p?.settle_payment || ''}</td>
-                    <td className={`${td} text-left whitespace-pre-line`}>{p?.ledger_status || ''}</td>
-                    <td className={`${td} text-left whitespace-pre-line`}>{p?.report_status || ''}</td>
-                    <td className={td}>{p?.consumption_tax_filed || ''}</td>
-                    <td className={td}>{p?.invoice_status || ''}</td>
+                    <td className={`${td} text-center`}>{p?.settle_return_docs === '1' ? '✓' : ''}</td>
                     <td className={`${td} border-l border-gray-100`}>{p?.director_change || ''}</td>
+                    <td className={`${td} border-l border-gray-100 tabular-nums text-right`}>{fmtAmount(p?.settle_corp_tax_amount)}</td>
+                    <td className={`${td} tabular-nums text-right`}>{fmtAmount(p?.settle_con_tax_amount)}</td>
+                    <td className={`${td} tabular-nums text-right text-blue-700 font-medium`}>
+                      {p?.settle_next_corp_interim ? fmtAmount(p.settle_next_corp_interim) : calcInterim(p?.settle_corp_tax_amount)}
+                    </td>
+                    <td className={`${td} tabular-nums text-right text-blue-700 font-medium`}>
+                      {(() => {
+                        if (p?.settle_next_con_interim) return <>{fmtAmount(p.settle_next_con_interim)}<span className="text-[10px] text-gray-400 ml-0.5">手動</span></>
+                        const det = calcConInterimDetail(p?.settle_con_tax_amount, p?.settle_con_tax_installments)
+                        if (!det) return ''
+                        return <>{det.perAmount}<span className="text-[10px] text-gray-400 ml-0.5">×{det.count}回</span></>
+                      })()}
+                    </td>
                   </tr>
                 )
               })}
@@ -616,12 +856,119 @@ export default function MonthlyPage() {
               <button onClick={() => setSettleModal(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
             </div>
             <div className="space-y-3">
-              {SETTLE_FIELDS.map(({ key, label }) => (
+              {SETTLE_FIELDS.map(({ key, label, placeholder, type }) => (
                 <div key={key} className="flex items-center gap-3">
                   <label className="text-xs font-medium text-gray-500 w-36 shrink-0">{label}</label>
-                  <input value={settleForm[key] || ''} onChange={e => setSettleForm(f => ({ ...f, [key]: e.target.value }))} className={inp} />
+                  {type === 'checkbox' ? (
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={settleForm[key] === '1'}
+                        onChange={e => setSettleForm(f => ({ ...f, [key]: e.target.checked ? '1' : '' }))}
+                        className="w-4 h-4 accent-purple-700 cursor-pointer"
+                      />
+                      <span className="text-sm text-gray-700">{settleForm[key] === '1' ? '完了' : '未完了'}</span>
+                    </label>
+                  ) : (
+                    <input value={settleForm[key] || ''} onChange={e => setSettleForm(f => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} className={inp} />
+                  )}
                 </div>
               ))}
+            </div>
+
+            {/* 納税額・予定納税セクション */}
+            <div className="mt-5 pt-4 border-t border-gray-200">
+              <p className="text-xs font-semibold text-gray-600 mb-3">当期確定税額</p>
+              <div className="space-y-3">
+                {/* 法人税確定額 */}
+                <div>
+                  <div className="flex items-center gap-3">
+                    <label className="text-xs font-medium text-gray-500 w-36 shrink-0">法人税確定額</label>
+                    <input
+                      type="text" inputMode="numeric"
+                      value={settleForm['settle_corp_tax_amount'] ? parseInt(settleForm['settle_corp_tax_amount'].replace(/[^0-9]/g, '') || '0', 10).toLocaleString('ja-JP') : ''}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^0-9]/g, '')
+                        setSettleForm(f => ({ ...f, settle_corp_tax_amount: raw }))
+                      }}
+                      placeholder="例: 1,200,000"
+                      className={inp}
+                    />
+                  </div>
+                  {calcInterim(settleForm['settle_corp_tax_amount']) && (
+                    <p className="text-xs text-blue-600 mt-1 ml-[156px]">
+                      ÷2 → 来期法人税中間 <span className="font-semibold">{calcInterim(settleForm['settle_corp_tax_amount'])}</span>
+                    </p>
+                  )}
+                </div>
+                {/* 消費税確定額 + 回数 */}
+                <div>
+                  <div className="flex items-center gap-3">
+                    <label className="text-xs font-medium text-gray-500 w-36 shrink-0">消費税確定額</label>
+                    <input
+                      type="text" inputMode="numeric"
+                      value={settleForm['settle_con_tax_amount'] ? parseInt(settleForm['settle_con_tax_amount'].replace(/[^0-9]/g, '') || '0', 10).toLocaleString('ja-JP') : ''}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^0-9]/g, '')
+                        setSettleForm(f => ({ ...f, settle_con_tax_amount: raw }))
+                      }}
+                      placeholder="例: 800,000"
+                      className={inp}
+                    />
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <label className="text-xs font-medium text-gray-500 w-36 shrink-0">中間申告回数</label>
+                    <select
+                      value={settleForm['settle_con_tax_installments'] || ''}
+                      onChange={e => setSettleForm(f => ({ ...f, settle_con_tax_installments: e.target.value }))}
+                      className={inp}
+                    >
+                      <option value="">選択してください</option>
+                      {CON_INSTALLMENT_OPTIONS.map(o => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {(() => {
+                    const detail = calcConInterimDetail(settleForm['settle_con_tax_amount'], settleForm['settle_con_tax_installments'])
+                    if (!detail) return null
+                    return (
+                      <p className="text-xs text-blue-600 mt-1 ml-[156px]">
+                        自動計算 → 来期消費税中間 <span className="font-semibold">{detail.perAmount}</span>
+                        <span className="text-gray-500 ml-1">×{detail.count}回 / 年</span>
+                      </p>
+                    )
+                  })()}
+                </div>
+              </div>
+
+              <p className="text-xs font-semibold text-gray-600 mt-4 mb-2">
+                来期予定納税額（手動）
+                <span className="ml-1 font-normal text-gray-400">— 自動計算と異なる場合のみ入力</span>
+              </p>
+              <div className="space-y-3">
+                {([
+                  { key: 'settle_next_corp_interim', label: '来期法人税中間（手動）' },
+                  { key: 'settle_next_con_interim',  label: '来期消費税中間（手動）' },
+                ] as const).map(({ key, label }) => (
+                  <div key={key} className="flex items-center gap-3">
+                    <label className="text-xs font-medium text-gray-500 w-36 shrink-0">{label}</label>
+                    <input
+                      type="text" inputMode="numeric"
+                      value={settleForm[key] ? parseInt(settleForm[key].replace(/[^0-9]/g, '') || '0', 10).toLocaleString('ja-JP') : ''}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^0-9]/g, '')
+                        setSettleForm(f => ({ ...f, [key]: raw }))
+                      }}
+                      placeholder="例: 600,000"
+                      className={inp}
+                    />
+                    {settleForm[key] && (
+                      <button onClick={() => setSettleForm(f => ({ ...f, [key]: '' }))} className="text-gray-300 hover:text-gray-500 text-xs">✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="flex gap-2 mt-6">
               <button onClick={() => setSettleModal(null)} className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">キャンセル</button>
@@ -633,5 +980,13 @@ export default function MonthlyPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function MonthlyPage() {
+  return (
+    <Suspense fallback={<div className="text-center py-12 text-gray-400">読み込み中...</div>}>
+      <MonthlyContent />
+    </Suspense>
   )
 }

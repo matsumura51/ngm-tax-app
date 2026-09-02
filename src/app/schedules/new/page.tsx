@@ -9,6 +9,13 @@ import { Suspense } from 'react'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
+const FACILITIES = ['アクア', '会議室①', '会議室②']
+const FACILITY_COLOR: Record<string, string> = {
+  'アクア': 'bg-teal-100 text-teal-700 border-teal-300',
+  '会議室①': 'bg-violet-100 text-violet-700 border-violet-300',
+  '会議室②': 'bg-pink-100 text-pink-700 border-pink-300',
+}
+
 const COLOR_OPTIONS = [
   { value: '外出', label: '外出', color: 'bg-orange-400' },
   { value: '来客（顧問先）', label: '来客（顧問先）', color: 'bg-blue-500' },
@@ -21,30 +28,55 @@ const COLOR_OPTIONS = [
   { value: '白', label: '白', color: 'bg-white border border-gray-300' },
 ]
 
+// タイムゾーンオフセット付きで保存（UTC解釈によるずれを防ぐ）
+function toLocalISOString(date: string, time: string): string {
+  const offset = -new Date().getTimezoneOffset()
+  const sign = offset >= 0 ? '+' : '-'
+  const h = Math.floor(Math.abs(offset) / 60).toString().padStart(2, '0')
+  const m = (Math.abs(offset) % 60).toString().padStart(2, '0')
+  return `${date}T${time}:00${sign}${h}:${m}`
+}
+
+function makeAutoTitle(clientName: string, color: string): string {
+  const name = clientName.trim()
+  const kind = color !== '白' ? color : ''
+  if (name && kind) return `${name}：${kind}`
+  return name || kind
+}
+
 function ScheduleNewForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [saving, setSaving] = useState(false)
   const [userName, setUserName] = useState('')
   const [userId, setUserId] = useState('')
+  const [clients, setClients] = useState<{ id: string; code: string; name: string }[]>([])
+  const [suggestions, setSuggestions] = useState<{ matches: { id: string; code: string; name: string }[]; top: number; left: number } | null>(null)
+  const [autoTitle, setAutoTitle] = useState(true)
+  const [selectedFacilities, setSelectedFacilities] = useState<string[]>([])
 
-  const today = new Date().toISOString().split('T')[0]
+  const paramDate = searchParams.get('date') || new Date().toISOString().split('T')[0]
   const [form, setForm] = useState({
     title: '',
-    start_date: today,
+    date: paramDate,
     start_time: '09:00',
-    end_date: today,
     end_time: '10:00',
     color: '白',
     type: 'スケジュール',
-    client_id: searchParams.get('client_id') || '',
-    client_name: searchParams.get('client_name') || '',
-    client_code: searchParams.get('client_code') || '',
+    client_id: '',
+    client_name: '',
+    client_code: '',
     memo: '',
   })
 
+  function toggleFacility(f: string) {
+    setSelectedFacilities(prev =>
+      prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]
+    )
+  }
+
   useEffect(() => {
-    async function loadUser() {
+    async function init() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
@@ -52,35 +84,106 @@ function ScheduleNewForm() {
         const { data } = await supabase.from('users').select('name').eq('id', user.id).single()
         setUserName(data?.name || user.email?.split('@')[0] || '')
       }
+      const { data: clientsData } = await supabase.from('clients').select('id, code, name').order('code')
+      setClients(clientsData || [])
     }
-    loadUser()
+    init()
   }, [])
 
-  function set(field: string, value: string) {
-    setForm(f => ({ ...f, [field]: value }))
+  function onColorChange(color: string) {
+    setForm(f => {
+      const title = autoTitle ? makeAutoTitle(f.client_name, color) : f.title
+      return { ...f, color, title }
+    })
+  }
+
+  function onClientNameChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const text = e.target.value
+    setForm(f => ({
+      ...f,
+      client_name: text,
+      client_id: '',
+      client_code: '',
+      title: autoTitle ? makeAutoTitle(text, f.color) : f.title,
+    }))
+    if (text.length >= 1) {
+      const matches = clients.filter(c => c.name.includes(text)).slice(0, 8)
+      if (matches.length > 0) {
+        const rect = e.target.getBoundingClientRect()
+        setSuggestions({ matches, top: rect.bottom + 2, left: rect.left })
+      } else {
+        setSuggestions(null)
+      }
+    } else {
+      setSuggestions(null)
+    }
+  }
+
+  function onClientCodeChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const code = e.target.value
+    const found = clients.find(c => c.code === code)
+    if (found) {
+      setForm(f => ({
+        ...f,
+        client_id: found.id,
+        client_code: found.code,
+        client_name: found.name,
+        title: autoTitle ? makeAutoTitle(found.name, f.color) : f.title,
+      }))
+    } else {
+      setForm(f => ({ ...f, client_code: code }))
+    }
+  }
+
+  function selectClient(c: { id: string; code: string; name: string }) {
+    setForm(f => ({
+      ...f,
+      client_id: c.id,
+      client_code: c.code,
+      client_name: c.name,
+      title: autoTitle ? makeAutoTitle(c.name, f.color) : f.title,
+    }))
+    setSuggestions(null)
+  }
+
+  function clearClient() {
+    setForm(f => ({
+      ...f,
+      client_id: '',
+      client_code: '',
+      client_name: '',
+      title: autoTitle ? makeAutoTitle('', f.color) : f.title,
+    }))
+    setSuggestions(null)
+  }
+
+  function onAutoTitleChange(checked: boolean) {
+    setAutoTitle(checked)
+    if (checked) {
+      setForm(f => ({ ...f, title: makeAutoTitle(f.client_name, f.color) }))
+    }
   }
 
   async function save() {
-    if (!form.title) { alert('タイトルは必須です'); return }
     setSaving(true)
     const supabase = createClient()
-    const start_datetime = `${form.start_date}T${form.start_time}:00`
-    const end_datetime = `${form.end_date}T${form.end_time}:00`
-
-    const { data, error } = await supabase.from('schedules').insert({
-      user_id: userId,
-      user_name: userName,
-      title: form.title,
-      start_datetime,
-      end_datetime,
+    // 毎回ユーザーを取得（state読み込み前に保存が走っても安全）
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { alert('ログインが必要です'); setSaving(false); return }
+    const { error } = await supabase.from('schedules').insert({
+      user_id: user.id,
+      user_name: userName || userId,
+      title: form.title || makeAutoTitle(form.client_name, form.color) || '（タイトルなし）',
+      start_datetime: toLocalISOString(form.date, form.start_time),
+      end_datetime: toLocalISOString(form.date, form.end_time),
       color: form.color,
       type: form.type,
       client_id: form.client_id || null,
       client_name: form.client_name || null,
       client_code: form.client_code || null,
       memo: form.memo || null,
-    }).select().single()
-
+      facility: selectedFacilities.length > 0 ? selectedFacilities.join(',') : null,
+    })
     if (error) { alert('エラー: ' + error.message); setSaving(false); return }
     router.push('/schedules')
   }
@@ -96,46 +199,97 @@ function ScheduleNewForm() {
 
       <div className="bg-white rounded-xl shadow p-6">
         <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">タイトル *</label>
-            <input className={inputClass} value={form.title} onChange={e => set('title', e.target.value)} placeholder="予定のタイトル" />
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* 日付・時刻 */}
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">開始日</label>
-              <input type="date" className={inputClass} value={form.start_date} onChange={e => set('start_date', e.target.value)} />
+              <label className="block text-xs font-medium text-gray-500 mb-1">日付</label>
+              <input type="date" className={inputClass} value={form.date}
+                onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">開始時刻</label>
-              <input type="time" className={inputClass} value={form.start_time} onChange={e => set('start_time', e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">終了日</label>
-              <input type="date" className={inputClass} value={form.end_date} onChange={e => set('end_date', e.target.value)} />
+              <input type="time" className={inputClass} value={form.start_time}
+                onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">終了時刻</label>
-              <input type="time" className={inputClass} value={form.end_time} onChange={e => set('end_time', e.target.value)} />
+              <input type="time" className={inputClass} value={form.end_time}
+                onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
             </div>
           </div>
 
+          {/* 種別（色） */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">色・種別</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">種別</label>
             <div className="flex flex-wrap gap-2">
               {COLOR_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => set('color', opt.value)}
+                <button key={opt.value} onClick={() => onColorChange(opt.value)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition ${
                     form.color === opt.value ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'
-                  }`}
-                >
+                  }`}>
                   <span className={`w-3 h-3 rounded-full ${opt.color}`} />
                   {opt.label}
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* 顧問先 */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">顧問先</label>
+            {form.client_name && form.client_id ? (
+              <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg text-sm">
+                <span className="font-mono text-gray-500 text-xs">{form.client_code}</span>
+                <span className="font-medium text-gray-800">{form.client_name}</span>
+                <button onClick={clearClient} className="ml-auto text-gray-400 hover:text-gray-600 text-xs">×</button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <input className={inputClass} value={form.client_code}
+                  onChange={onClientCodeChange} placeholder="顧客コード" />
+                <input className={inputClass} value={form.client_name}
+                  onChange={onClientNameChange}
+                  onBlur={() => setTimeout(() => setSuggestions(null), 150)}
+                  placeholder="顧問先名（部分一致）" />
+              </div>
+            )}
+          </div>
+
+          {/* 施設 */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">施設利用</label>
+            <div className="flex gap-3">
+              {FACILITIES.map(f => (
+                <label key={f} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs border cursor-pointer transition select-none ${
+                  selectedFacilities.includes(f)
+                    ? FACILITY_COLOR[f]
+                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                }`}>
+                  <input type="checkbox" className="sr-only"
+                    checked={selectedFacilities.includes(f)}
+                    onChange={() => toggleFacility(f)} />
+                  {f}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* タイトル */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-gray-500">タイトル</label>
+              <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                <input type="checkbox" checked={autoTitle} onChange={e => onAutoTitleChange(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded" />
+                顧問先・種別から自動生成
+              </label>
+            </div>
+            <input className={inputClass + (autoTitle ? ' bg-gray-50 text-gray-600' : '')}
+              value={form.title}
+              onChange={e => !autoTitle && setForm(f => ({ ...f, title: e.target.value }))}
+              readOnly={autoTitle}
+              placeholder={autoTitle ? '顧問先と種別を選択すると自動入力' : 'タイトルを入力'} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -145,38 +299,18 @@ function ScheduleNewForm() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">種類</label>
-              <select className={inputClass} value={form.type} onChange={e => set('type', e.target.value)}>
+              <select className={inputClass} value={form.type}
+                onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
                 <option value="スケジュール">スケジュール</option>
                 <option value="TODO">TODO</option>
               </select>
             </div>
           </div>
 
-          {form.client_name ? (
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">顧客</label>
-              <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg text-sm">
-                <span className="font-mono text-gray-500 text-xs">{form.client_code}</span>
-                <span className="font-medium text-gray-800">{form.client_name}</span>
-                <button onClick={() => { set('client_id', ''); set('client_name', ''); set('client_code', '') }} className="ml-auto text-gray-400 hover:text-gray-600 text-xs">×</button>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">顧客コード</label>
-                <input className={inputClass} value={form.client_code} onChange={e => set('client_code', e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">顧客名</label>
-                <input className={inputClass} value={form.client_name} onChange={e => set('client_name', e.target.value)} />
-              </div>
-            </div>
-          )}
-
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">メモ</label>
-            <textarea className={inputClass + ' resize-none'} rows={3} value={form.memo} onChange={e => set('memo', e.target.value)} />
+            <textarea className={inputClass + ' resize-none'} rows={3} value={form.memo}
+              onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} />
           </div>
         </div>
 
@@ -184,11 +318,26 @@ function ScheduleNewForm() {
           <Link href="/schedules" className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
             キャンセル
           </Link>
-          <button onClick={save} disabled={saving} className="px-6 py-2 text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-lg disabled:opacity-50">
+          <button onClick={save} disabled={saving}
+            className="px-6 py-2 text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-lg disabled:opacity-50">
             {saving ? '保存中...' : '保存'}
           </button>
         </div>
       </div>
+
+      {suggestions && (
+        <div style={{ position: 'fixed', top: suggestions.top, left: suggestions.left, minWidth: '260px', zIndex: 9999 }}
+          className="bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {suggestions.matches.map(c => (
+            <button key={c.id} type="button"
+              onMouseDown={() => selectClient(c)}
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 flex items-center gap-2">
+              <span className="font-mono text-gray-400 shrink-0">{c.code}</span>
+              <span className="truncate">{c.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

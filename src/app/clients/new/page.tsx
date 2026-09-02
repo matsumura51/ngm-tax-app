@@ -16,14 +16,14 @@ const BLUE_WHITE_OPTIONS = ['青色', '白色']
 const ic = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const icReq = 'w-full border border-red-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-red-50'
 
-const REQUIRED = ['code', 'name', 'entity_type', 'fiscal_month', 'withholding_tax', 'consumption_tax', 'primary_staff', 'contract_status', 'year_end_adjustment', 'notification_send', 'send_postal_code', 'send_address', 'send_recipient'] as const
+const REQUIRED = ['code', 'name', 'entity_type', 'fiscal_month', 'withholding_tax', 'consumption_tax', 'primary_staff', 'contract_status', 'year_end_adjustment', 'notification_send', 'jumin_tax', 'send_postal_code', 'send_address', 'send_recipient'] as const
 
 type FormState = {
   code: string; name: string; entity_type: string
   fiscal_month: string; contract_status: string
   contract_start_date: string; contract_end_date: string
   withholding_tax: string; consumption_tax: string
-  year_end_adjustment: string; notification_send: string
+  year_end_adjustment: string; notification_send: string; jumin_tax: string
   representative: string; honorific: string; representative_title: string
   employee_count: string; invoice_number: string
   client_department: string; client_contact: string; website: string
@@ -37,7 +37,7 @@ type FormState = {
 const INIT: FormState = {
   code: '', name: '', entity_type: '', fiscal_month: '', contract_status: '',
   contract_start_date: '', contract_end_date: '', withholding_tax: '', consumption_tax: '',
-  year_end_adjustment: '', notification_send: '', representative: '', honorific: '',
+  year_end_adjustment: '', notification_send: '', jumin_tax: '', representative: '', honorific: '',
   representative_title: '', employee_count: '', invoice_number: '', client_department: '',
   client_contact: '', website: '', email: '', postal_code: '', address: '', phone: '', fax: '',
   send_postal_code: '', send_address: '', send_tel: '', send_recipient: '', contact_notes: '',
@@ -64,7 +64,7 @@ export default function ClientNewPage() {
       code: '顧客コード', name: '顧客名', entity_type: '法・個区分',
       fiscal_month: '決算月', withholding_tax: '源泉税', consumption_tax: '消費税',
       primary_staff: '主担当', contract_status: '契約ステータス',
-      year_end_adjustment: '年調有無', notification_send: '申告の知らせ送付',
+      year_end_adjustment: '年調有無', notification_send: '申告の知らせ送付', jumin_tax: '住民税',
       send_postal_code: '送付先郵便番号', send_address: '送付先住所', send_recipient: '送付先宛先',
     }
     for (const field of REQUIRED) {
@@ -196,6 +196,17 @@ export default function ClientNewPage() {
                 {YES_NO_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
               {errors.notification_send && <p className="text-xs text-red-500 mt-0.5">{errors.notification_send}</p>}
+            </F>
+            <F label="住民税" required>
+              <select className={errors.jumin_tax ? icReq : ic} value={form.jumin_tax} onChange={e => set('jumin_tax', e.target.value)}>
+                <option value="">選択</option>
+                <option value="毎月（納付書）">毎月（納付書）</option>
+                <option value="毎月（ダイレクト）">毎月（ダイレクト）</option>
+                <option value="一括（ダイレクト）">一括（ダイレクト）</option>
+                <option value="普通徴収">普通徴収</option>
+                <option value="その他">その他</option>
+              </select>
+              {errors.jumin_tax && <p className="text-xs text-red-500 mt-0.5">{errors.jumin_tax}</p>}
             </F>
           </div>
         </Section>
