@@ -1030,7 +1030,7 @@ export default function DashboardPage() {
                   <th className="text-center px-4 py-2 font-medium">期限</th>
                   <th className="text-center px-4 py-2 font-medium">納付方法</th>
                   <th className="text-center px-4 py-2 font-medium">送付日</th>
-                  <th className="text-center px-4 py-2 font-medium">支払日</th>
+                  <th className="text-center px-4 py-2 font-medium">納付日</th>
                   <th className="text-center px-4 py-2 font-medium w-28">確認</th>
                 </tr>
               </thead>
