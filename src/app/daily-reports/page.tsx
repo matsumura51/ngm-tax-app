@@ -184,6 +184,7 @@ export default function DailyReportsPage() {
                               <tr className="text-gray-400">
                                 <th className="text-left pb-1 w-16">時間</th>
                                 <th className="text-left pb-1 w-24">業務区分</th>
+                                <th className="text-left pb-1 w-28">処理期間</th>
                                 <th className="text-left pb-1 w-32">顧客名</th>
                                 <th className="text-left pb-1">作業内容</th>
                               </tr>
@@ -193,6 +194,9 @@ export default function DailyReportsPage() {
                                 <tr key={i} className="text-gray-600">
                                   <td className="py-1">{d.work_time || ''}</td>
                                   <td className="py-1">{d.task_type || ''}</td>
+                                  <td className="py-1 text-gray-400">
+                                    {d.subject ? (d.details && d.details !== d.subject ? `${d.subject}～${d.details}` : d.subject) : ''}
+                                  </td>
                                   <td className="py-1 truncate max-w-[128px]">{d.client_name || ''}</td>
                                   <td className="py-1 truncate">{d.report_content || ''}</td>
                                 </tr>

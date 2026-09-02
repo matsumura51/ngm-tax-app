@@ -33,6 +33,15 @@ function fmtRate(fee: number, minutes: number): string {
   return Math.round(hourly).toLocaleString('ja-JP') + '円/h'
 }
 
+function monthSpan(subject: string | null, details: string | null): number {
+  if (!subject) return 1
+  const end = details || subject
+  const [sy, sm] = subject.split('-').map(Number)
+  const [ey, em] = end.split('-').map(Number)
+  if (isNaN(sy) || isNaN(sm) || isNaN(ey) || isNaN(em)) return 1
+  return Math.max(1, (ey - sy) * 12 + (em - sm) + 1)
+}
+
 interface WorkEntry {
   user_name: string
   task_type: string | null
@@ -42,6 +51,8 @@ interface WorkEntry {
   date: string
   report_content: string | null
   report_id: string
+  subject: string | null
+  details: string | null
 }
 
 interface ClientRow {
@@ -100,7 +111,7 @@ export default function ReportsPage() {
     // client_codeがあり且つwork_timeが入力済みの明細を先に取得 → 日報で日付・担当者を確認
     const { data: details } = await supabase
       .from('daily_report_details')
-      .select('report_id, task_type, work_time, client_code, client_name, report_content')
+      .select('report_id, task_type, work_time, client_code, client_name, report_content, subject, details')
       .not('client_code', 'is', null)
       .not('work_time', 'is', null)
 
@@ -177,6 +188,8 @@ export default function ReportsPage() {
         date: reportMap[d.report_id]?.date || '',
         report_content: d.report_content || null,
         report_id: d.report_id,
+        subject: d.subject || null,
+        details: d.details || null,
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
@@ -203,36 +216,69 @@ export default function ReportsPage() {
       row.entries.push(e)
     }
 
-    // 報酬配分を計算
+    // 報酬配分を計算（処理月数を考慮・合計を月額報酬でキャップ）
     for (const row of Object.values(clientMap)) {
       const fee = row.monthly_fee
       if (fee === 0) continue
 
-      // task_typeごとにグループ化
-      const byTask: Record<string, { user: string; mins: number }[]> = {}
+      // task_typeごとにグループ化（処理月数を含む）
+      const byTask: Record<string, { user: string; mins: number; subject: string | null; details: string | null }[]> = {}
       for (const e of entries.filter(e => e.client_code === row.client_code)) {
         const tt = e.task_type || 'その他'
         if (!byTask[tt]) byTask[tt] = []
-        byTask[tt].push({ user: e.user_name, mins: e.work_minutes })
+        byTask[tt].push({ user: e.user_name, mins: e.work_minutes, subject: e.subject, details: e.details })
       }
 
+      // 各タスクの生プール（処理月数で乗算）を計算
+      const rawPools: Record<string, number> = {}
       for (const [taskType, alloc] of Object.entries(TASK_ALLOC)) {
         const taskEntries = byTask[taskType] || []
         if (taskEntries.length === 0) continue
-        const pool = fee * alloc.rate
+        if (alloc.splitBy === 'time') {
+          // 時間×月数で加重平均
+          const totalWeighted = taskEntries.reduce((s, e) => s + e.mins * monthSpan(e.subject, e.details), 0)
+          const totalMins = taskEntries.reduce((s, e) => s + e.mins, 0)
+          const avgMonths = totalMins > 0 ? totalWeighted / totalMins : 1
+          rawPools[taskType] = fee * alloc.rate * avgMonths
+        } else {
+          // 担当者ごとに最大月数を取り、平均で乗算
+          const personMonths: Record<string, number> = {}
+          for (const e of taskEntries) {
+            const ms = monthSpan(e.subject, e.details)
+            personMonths[e.user] = Math.max(personMonths[e.user] || 0, ms)
+          }
+          const avgMonths = Object.values(personMonths).reduce((s, m) => s + m, 0) / Object.keys(personMonths).length
+          rawPools[taskType] = fee * alloc.rate * avgMonths
+        }
+      }
+
+      // 合計が月額報酬を超えないよう正規化
+      const totalRaw = Object.values(rawPools).reduce((s, v) => s + v, 0)
+      const normFactor = totalRaw > fee ? fee / totalRaw : 1
+
+      // 配分を実行
+      for (const [taskType, alloc] of Object.entries(TASK_ALLOC)) {
+        const taskEntries = byTask[taskType] || []
+        if (taskEntries.length === 0) continue
+        const pool = (rawPools[taskType] || 0) * normFactor
 
         if (alloc.splitBy === 'time') {
-          const totalMins = taskEntries.reduce((s, e) => s + e.mins, 0)
+          const totalWeighted = taskEntries.reduce((s, e) => s + e.mins * monthSpan(e.subject, e.details), 0)
           for (const e of taskEntries) {
-            const share = totalMins > 0 ? (e.mins / totalMins) * pool : pool / taskEntries.length
+            const w = e.mins * monthSpan(e.subject, e.details)
+            const share = totalWeighted > 0 ? (w / totalWeighted) * pool : pool / taskEntries.length
             row.staff_alloc[e.user] = (row.staff_alloc[e.user] || 0) + share
           }
         } else {
-          // person: 担当者ごとに均等割（同じ人が複数回でも1カウント）
-          const uniqueStaff = [...new Set(taskEntries.map(e => e.user))]
-          const sharePerPerson = pool / uniqueStaff.length
-          for (const user of uniqueStaff) {
-            row.staff_alloc[user] = (row.staff_alloc[user] || 0) + sharePerPerson
+          const personMonths: Record<string, number> = {}
+          for (const e of taskEntries) {
+            const ms = monthSpan(e.subject, e.details)
+            personMonths[e.user] = Math.max(personMonths[e.user] || 0, ms)
+          }
+          const totalPersonMonths = Object.values(personMonths).reduce((s, m) => s + m, 0)
+          for (const [user, months] of Object.entries(personMonths)) {
+            const share = totalPersonMonths > 0 ? (months / totalPersonMonths) * pool : pool / Object.keys(personMonths).length
+            row.staff_alloc[user] = (row.staff_alloc[user] || 0) + share
           }
         }
       }
