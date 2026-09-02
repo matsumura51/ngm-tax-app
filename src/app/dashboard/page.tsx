@@ -240,10 +240,7 @@ export default function DashboardPage() {
     setSettleItems(settleResult)
 
     // ── 月次未処理 ──
-    // 当年のmonthly_progressを全件取得し、今月・先月のどちらかで
-    // 「資料収集あり・月次完成なし」のものを列挙
-    const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1
-    const prevMonthStr = String(prevMonth)
+    // 全年・全月をチェックし「資料収集あり・月次未完成・14日以上経過」を列挙
     const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear
 
     const { data: progressRaw } = await supabase
@@ -256,21 +253,19 @@ export default function DashboardPage() {
     const unfinished: MonthlyItem[] = []
 
     for (const p of (progressRaw || [])) {
-      // 当月チェック（year = currentYear）
-      const matCur: string | null = (p.monthly_material || {})[currentMonthStr] || null
-      const compCur: string | null = (p.monthly_completion || {})[currentMonthStr] || null
-      if (matCur && !compCur && !seen.has(p.client_id + '-' + currentMonthStr)) {
-        seen.add(p.client_id + '-' + currentMonthStr)
-        const elapsed = Math.floor((todayTime - new Date(matCur).getTime()) / 86400000)
-        unfinished.push({ client_id: p.client_id, client_code: p.client_code, client_name: p.client_name, primary_staff: p.primary_staff, sub_staff: p.sub_staff, material_date: matCur, elapsed_days: elapsed })
-      }
-      // 先月チェック
-      const matPrev: string | null = (p.monthly_material || {})[prevMonthStr] || null
-      const compPrev: string | null = (p.monthly_completion || {})[prevMonthStr] || null
-      if (matPrev && !compPrev && !seen.has(p.client_id + '-' + prevMonthStr)) {
-        seen.add(p.client_id + '-' + prevMonthStr)
-        const elapsed = Math.floor((todayTime - new Date(matPrev).getTime()) / 86400000)
-        unfinished.push({ client_id: p.client_id, client_code: p.client_code, client_name: p.client_name, primary_staff: p.primary_staff, sub_staff: p.sub_staff, material_date: matPrev, elapsed_days: elapsed })
+      const matObj: Record<string, string> = p.monthly_material || {}
+      const compObj: Record<string, string> = p.monthly_completion || {}
+      for (const monthStr of Object.keys(matObj)) {
+        const matDate = matObj[monthStr]
+        const compDate = compObj[monthStr]
+        const key = `${p.client_id}-${monthStr}`
+        if (matDate && !compDate && !seen.has(key)) {
+          seen.add(key)
+          const elapsed = Math.floor((todayTime - new Date(matDate).getTime()) / 86400000)
+          if (elapsed >= 14) {
+            unfinished.push({ client_id: p.client_id, client_code: p.client_code, client_name: p.client_name, primary_staff: p.primary_staff, sub_staff: p.sub_staff, material_date: matDate, elapsed_days: elapsed })
+          }
+        }
       }
     }
 
@@ -854,7 +849,7 @@ export default function DashboardPage() {
           <div className="bg-yellow-50 border-b border-yellow-100 px-5 py-3 flex items-center justify-between">
             <div>
               <span className="font-bold text-yellow-700 text-sm">月次 未処理</span>
-              <span className="ml-2 text-xs text-gray-500">資料収集あり・月次未完成（赤＝2週間超）</span>
+              <span className="ml-2 text-xs text-gray-500">資料収集から2週間以上・月次未完成</span>
             </div>
             <span className="text-xs font-bold text-yellow-600 bg-yellow-100 rounded-full px-2 py-0.5">
               {progressLoading ? '...' : `${monthlyItems.length}件`}
