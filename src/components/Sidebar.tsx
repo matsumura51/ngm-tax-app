@@ -41,12 +41,9 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   }
 
   return (
-    <aside className={`
-      fixed md:sticky top-0 left-0 z-40 h-screen
-      w-64 md:w-56 bg-blue-800 text-white flex flex-col
-      transition-transform duration-300 ease-in-out shrink-0
-      ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-    `}>
+    <aside
+      className={`fixed md:sticky top-0 left-0 z-40 h-screen w-64 md:w-56 bg-blue-800 text-white flex-col shrink-0 ${isOpen ? 'flex' : 'hidden md:flex'}`}
+    >
       <div className="px-6 py-5 border-b border-blue-700 flex items-center justify-between">
         <div>
           <div className="font-bold text-lg leading-tight">業務管理</div>
