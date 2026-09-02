@@ -83,6 +83,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => { if (tab === '指摘事項' && client) loadChecks() }, [tab, client])
   useEffect(() => { if (tab === '質問事項' && client) loadQuestions() }, [tab, client])
 
+  const [clientLoaded, setClientLoaded] = useState(false)
+
   async function loadClient() {
     const supabase = createClient()
     const { data } = await supabase.from('clients').select('*').eq('id', id).single()
@@ -91,6 +93,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       setForm({ ...data, directors: data.directors || [], documents: data.documents || [] })
       setIsDirty(false)
     }
+    setClientLoaded(true)
   }
 
   useEffect(() => {
@@ -365,7 +368,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     set('documents', (form.documents || []).filter((_, i) => i !== index))
   }
 
-  if (!client) return <div className="p-6 text-gray-400">読み込み中...</div>
+  if (!clientLoaded) return <div className="p-6 text-gray-400">読み込み中...</div>
+  if (!client) return <div className="p-6 text-red-400">顧客が見つかりません（IDが無効です）</div>
 
   return (
     <div className="p-6">

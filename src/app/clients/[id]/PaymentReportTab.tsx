@@ -480,9 +480,15 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
                 </span>
               </div>
             </div>
-            <div className="flex justify-end gap-3 px-6 pb-5">
+            <div className="flex items-center gap-3 px-6 pb-5">
+              {editingId && (
+                <button onClick={async () => { if (confirm('この物件を削除しますか？')) { await deleteItem(editingId); setModalOpen(false) } }}
+                  className="mr-auto px-4 py-2 text-sm text-red-600 border border-red-300 rounded-lg hover:bg-red-50">
+                  削除
+                </button>
+              )}
               <button onClick={() => setModalOpen(false)}
-                className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 ml-auto">
                 キャンセル
               </button>
               <button onClick={save} disabled={saving}

@@ -18,7 +18,7 @@ export default function PaymentReportsPage() {
   const [year, setYear] = useState(new Date().getFullYear())
   const [summaries, setSummaries] = useState<PaymentSummary[]>([])
   const [loading, setLoading] = useState(false)
-  const [clientName, setClientName] = useState('')
+  const [filter, setFilter] = useState('')
 
   useEffect(() => { load() }, [year])
 
@@ -59,14 +59,13 @@ export default function PaymentReportsPage() {
     setLoading(false)
   }
 
-  const filtered = summaries.filter(s => !clientName || s.client_name.includes(clientName))
+  const filtered = summaries.filter(s => !filter || s.client_name.includes(filter))
   const grandTotal = filtered.reduce((s, r) => s + r.total, 0)
-  const reiwa = year - 2018
 
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-gray-800 mb-1">支払調書</h1>
-      <p className="text-xs text-gray-500 mb-5">不動産使用料等の支払調書 — 顧客カルテの「支払調書」タブから入力</p>
+      <p className="text-xs text-gray-500 mb-5">不動産使用料等の支払調書</p>
 
       <div className="flex items-center gap-3 mb-5 flex-wrap">
         <select value={year} onChange={e => setYear(Number(e.target.value))}
@@ -78,12 +77,11 @@ export default function PaymentReportsPage() {
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input className="border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm w-48"
-            placeholder="顧客名で絞り込み" value={clientName}
-            onChange={e => setClientName(e.target.value)} />
+            placeholder="顧客名で絞り込み" value={filter}
+            onChange={e => setFilter(e.target.value)} />
         </div>
-        <div className="ml-auto text-sm text-gray-600">
-          令和{reiwa}年 総支払額：
-          <span className="font-bold text-gray-900 ml-1">{grandTotal.toLocaleString('ja-JP')}円</span>
+        <div className="ml-auto text-sm text-gray-500">
+          年間支払合計：<span className="font-bold text-gray-900 ml-1">{grandTotal.toLocaleString('ja-JP')}円</span>
         </div>
       </div>
 
@@ -110,11 +108,18 @@ export default function PaymentReportsPage() {
               {filtered.map(s => (
                 <tr key={s.report_id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
-                    <Link href={`/clients/${s.client_id}`}
-                      className="font-medium text-blue-600 hover:underline flex items-center gap-1.5">
-                      <FileText size={14} className="text-blue-400" />
-                      {s.client_name}
-                    </Link>
+                    {s.client_id ? (
+                      <Link href={`/clients/${s.client_id}`}
+                        className="font-medium text-blue-600 hover:underline flex items-center gap-1.5">
+                        <FileText size={14} className="text-blue-400" />
+                        {s.client_name}
+                      </Link>
+                    ) : (
+                      <span className="font-medium text-gray-700 flex items-center gap-1.5">
+                        <FileText size={14} className="text-gray-400" />
+                        {s.client_name}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 font-mono text-gray-500 text-xs">{s.client_code}</td>
                   <td className="px-4 py-3 text-right text-gray-600">{s.item_count}件</td>

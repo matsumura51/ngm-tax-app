@@ -79,6 +79,15 @@ export default function YearEndAdjTab({ year }: Props) {
     setForm(f => ({ ...f, [key]: val }))
   }
 
+  async function deleteRecord(id: string) {
+    if (!confirm('このレコードを削除しますか？')) return
+    const supabase = createClient()
+    const { error } = await supabase.from('year_end_adj_records').delete().eq('id', id)
+    if (error) { alert('削除エラー: ' + error.message); return }
+    setEditingRecord(null)
+    load()
+  }
+
   async function save() {
     setSaving(true)
     const supabase = createClient()
@@ -466,7 +475,11 @@ export default function YearEndAdjTab({ year }: Props) {
                 ))}
               </div>
             </div>
-            <div className="flex justify-end gap-3 px-6 pb-5">
+            <div className="flex items-center gap-3 px-6 pb-5">
+              <button onClick={() => deleteRecord(editingRecord!.id)}
+                className="mr-auto px-4 py-2 text-sm text-red-600 border border-red-300 rounded-lg hover:bg-red-50">
+                削除
+              </button>
               <button onClick={() => setEditingRecord(null)}
                 className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
                 キャンセル
