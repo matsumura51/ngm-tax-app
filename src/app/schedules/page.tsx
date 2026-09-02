@@ -108,7 +108,7 @@ function SchedulesContent() {
   async function loadUsers() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (user) setCurrentUserId(user.id)
+    if (user) { setCurrentUserId(user.id); setSelectedUserId(user.id) }
     const { data } = await supabase.from('users').select('id, name, leave_date, code').order('code')
     setUsers((data || []).filter((u: { leave_date: string | null }) => !u.leave_date))
   }
