@@ -146,6 +146,7 @@ export default function WithholdingTaxPage() {
   const grandGross = filteredSummaries.reduce((s, r) => s + r.total_gross, 0)
   const grandTax = filteredSummaries.reduce((s, r) => s + r.total_tax, 0)
   const grandFeeTotal = filteredFees.reduce((s, r) => s + r.total, 0)
+  const grandFeeTax = filteredFees.reduce((s, r) => s + Math.floor(r.total * 0.1021), 0)
 
   return (
     <div className="p-6">
@@ -183,8 +184,13 @@ export default function WithholdingTaxPage() {
           </div>
         )}
         {tab === '税理士報酬' && (
-          <div className="ml-auto text-sm text-gray-500">
-            年間報酬合計：<span className="font-bold text-gray-900 ml-1">{grandFeeTotal.toLocaleString('ja-JP')}円</span>
+          <div className="ml-auto flex gap-6 text-sm">
+            <span className="text-gray-500">
+              年間支払合計：<span className="font-bold text-gray-900 ml-1">{grandFeeTotal.toLocaleString('ja-JP')}円</span>
+            </span>
+            <span className="text-gray-500">
+              年間源泉合計：<span className="font-bold text-red-600 ml-1">{grandFeeTax.toLocaleString('ja-JP')}円</span>
+            </span>
           </div>
         )}
       </div>
@@ -269,7 +275,7 @@ export default function WithholdingTaxPage() {
         <div className="bg-white rounded-xl shadow overflow-hidden">
           <div className="bg-indigo-50 border-b border-indigo-100 px-5 py-3 flex items-center gap-3">
             <span className="font-bold text-indigo-700 text-sm">税理士報酬の支払調書</span>
-            <span className="text-xs text-gray-500">受取人：和み税理士法人　— 月次進捗表の報酬から自動集計</span>
+            <span className="text-xs text-gray-500">受取人：和み税理士法人　— 月次進捗表の報酬から自動集計（源泉10.21%）</span>
           </div>
           {loading ? (
             <div className="text-center py-12 text-gray-400">読み込み中...</div>
@@ -280,55 +286,53 @@ export default function WithholdingTaxPage() {
               <p className="text-xs mt-1">月次進捗表の「報酬」列に入力すると自動で反映されます</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 text-gray-500 border-b">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium">顧客名</th>
-                    {MONTHS.map(m => (
-                      <th key={m} className="px-2 py-2 text-right font-medium w-20">{m}月</th>
-                    ))}
-                    <th className="px-3 py-2 text-right font-bold w-28">年間合計</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredFees.map(r => (
-                    <tr key={r.client_code} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">
-                        {r.client_name}
-                        <span className="ml-1.5 text-gray-400 font-mono text-[10px]">{r.client_code}</span>
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs text-gray-500 border-b">
+                <tr>
+                  <th className="px-4 py-3 text-left">顧客名</th>
+                  <th className="px-4 py-3 text-left w-24">顧客コード</th>
+                  <th className="px-4 py-3 text-right w-40">年間支払金額</th>
+                  <th className="px-4 py-3 text-right w-40">年間源泉税額</th>
+                  <th className="px-4 py-3 text-right w-40">差引支払額</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredFees.map(r => {
+                  const tax = Math.floor(r.total * 0.1021)
+                  return (
+                    <tr key={r.client_code || r.client_name} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-800">{r.client_name}</td>
+                      <td className="px-4 py-3 font-mono text-gray-500 text-xs">{r.client_code}</td>
+                      <td className="px-4 py-3 text-right font-mono text-gray-700">
+                        {r.total > 0 ? r.total.toLocaleString('ja-JP') + '円' : '—'}
                       </td>
-                      {MONTHS.map(m => (
-                        <td key={m} className="px-2 py-2 text-right tabular-nums text-gray-600">
-                          {r.monthly[m] > 0 ? r.monthly[m].toLocaleString('ja-JP') : ''}
-                        </td>
-                      ))}
-                      <td className="px-3 py-2 text-right font-bold tabular-nums text-gray-900">
-                        {r.total.toLocaleString('ja-JP')}円
+                      <td className="px-4 py-3 text-right font-mono text-red-600 font-bold">
+                        {tax > 0 ? tax.toLocaleString('ja-JP') + '円' : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-gray-800">
+                        {r.total > 0 ? (r.total - tax).toLocaleString('ja-JP') + '円' : '—'}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-gray-50 border-t-2 border-gray-200">
-                  <tr>
-                    <td className="px-3 py-2 font-bold text-gray-700">
-                      合計（{filteredFees.length}社）
-                    </td>
-                    {MONTHS.map(m => (
-                      <td key={m} className="px-2 py-2 text-right tabular-nums font-medium text-gray-700">
-                        {(() => {
-                          const s = filteredFees.reduce((sum, r) => sum + r.monthly[m], 0)
-                          return s > 0 ? s.toLocaleString('ja-JP') : ''
-                        })()}
-                      </td>
-                    ))}
-                    <td className="px-3 py-2 text-right font-bold tabular-nums text-gray-900">
-                      {grandFeeTotal.toLocaleString('ja-JP')}円
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                  )
+                })}
+              </tbody>
+              <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                <tr>
+                  <td colSpan={2} className="px-4 py-3 font-bold text-gray-700 text-xs">
+                    合計（{filteredFees.length}社）
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold font-mono text-gray-900">
+                    {grandFeeTotal.toLocaleString('ja-JP')}円
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold font-mono text-red-700">
+                    {grandFeeTax.toLocaleString('ja-JP')}円
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold font-mono text-gray-900">
+                    {(grandFeeTotal - grandFeeTax).toLocaleString('ja-JP')}円
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           )}
         </div>
       )}
