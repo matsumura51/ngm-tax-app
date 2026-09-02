@@ -21,11 +21,23 @@ export default function LoginPage() {
     // メールアドレスはそのまま、それ以外はコード@ngm-tax.local に変換
     const email = loginId.includes('@') ? loginId : `${loginId}@ngm-tax.local`
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
       setError('ログインIDまたはパスワードが正しくありません')
       setLoading(false)
+      return
+    }
+
+    // 初回ログイン確認
+    const { data: profile } = await supabase
+      .from('users')
+      .select('must_change_password')
+      .eq('id', data.user.id)
+      .single()
+
+    if (profile?.must_change_password) {
+      router.push('/change-password')
     } else {
       router.push('/dashboard')
     }

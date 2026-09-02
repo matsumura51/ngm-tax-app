@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase.auth.admin.createUser({
     email,
-    password,
+    password: '111111',
     email_confirm: true,
     user_metadata: { name },
   })
@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
     hire_date: hire_date || null,
     leave_date: leave_date || null,
     division: division || null,
+    must_change_password: true,
   }).eq('id', data.user.id)
 
   return NextResponse.json({ success: true })
