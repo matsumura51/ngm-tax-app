@@ -17,6 +17,58 @@ const MONTHLY_FIELDS = [
 ]
 type ActiveTab = '月次進捗' | '税務情報' | '決算業務'
 
+// 年4桁→月へ、月2桁→日へ自動移動するカスタム日付入力
+function DatePartInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const parsed = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const [ly, setLy] = useState(parsed ? parsed[1] : '')
+  const [lm, setLm] = useState(parsed ? parsed[2] : '')
+  const [ld, setLd] = useState(parsed ? parsed[3] : '')
+  const mRef = useRef<HTMLInputElement>(null)
+  const dRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const p = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (p) { setLy(p[1]); setLm(p[2]); setLd(p[3]) }
+    else if (!value) { setLy(''); setLm(''); setLd('') }
+  }, [value])
+
+  function emit(ny: string, nm: string, nd: string) {
+    if (ny.length === 4 && nm.length >= 1 && nd.length >= 1) {
+      onChange(`${ny}-${nm.padStart(2, '0')}-${nd.padStart(2, '0')}`)
+    } else if (!ny && !nm && !nd) {
+      onChange('')
+    }
+  }
+
+  const seg = 'text-center border border-gray-300 rounded px-1 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500'
+  return (
+    <div className="flex items-center gap-1 flex-1">
+      <input type="text" inputMode="numeric" placeholder="YYYY" maxLength={4} value={ly}
+        onChange={e => {
+          const v = e.target.value.replace(/\D/g, '').slice(0, 4)
+          setLy(v); emit(v, lm, ld)
+          if (v.length === 4) mRef.current?.focus()
+        }}
+        className={`${seg} w-16`} />
+      <span className="text-gray-400 text-sm">/</span>
+      <input ref={mRef} type="text" inputMode="numeric" placeholder="MM" maxLength={2} value={lm}
+        onChange={e => {
+          const v = e.target.value.replace(/\D/g, '').slice(0, 2)
+          setLm(v); emit(ly, v, ld)
+          if (v.length === 2) dRef.current?.focus()
+        }}
+        className={`${seg} w-10`} />
+      <span className="text-gray-400 text-sm">/</span>
+      <input ref={dRef} type="text" inputMode="numeric" placeholder="DD" maxLength={2} value={ld}
+        onChange={e => {
+          const v = e.target.value.replace(/\D/g, '').slice(0, 2)
+          setLd(v); emit(ly, lm, v)
+        }}
+        className={`${seg} w-10`} />
+    </div>
+  )
+}
+
 // "YYYY-MM-DD" → "M/D" for table display; pass-through other formats
 function fmtDate(s: string | null | undefined): string {
   if (!s) return ''
@@ -959,9 +1011,10 @@ function MonthlyContent() {
                 <div key={f.key} className="flex items-center gap-3">
                   <label className="text-xs font-medium text-gray-500 w-16 shrink-0">{f.label}</label>
                   {f.type === 'date' ? (
-                    <input type="date" value={monthDates[f.key] || ''}
-                      onChange={e => setMonthDates(d => ({ ...d, [f.key]: e.target.value }))}
-                      className={inp} />
+                    <DatePartInput
+                      value={monthDates[f.key] || ''}
+                      onChange={v => setMonthDates(d => ({ ...d, [f.key]: v }))}
+                    />
                   ) : (
                     <input type="text" inputMode="numeric"
                       value={fmtFee(monthDates[f.key])}
@@ -1014,11 +1067,9 @@ function MonthlyContent() {
                     </label>
                   ) : type === 'date' ? (
                     <div className="flex items-center gap-2 flex-1">
-                      <input
-                        type="date"
+                      <DatePartInput
                         value={toIso(settleForm[key])}
-                        onChange={e => setSettleForm(f => ({ ...f, [key]: e.target.value }))}
-                        className={inp}
+                        onChange={v => setSettleForm(f => ({ ...f, [key]: v }))}
                       />
                       {settleForm[key] && (
                         <button onClick={() => setSettleForm(f => ({ ...f, [key]: '' }))} className="text-gray-300 hover:text-gray-500 text-xs shrink-0">✕</button>
