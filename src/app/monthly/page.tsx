@@ -469,7 +469,7 @@ function MonthlyContent() {
     setMonthModal({ client, month })
   }
 
-  async function saveMonthModal() {
+  async function saveMonthModal(openNext = false) {
     if (!monthModal) return
     setSaving(true)
     const { client, month } = monthModal
@@ -492,9 +492,22 @@ function MonthlyContent() {
       setSaving(false)
       return
     }
-    setProgressMap(prev => ({ ...prev, [client.code]: { ...p!, ...updates } }))
+    const newP = { ...p!, ...updates }
+    setProgressMap(prev => ({ ...prev, [client.code]: newP }))
     setSaving(false)
-    setMonthModal(null)
+    if (openNext && month < 12) {
+      // 次の月のデータを newP から読み込んでモーダルを開く
+      const nextMonth = month + 1
+      const dates: Record<string, string> = {}
+      for (const f of MONTHLY_FIELDS) {
+        const val = newP[f.key as keyof MonthlyProgress] as Record<string, string | null> | undefined
+        dates[f.key] = val?.[String(nextMonth)] || ''
+      }
+      setMonthDates(dates)
+      setMonthModal({ client, month: nextMonth })
+    } else {
+      setMonthModal(null)
+    }
   }
 
   function openSettleModal(client: Client) {
@@ -1011,7 +1024,17 @@ function MonthlyContent() {
             <div className="flex justify-between items-start mb-4">
               <div>
                 <div className="font-bold text-gray-800">{monthModal.client.name}</div>
-                <div className="text-sm text-blue-600 font-medium">{year}年 {monthModal.month}月</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-blue-600 font-medium">{year}年 {monthModal.month}月</span>
+                  {monthModal.month < 12 && (
+                    <button
+                      onClick={() => saveMonthModal(true)}
+                      disabled={saving}
+                      className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-full hover:bg-blue-100 disabled:opacity-50 transition">
+                      保存して次月へ →
+                    </button>
+                  )}
+                </div>
               </div>
               <button onClick={() => setMonthModal(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
             </div>
@@ -1041,7 +1064,7 @@ function MonthlyContent() {
             </div>
             <div className="flex gap-2 mt-5">
               <button onClick={() => setMonthModal(null)} className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">キャンセル</button>
-              <button onClick={saveMonthModal} disabled={saving} className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              <button onClick={() => saveMonthModal(false)} disabled={saving} className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
                 {saving ? '保存中...' : '保存'}
               </button>
             </div>
