@@ -96,7 +96,7 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
       setBreakMinutes(s.break_minutes != null ? String(s.break_minutes) : '')
       setForm({
         title,
-        date: start.toISOString().split('T')[0],
+        date: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`,
         start_time: start.toTimeString().slice(0, 5),
         end_time: end.toTimeString().slice(0, 5),
         color,
