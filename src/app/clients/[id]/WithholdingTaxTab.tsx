@@ -7,7 +7,8 @@ import { WithholdingRecordItem } from '@/lib/types'
 import * as XLSX from 'xlsx'
 
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-const PAYEE_TYPES = ['社労士', '司法書士', '弁護士', '税理士', '公認会計士', '土地家屋調査士', '行政書士', 'その他']
+const PAYEE_TYPES = ['社労士', '司法書士', '弁護士', '弁理士', '税理士', '公認会計士', '土地家屋調査士', '行政書士', 'その他']
+const PAYEE_TYPES_FIXED = PAYEE_TYPES.filter(t => t !== 'その他')
 const ic = 'border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 w-full'
 
 function zen2han(str: string): string {
@@ -510,10 +511,21 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">種別</label>
-                  <select className={ic} value={form.payee_type}
-                    onChange={e => setForm(f => ({ ...f, payee_type: e.target.value }))}>
+                  <select className={ic}
+                    value={PAYEE_TYPES_FIXED.includes(form.payee_type) ? form.payee_type : 'その他'}
+                    onChange={e => {
+                      if (e.target.value === 'その他') {
+                        setForm(f => ({ ...f, payee_type: PAYEE_TYPES_FIXED.includes(f.payee_type) ? '' : f.payee_type }))
+                      } else {
+                        setForm(f => ({ ...f, payee_type: e.target.value }))
+                      }
+                    }}>
                     {PAYEE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
+                  {!PAYEE_TYPES_FIXED.includes(form.payee_type) && (
+                    <input className={`${ic} mt-1`} placeholder="種別を入力" value={form.payee_type}
+                      onChange={e => setForm(f => ({ ...f, payee_type: e.target.value }))} />
+                  )}
                 </div>
               </div>
 
