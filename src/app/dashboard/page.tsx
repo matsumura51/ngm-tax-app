@@ -49,7 +49,20 @@ interface SettleItem {
   settle_return_prepared: string | null
 }
 
+const MONTHLY_STATUS_OPTIONS = ['要対応', '処理中', '質問回答待ち', '不足書類待ち', '未対応', 'その他'] as const
+type MonthlyStatusOption = typeof MONTHLY_STATUS_OPTIONS[number]
+
+const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
+  '要対応':       { bg: 'bg-red-100',    text: 'text-red-700',    dot: 'bg-red-500' },
+  '処理中':       { bg: 'bg-blue-100',   text: 'text-blue-700',   dot: 'bg-blue-500' },
+  '質問回答待ち': { bg: 'bg-yellow-100', text: 'text-yellow-700', dot: 'bg-yellow-500' },
+  '不足書類待ち': { bg: 'bg-orange-100', text: 'text-orange-700', dot: 'bg-orange-400' },
+  '未対応':       { bg: 'bg-gray-100',   text: 'text-gray-600',   dot: 'bg-gray-400' },
+  'その他':       { bg: 'bg-purple-100', text: 'text-purple-700', dot: 'bg-purple-400' },
+}
+
 interface MonthlyItem {
+  progress_id: string | null
   client_id: string
   client_code: string
   client_name: string
@@ -58,6 +71,7 @@ interface MonthlyItem {
   material_date: string   // 資料預かり日（最も古いもの）
   elapsed_days: number
   months_count: number    // 未処理の月数
+  monthly_status: string | null
 }
 
 interface ReturnItem { client_code: string | null; client_name: string; staff_name: string | null; category: '決算業務' | '年末調整' | '確定申告' }
@@ -350,7 +364,7 @@ export default function DashboardPage() {
         if (matDate && !compDate && !seen.has(key)) {
           seen.add(key)
           const elapsed = Math.floor((todayTime - new Date(matDate).getTime()) / 86400000)
-          unfinished.push({ client_id: p.client_id, client_code: p.client_code, client_name: p.client_name, primary_staff: p.primary_staff, sub_staff: p.sub_staff, material_date: matDate, elapsed_days: elapsed, months_count: 1 })
+          unfinished.push({ progress_id: p.id ?? null, client_id: p.client_id, client_code: p.client_code, client_name: p.client_name, primary_staff: p.primary_staff, sub_staff: p.sub_staff, material_date: matDate, elapsed_days: elapsed, months_count: 1, monthly_status: p.monthly_status ?? null })
         }
       }
     }
@@ -362,7 +376,8 @@ export default function DashboardPage() {
       if (!existing) {
         groupMap.set(item.client_code, { ...item, months_count: 1 })
       } else if (item.elapsed_days > existing.elapsed_days) {
-        groupMap.set(item.client_code, { ...item, months_count: existing.months_count + 1 })
+        // elapsed_days が大きいものを代表にするが、status/progress_id は同じレコードなので引き継ぐ
+        groupMap.set(item.client_code, { ...item, months_count: existing.months_count + 1, monthly_status: existing.monthly_status, progress_id: existing.progress_id })
       } else {
         existing.months_count += 1
       }
@@ -371,6 +386,17 @@ export default function DashboardPage() {
     grouped.sort((a, b) => b.elapsed_days - a.elapsed_days)
     setMonthlyItems(grouped)
     setProgressLoading(false)
+  }
+
+  async function updateMonthlyStatus(clientCode: string, progressId: string | null, newStatus: string) {
+    // ローカル状態を即座に更新
+    setMonthlyItems(prev => prev.map(i => i.client_code === clientCode ? { ...i, monthly_status: newStatus || null } : i))
+    if (!progressId) return
+    await fetch('/api/monthly-progress/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: progressId, updates: { monthly_status: newStatus || null } }),
+    })
   }
 
   // 担当者別集計
@@ -1148,16 +1174,28 @@ export default function DashboardPage() {
                                 <span className="text-xs text-gray-500">{item.elapsed_days}日</span>
                               )}
                             </td>
-                            <td className="px-3 py-2.5 text-center">
-                              {item.elapsed_days >= 14 ? (
-                                <span className="inline-flex items-center gap-1 text-xs font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>要対応
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-xs font-medium bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded-full">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 inline-block"></span>未完成
-                                </span>
-                              )}
+                            <td className="px-2 py-2 text-center" onClick={e => e.stopPropagation()}>
+                              {(() => {
+                                const st = item.monthly_status
+                                const style = st ? STATUS_STYLE[st] : null
+                                return (
+                                  <div className="relative inline-block">
+                                    {style && (
+                                      <span className={`inline-flex items-center gap-1 text-xs font-medium ${style.bg} ${style.text} px-2 py-0.5 rounded-full mb-0.5`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${style.dot} inline-block`}></span>{st}
+                                      </span>
+                                    )}
+                                    <select
+                                      value={item.monthly_status || ''}
+                                      onChange={e => updateMonthlyStatus(item.client_code, item.progress_id, e.target.value)}
+                                      className="block w-full text-xs border border-gray-200 rounded px-1.5 py-1 text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
+                                    >
+                                      <option value="">— 選択 —</option>
+                                      {MONTHLY_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                  </div>
+                                )
+                              })()}
                             </td>
                           </tr>
                         )
