@@ -263,8 +263,8 @@ export default function ClientQuestionDetailPage({ params }: { params: Promise<{
             <span style="font-size:12px;line-height:1.6">${escapedText}</span>
           </div>${answerHtml}
           <div style="margin-top:8px;margin-left:24px">
-            <div style="border-bottom:1px solid #bbb;height:24px;margin-bottom:4px"></div>
-            <div style="border-bottom:1px solid #bbb;height:24px"></div>
+            <div style="height:24px"></div>
+            <div style="height:24px"></div>
           </div>
         </div>`
       }).join('')
