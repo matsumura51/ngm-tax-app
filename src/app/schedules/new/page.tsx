@@ -234,7 +234,7 @@ function ScheduleNewForm() {
       if (error) { alert('エラー: ' + error.message); setSaving(false); return }
     } else {
       const dates = generateDates(form.date, recurrenceEnd, recurrence)
-      const recurringId = Date.now()
+      const recurringId = Math.floor(Math.random() * 2147483647)
       const records = dates.map(d => ({
         ...base,
         start_datetime: toLocalISOString(d, form.start_time),
