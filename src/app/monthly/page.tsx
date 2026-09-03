@@ -366,15 +366,20 @@ function MonthlyContent() {
   async function ensureProgress(client: Client): Promise<MonthlyProgress | null> {
     const existing = progressMap[client.code]
     if (existing) return existing
-    const supabase = createClient()
-    const { data } = await supabase.from('monthly_progress').insert({
-      client_id: client.id, client_code: client.code, client_name: client.name,
-      year, fiscal_month: client.fiscal_month, industry: client.industry,
-      consumption_tax: client.consumption_tax, withholding_tax: client.withholding_tax,
-      invoice_registered: client.invoice_registered, primary_staff: client.primary_staff,
-    }).select().single()
-    if (data) { setProgressMap(prev => ({ ...prev, [client.code]: data })); return data }
-    return null
+    const res = await fetch('/api/monthly-progress/ensure', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: client.id, client_code: client.code, client_name: client.name,
+        year, fiscal_month: client.fiscal_month, industry: client.industry,
+        consumption_tax: client.consumption_tax, withholding_tax: client.withholding_tax,
+        invoice_registered: client.invoice_registered, primary_staff: client.primary_staff,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) return null
+    setProgressMap(prev => ({ ...prev, [client.code]: data }))
+    return data
   }
 
   function openMonthModal(client: Client, month: number) {
@@ -395,13 +400,16 @@ function MonthlyContent() {
     let p = prog(client.code)
     if (!p) p = await ensureProgress(client)
     if (!p) { setSaving(false); return }
-    const supabase = createClient()
     const updates: Record<string, Record<string, string | null>> = {}
     for (const f of MONTHLY_FIELDS) {
       const existing = (p[f.key as keyof MonthlyProgress] as Record<string, string | null>) || {}
       updates[f.key] = { ...existing, [String(month)]: monthDates[f.key] || null }
     }
-    await supabase.from('monthly_progress').update(updates).eq('id', p.id)
+    await fetch('/api/monthly-progress/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: p.id, updates }),
+    })
     setProgressMap(prev => ({ ...prev, [client.code]: { ...p!, ...updates } }))
     setSaving(false)
     setMonthModal(null)
@@ -421,10 +429,13 @@ function MonthlyContent() {
     let p = prog(settleModal.code)
     if (!p) p = await ensureProgress(settleModal)
     if (!p) { setSaving(false); return }
-    const supabase = createClient()
     const updates: Record<string, string | null> = {}
     for (const [k, v] of Object.entries(settleForm)) updates[k] = v || null
-    await supabase.from('monthly_progress').update(updates).eq('id', p.id)
+    await fetch('/api/monthly-progress/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: p.id, updates }),
+    })
     setProgressMap(prev => ({ ...prev, [settleModal.code]: { ...p!, ...updates } }))
 
     // 2026年7月決算以降は月次進捗の決算業務から予定納税を自動生成
