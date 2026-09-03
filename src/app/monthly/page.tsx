@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { MonthlyProgress, Client, TaxSchedule } from '@/lib/types'
 import { Search, X, RefreshCw, Calendar } from 'lucide-react'
@@ -764,7 +765,7 @@ function MonthlyContent() {
                     ref={isHL ? highlightRef : null}
                     className={isHL ? 'bg-orange-100 outline outline-2 outline-orange-400' : even ? 'bg-white' : 'bg-gray-50'}>
                     <td className={stickyCode(even)}>{c.code}</td>
-                    <td className={stickyName(even)}>{c.name}</td>
+                    <td className={stickyName(even)}><Link href={`/clients/${c.id}`} className="hover:text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{c.name}</Link></td>
                     <td className={td}>{c.fiscal_month === 0 ? '個人' : c.fiscal_month ? `${c.fiscal_month}月` : '-'}</td>
                     <td className={`${td} border-r border-gray-200`}>{c.primary_staff || p?.primary_staff || '-'}</td>
                     {MONTHS.map(m => (
@@ -833,7 +834,7 @@ function MonthlyContent() {
                         return (
                           <tr key={c.id} className={bg}>
                             <td className={stickyCode(even)}>{c.code}</td>
-                            <td className={stickyName(even)}>{c.name}</td>
+                            <td className={stickyName(even)}><Link href={`/clients/${c.id}`} className="hover:text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{c.name}</Link></td>
                             <td className={`${td} tabular-nums text-right`}>{fmtAmount(p?.settle_corp_tax_amount)}</td>
                             <td className={`${td} tabular-nums text-right font-semibold text-blue-700`}>
                               {corpInterim}
@@ -928,7 +929,7 @@ function MonthlyContent() {
                     return [(
                       <tr key={c.id} className={bg}>
                         <td className={stickyCode(even)}>{c.code}</td>
-                        <td className={stickyName(even)}>{c.name}</td>
+                        <td className={stickyName(even)}><Link href={`/clients/${c.id}`} className="hover:text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{c.name}</Link></td>
                         <td className={td}></td>
                         <td className="px-2 py-2 text-right text-gray-400 text-[11px] tabular-nums">0円</td>
                         <td className={td}></td>
@@ -944,7 +945,7 @@ function MonthlyContent() {
                   return entries.map((s, ei) => (
                     <tr key={s.id} className={bg}>
                       <td className={stickyCode(even)}>{ei === 0 ? c.code : ''}</td>
-                      <td className={stickyName(even)}>{ei === 0 ? c.name : ''}</td>
+                      <td className={stickyName(even)}>{ei === 0 ? <Link href={`/clients/${c.id}`} className="hover:text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{c.name}</Link> : ''}</td>
                       <td className={td}>{s.tax_type || ''}</td>
                       <td className="px-2 py-2 text-right text-gray-800 text-[11px] font-medium tabular-nums">{s.amount || ''}</td>
                       <td className={td}>{s.installment || ''}</td>
@@ -998,7 +999,7 @@ function MonthlyContent() {
                     onClick={() => openSettleModal(c)}
                     className={`cursor-pointer hover:bg-blue-50 ${isHL ? 'bg-orange-100 outline outline-2 outline-orange-400' : even ? 'bg-white' : 'bg-gray-50'}`}>
                     <td className={stickyCode(even)}>{c.code}</td>
-                    <td className={stickyName(even)}>{c.name}</td>
+                    <td className={stickyName(even)}><Link href={`/clients/${c.id}`} className="hover:text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{c.name}</Link></td>
                     <td className={`${td} border-l border-gray-100`}>{p?.settle_consumption_judged || ''}</td>
                     <td className={td}>{fmtDate(p?.settle_materials)}</td>
                     <td className={td}>{fmtDate(p?.settle_return_prepared)}</td>
