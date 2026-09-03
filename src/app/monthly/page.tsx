@@ -176,6 +176,7 @@ function MonthlyContent() {
 
   const [monthModal, setMonthModal] = useState<{ client: Client; month: number } | null>(null)
   const [monthDates, setMonthDates] = useState<Record<string, string>>({})
+  const [monthRangeEnd, setMonthRangeEnd] = useState<number | null>(null)
   const [settleModal, setSettleModal] = useState<Client | null>(null)
   const [settleForm, setSettleForm] = useState<Record<string, string>>({})
   const [taxSchedules, setTaxSchedules] = useState<TaxSchedule[]>([])
@@ -483,6 +484,7 @@ function MonthlyContent() {
       dates[f.key] = val?.[String(month)] || ''
     }
     setMonthDates(dates)
+    setMonthRangeEnd(null)
     setMonthModal({ client, month })
   }
 
@@ -504,13 +506,21 @@ function MonthlyContent() {
     if (!monthModal) return
     setSaving(true)
     const { client, month } = monthModal
+    const endMonth = monthRangeEnd ?? month
+    const fromMonth = Math.min(month, endMonth)
+    const toMonth = Math.max(month, endMonth)
     let p = prog(client.code)
     if (!p) p = await ensureProgress(client)
     if (!p) { setSaving(false); return }
+    // 指定範囲の全月に同じデータを書き込む
     const updates: Record<string, Record<string, string | null>> = {}
     for (const f of MONTHLY_FIELDS) {
       const existing = (p[f.key as keyof MonthlyProgress] as Record<string, string | null>) || {}
-      updates[f.key] = { ...existing, [String(month)]: monthDates[f.key] || null }
+      const patch: Record<string, string | null> = { ...existing }
+      for (let m = fromMonth; m <= toMonth; m++) {
+        patch[String(m)] = monthDates[f.key] || null
+      }
+      updates[f.key] = patch
     }
     const res = await fetch('/api/monthly-progress/update', {
       method: 'POST',
@@ -526,15 +536,15 @@ function MonthlyContent() {
     const newP = { ...p!, ...updates }
     setProgressMap(prev => ({ ...prev, [client.code]: newP }))
     setSaving(false)
-    if (openNext && month < 12) {
-      // 次の月のデータを newP から読み込んでモーダルを開く
-      const nextMonth = month + 1
+    if (openNext && toMonth < 12) {
+      const nextMonth = toMonth + 1
       const dates: Record<string, string> = {}
       for (const f of MONTHLY_FIELDS) {
         const val = newP[f.key as keyof MonthlyProgress] as Record<string, string | null> | undefined
         dates[f.key] = val?.[String(nextMonth)] || ''
       }
       setMonthDates(dates)
+      setMonthRangeEnd(null)
       setMonthModal({ client, month: nextMonth })
     } else {
       setMonthModal(null)
@@ -1056,7 +1066,27 @@ function MonthlyContent() {
               <div>
                 <div className="font-bold text-gray-800">{monthModal.client.name}</div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm text-blue-600 font-medium">{year}年 {monthModal.month}月</span>
+                  <span className="text-sm text-blue-600 font-medium">{year}年</span>
+                  <select
+                    value={monthModal.month}
+                    onChange={e => {
+                      const m = Number(e.target.value)
+                      setMonthModal({ client: monthModal.client, month: m })
+                      setMonthRangeEnd(prev => prev !== null && prev < m ? m : prev)
+                    }}
+                    className="text-sm text-blue-600 font-medium border-0 bg-transparent focus:outline-none cursor-pointer">
+                    {MONTHS.map(m => <option key={m} value={m}>{m}月</option>)}
+                  </select>
+                  <span className="text-xs text-gray-400">〜</span>
+                  <select
+                    value={monthRangeEnd ?? monthModal.month}
+                    onChange={e => {
+                      const v = Number(e.target.value)
+                      setMonthRangeEnd(v === monthModal.month ? null : v)
+                    }}
+                    className="text-sm text-blue-600 font-medium border-0 bg-transparent focus:outline-none cursor-pointer">
+                    {MONTHS.filter(m => Number(m) >= monthModal.month).map(m => <option key={m} value={m}>{m}月</option>)}
+                  </select>
                   {monthModal.month > 1 && (
                     <button
                       onClick={copyPrevMonth}
@@ -1064,7 +1094,7 @@ function MonthlyContent() {
                       ← 前月の複写
                     </button>
                   )}
-                  {monthModal.month < 12 && (
+                  {(monthRangeEnd ?? monthModal.month) < 12 && !monthRangeEnd && (
                     <button
                       onClick={() => saveMonthModal(true)}
                       disabled={saving}
@@ -1103,7 +1133,7 @@ function MonthlyContent() {
             <div className="flex gap-2 mt-5">
               <button onClick={() => setMonthModal(null)} className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">キャンセル</button>
               <button onClick={() => saveMonthModal(false)} disabled={saving} className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                {saving ? '保存中...' : '保存'}
+                {saving ? '保存中...' : monthRangeEnd && monthRangeEnd !== monthModal.month ? `${monthModal.month}〜${monthRangeEnd}月 一括保存` : '保存'}
               </button>
             </div>
           </div>
