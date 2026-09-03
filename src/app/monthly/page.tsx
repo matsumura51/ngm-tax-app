@@ -238,7 +238,7 @@ function MonthlyContent() {
       await supabase.from('tax_schedules').delete().eq('year', year)
         .in('tax_type', ['法人税中間', '消費税中間'])
       const now = new Date().toISOString()
-      const toInsert: Omit<TaxSchedule, 'id'>[] = []
+      const toInsert: Omit<TaxSchedule, 'id' | 'contact_date'>[] = []
       for (const p of prevProgress) {
         const clientName = p.client_name || ''
         const clientCode = p.client_code
@@ -256,7 +256,7 @@ function MonthlyContent() {
               amount: interim.toLocaleString('ja-JP') + '円',
               installment: '年1回',
               deadline: null, payment_method: null,
-              send_date: null, payment_date: null, contact_date: null,
+              send_date: null, payment_date: null,
               confirmation: null, imported_at: now,
             })
           }
@@ -276,7 +276,7 @@ function MonthlyContent() {
               amount: perAmount.toLocaleString('ja-JP') + '円',
               installment: `年${count}回`,
               deadline: null, payment_method: null,
-              send_date: null, payment_date: null, contact_date: null,
+              send_date: null, payment_date: null,
               confirmation: null, imported_at: now,
             })
           }
@@ -308,12 +308,18 @@ function MonthlyContent() {
     const val = (s[field] as string | null) || ''
     if (isEditing) {
       if (field === 'payment_method') {
+        const sid = s.id
         return (
           <select
             autoFocus
             value={editingCell!.value}
-            onChange={e => setEditingCell(c => c ? { ...c, value: e.target.value } : null)}
-            onBlur={saveCell}
+            onChange={e => {
+              const v = e.target.value
+              setEditingCell(null)
+              setTaxSchedules(prev => prev.map(ts => ts.id === sid ? { ...ts, payment_method: v || null } : ts))
+              createClient().from('tax_schedules').update({ payment_method: v || null }).eq('id', sid)
+            }}
+            onBlur={() => setEditingCell(null)}
             onKeyDown={e => { if (e.key === 'Escape') setEditingCell(null) }}
             className="w-full px-1 py-0.5 text-[11px] border border-blue-400 rounded focus:outline-none bg-white"
           >
@@ -476,7 +482,6 @@ function MonthlyContent() {
           payment_method: null,
           send_date: null,
           payment_date: null,
-          contact_date: null,
           confirmation: null,
           imported_at: now,
         })))
