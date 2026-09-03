@@ -720,10 +720,18 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
       {tab === '月次進捗' && (
         <div className="bg-white rounded-xl shadow p-4">
-          <div className="flex items-center gap-3 mb-4">
-            <button onClick={() => setProgressYear(y => y - 1)} className="p-1.5 hover:bg-gray-100 rounded-lg"><ChevronLeft size={18} /></button>
-            <span className="font-bold text-lg">{progressYear}年</span>
-            <button onClick={() => setProgressYear(y => y + 1)} className="p-1.5 hover:bg-gray-100 rounded-lg"><ChevronRight size={18} /></button>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setProgressYear(y => y - 1)} className="p-1.5 hover:bg-gray-100 rounded-lg"><ChevronLeft size={18} /></button>
+              <span className="font-bold text-lg">{progressYear}年</span>
+              <button onClick={() => setProgressYear(y => y + 1)} className="p-1.5 hover:bg-gray-100 rounded-lg"><ChevronRight size={18} /></button>
+            </div>
+            <Link
+              href={`/monthly?tab=月次進捗&highlight=${client?.id}`}
+              className="flex items-center gap-1.5 text-sm px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
+            >
+              月次進捗表で開く →
+            </Link>
           </div>
           <div className="overflow-x-auto">
             <table className="text-xs border-collapse min-w-full">
@@ -743,10 +751,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                       const month = i + 1
                       const data = progress?.[row.key as keyof MonthlyProgress] as Record<string, string | null> | undefined
                       const date = data?.[String(month)] || ''
+                      const label = date ? date.replace(/^\d{4}-/, '').replace('-', '/') : ''
                       return (
-                        <td key={month} className="border border-gray-200 p-0">
-                          <input type="date" value={date} onChange={e => updateCell(row.key, month, e.target.value || null)}
-                            className="w-full text-xs px-1 py-1.5 border-none outline-none bg-transparent cursor-pointer text-center" />
+                        <td key={month} className="border border-gray-200 px-1 py-1.5 text-center text-gray-700">
+                          {label}
                         </td>
                       )
                     })}
