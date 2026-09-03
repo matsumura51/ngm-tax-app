@@ -188,6 +188,7 @@ function MonthlyContent() {
   const [filterTaxMonth, setFilterTaxMonth] = useState('')
   const [allUsers, setAllUsers] = useState<{ name: string; division: string | null }[]>([])
   const [filterHasAmount, setFilterHasAmount] = useState(false)
+  const isFirstLoad = useRef(true)
 
   const SHEET_ID = '1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc'
 
@@ -222,14 +223,24 @@ function MonthlyContent() {
   async function load() {
     setLoading(true)
     const supabase = createClient()
-    const [{ data: clientsData }, { data: usersData }, progressRes] = await Promise.all([
+    const [{ data: clientsData }, { data: usersData }, progressRes, authResult] = await Promise.all([
       supabase.from('clients').select('*').is('contract_end_date', null).eq('show_in_monthly', true).order('code'),
       supabase.from('users').select('name, division').order('name'),
       fetch(`/api/monthly-progress/list?year=${year}`),
+      supabase.auth.getUser(),
     ])
     const progressData: MonthlyProgress[] = progressRes.ok ? await progressRes.json() : []
     setClients(clientsData || [])
     setAllUsers(usersData || [])
+    // 初回ロード時のみログイン中の担当者でデフォルトフィルター
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false
+      const currentUser = authResult.data.user
+      if (currentUser) {
+        const { data: me } = await supabase.from('users').select('name').eq('id', currentUser.id).maybeSingle()
+        if (me?.name) setFilterStaff(me.name)
+      }
+    }
     const map: Record<string, MonthlyProgress> = {}
     for (const p of progressData) map[p.client_code] = p
     setProgressMap(map)

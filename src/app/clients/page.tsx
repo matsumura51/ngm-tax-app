@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { Client } from '@/lib/types'
-import { Plus, Search, ChevronRight, Upload, Download, FileDown, Trash2 } from 'lucide-react'
+import { Plus, Search, ChevronRight, Upload, Download, FileDown, Trash2, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { CLIENT_COLUMNS } from '@/lib/clientColumns'
 
@@ -24,22 +24,39 @@ const FISCAL_MONTHS = [
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
+  const [allUsers, setAllUsers] = useState<{ name: string; division: string | null }[]>([])
   const [search, setSearch] = useState('')
   const [staffFilter, setStaffFilter] = useState('')
+  const [filterDivision, setFilterDivision] = useState('')
   const [fiscalFilter, setFiscalFilter] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
   const [bulkUpdating, setBulkUpdating] = useState(false)
+  const isFirstLoad = useRef(true)
 
   useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
     const supabase = createClient()
-    const { data } = await supabase.from('clients').select('*').order('code')
-    setClients(data || [])
+    const [{ data: clientsData }, { data: usersData }, authResult] = await Promise.all([
+      supabase.from('clients').select('*').order('code'),
+      supabase.from('users').select('name, division').order('name'),
+      supabase.auth.getUser(),
+    ])
+    setClients(clientsData || [])
+    setAllUsers(usersData || [])
+    // 初回ロード時のみログイン中の担当者でデフォルトフィルター
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false
+      const currentUser = authResult.data.user
+      if (currentUser) {
+        const { data: me } = await supabase.from('users').select('name').eq('id', currentUser.id).maybeSingle()
+        if (me?.name) setStaffFilter(me.name)
+      }
+    }
     setSelectedIds(new Set())
     setLoading(false)
   }
@@ -111,10 +128,15 @@ export default function ClientsPage() {
     }
   }
 
+  const divisionOptions = Array.from(new Set(allUsers.map(u => u.division).filter(Boolean))).sort() as string[]
+  const staffInDivision = filterDivision ? allUsers.filter(u => u.division === filterDivision).map(u => u.name) : null
+  const staffOptions = Array.from(new Set(clients.map(c => c.primary_staff).filter(s => !staffInDivision || staffInDivision.includes(s || '')).filter(Boolean))).sort() as string[]
+
   const filtered = clients.filter(c => {
     if (!showAll && c.contract_end_date) return false
     if (search && !c.name.includes(search) && !c.code.includes(search)) return false
-    if (staffFilter && !(c.primary_staff || '').includes(staffFilter)) return false
+    if (filterDivision && staffInDivision && !staffInDivision.includes(c.primary_staff || '')) return false
+    if (staffFilter && c.primary_staff !== staffFilter) return false
     if (fiscalFilter !== '') {
       const fv = Number(fiscalFilter)
       if (c.fiscal_month !== fv) return false
@@ -160,13 +182,28 @@ export default function ClientsPage() {
             onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-        <input type="text" placeholder="担当者で絞り込み" value={staffFilter}
-          onChange={e => setStaffFilter(e.target.value)}
-          className="w-40 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        {divisionOptions.length > 0 && (
+          <select value={filterDivision} onChange={e => { setFilterDivision(e.target.value); setStaffFilter('') }}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">所属（全チーム）</option>
+            {divisionOptions.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+        )}
+        <select value={staffFilter} onChange={e => setStaffFilter(e.target.value)}
+          className="w-40 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">{filterDivision ? `${filterDivision}の全員` : '担当者（全員）'}</option>
+          {staffOptions.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
         <select value={fiscalFilter} onChange={e => setFiscalFilter(e.target.value)}
           className="w-32 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
           {FISCAL_MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
+        {(staffFilter || filterDivision) && (
+          <button onClick={() => { setStaffFilter(''); setFilterDivision('') }}
+            className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+            <X size={14} />絞り込み解除
+          </button>
+        )}
         <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none whitespace-nowrap">
           <input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} className="w-4 h-4 rounded" />
           契約終了を含む全て表示
