@@ -396,23 +396,15 @@ export default function DashboardPage() {
     setProgressLoading(false)
   }
 
-  async function updateMonthlyStatus(clientCode: string, progressId: string | null, newStatus: string) {
+  async function updateMonthlyStatus(clientCode: string, clientId: string, newStatus: string) {
     // ローカル状態を即座に更新
     setMonthlyItems(prev => prev.map(i => i.client_code === clientCode ? { ...i, monthly_status: newStatus || null } : i))
-    // client_code で同一顧客の全月レコードを一括更新（複数月ある場合も再読み込み後に保持される）
-    if (clientCode) {
-      await fetch('/api/monthly-progress/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_code: clientCode, updates: { monthly_status: newStatus || null } }),
-      })
-    } else if (progressId) {
-      await fetch('/api/monthly-progress/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: progressId, updates: { monthly_status: newStatus || null } }),
-      })
-    }
+    // client_id（UUID）で同一顧客の全年・全月レコードを一括更新
+    await fetch('/api/monthly-progress/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, updates: { monthly_status: newStatus || null } }),
+    })
   }
 
   // 担当者別集計
@@ -1237,7 +1229,7 @@ export default function DashboardPage() {
                                     )}
                                     <select
                                       value={item.monthly_status || ''}
-                                      onChange={e => updateMonthlyStatus(item.client_code, item.progress_id, e.target.value)}
+                                      onChange={e => updateMonthlyStatus(item.client_code, item.client_id, e.target.value)}
                                       className="block w-full text-xs border border-gray-200 rounded px-1.5 py-1 text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
                                     >
                                       <option value="">— 選択 —</option>
