@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-import { Users, ClipboardList, FileText, Calendar, Plus, AlertCircle, Clock, ListChecks } from 'lucide-react'
+import { Users, ClipboardList, FileText, Calendar, Plus, AlertCircle, Clock, ListChecks, HardDrive } from 'lucide-react'
 
 const COLOR_MAP: Record<string, { bg: string; text: string }> = {
   '外出':           { bg: '#e57373', text: '#fff' },
@@ -115,6 +115,8 @@ export default function DashboardPage() {
   const [monthlyItems, setMonthlyItems] = useState<MonthlyItem[]>([])
   const [loading, setLoading] = useState(true)
   const [progressLoading, setProgressLoading] = useState(true)
+  const [storageBytes, setStorageBytes] = useState(0)
+  const STORAGE_LIMIT_BYTES = 1 * 1024 * 1024 * 1024 // 1GB（Supabaseフリープラン上限）
   interface AnnualRecord { client_code: string | null; client_name: string; staff_name: string | null; unprocessed: boolean; docPending: boolean }
   const [annualItems, setAnnualItems] = useState<{ yearEnd: AnnualRecord[]; withholding: AnnualRecord[]; taxReturn: AnnualRecord[] }>({ yearEnd: [], withholding: [], taxReturn: [] })
   const [showYearEnd, setShowYearEnd] = useState(false)
@@ -169,6 +171,8 @@ export default function DashboardPage() {
       { count: unreadCount },
       { data: reports },
       { data: schedules },
+      { data: qAtt },
+      { data: cAtt },
     ] = await Promise.all([
       supabase.from('clients').select('entity_type').is('contract_end_date', null),
       // 自分の今日の予定のみカウント
@@ -184,7 +188,11 @@ export default function DashboardPage() {
         .lte('start_datetime', today + 'T23:59:59')
         .in('facility', ['会議室①', '会議室②', 'アクア'])
         .order('start_datetime').limit(50),
+      supabase.from('client_question_attachments').select('file_size'),
+      supabase.from('client_check_attachments').select('file_size'),
     ])
+    const totalStorageBytes = [...(qAtt || []), ...(cAtt || [])].reduce((sum, a) => sum + (a.file_size || 0), 0)
+    setStorageBytes(totalStorageBytes)
     const corporateCount = (activeClients || []).filter(c => c.entity_type !== '個人').length
     const individualCount = (activeClients || []).filter(c => c.entity_type === '個人').length
     setStats({ corporateCount, individualCount, todaySchedules: scheduleCount || 0, unreadReports: unreadCount || 0 })
@@ -460,9 +468,43 @@ export default function DashboardPage() {
   }
   const staffOverdueList = Object.entries(staffOverdueMap).sort((a, b) => (b[1].settle + b[1].monthly) - (a[1].settle + a[1].monthly))
 
+  const storagePercent = Math.min(100, Math.round((storageBytes / STORAGE_LIMIT_BYTES) * 100))
+  const storageMB = (storageBytes / (1024 * 1024)).toFixed(0)
+  const storageBarColor = storagePercent >= 80 ? 'bg-red-500' : storagePercent >= 60 ? 'bg-yellow-400' : 'bg-green-400'
+  const storageBgColor = storagePercent >= 80 ? 'bg-red-50 border-red-300' : storagePercent >= 60 ? 'bg-yellow-50 border-yellow-300' : 'bg-gray-50 border-gray-200'
+  const storageTextColor = storagePercent >= 80 ? 'text-red-700' : storagePercent >= 60 ? 'text-yellow-700' : 'text-gray-600'
+
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">ダッシュボード</h1>
+
+      {/* ストレージ使用量 */}
+      {!loading && (
+        <div className={`mb-6 border rounded-xl p-4 ${storageBgColor}`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className={`flex items-center gap-2 text-sm font-medium ${storageTextColor}`}>
+              <HardDrive size={15} />
+              ストレージ使用量
+              {storagePercent >= 60 && (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${storagePercent >= 80 ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                  {storagePercent >= 80 ? '⚠ 残り少ない' : '⚠ 60%超過'}
+                </span>
+              )}
+            </div>
+            <span className={`text-sm font-bold ${storageTextColor}`}>{storageMB} MB / 1,024 MB（{storagePercent}%）</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2.5">
+            <div className={`h-2.5 rounded-full transition-all ${storageBarColor}`} style={{ width: `${storagePercent}%` }} />
+          </div>
+          {storagePercent >= 60 && (
+            <p className={`text-xs mt-2 ${storageTextColor}`}>
+              {storagePercent >= 80
+                ? '容量が80%を超えました。Supabase Proプランへのアップグレードを検討してください。'
+                : '容量が60%を超えました。引き続き使用量にご注意ください。'}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* 統計カード */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
