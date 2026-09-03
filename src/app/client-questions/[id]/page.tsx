@@ -253,14 +253,19 @@ export default function ClientQuestionDetailPage({ params }: { params: Promise<{
       .filter(it => it.text.trim())
       .map(it => {
         const box = it.answered ? '☑' : '☐'
+        const escapedText = it.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
         const answerHtml = it.answer
-          ? `<div style="margin-left:24px;margin-top:4px;font-size:11px;color:#555">→ ${it.answer}</div>`
+          ? `<div style="margin-left:24px;margin-top:4px;font-size:11px;color:#555">→ ${it.answer.replace(/\n/g, '<br>')}</div>`
           : ''
-        return `<div style="margin-bottom:10px">
+        return `<div style="margin-bottom:18px;page-break-inside:avoid">
           <div style="display:flex;gap:8px;align-items:flex-start">
             <span style="font-size:15px;flex-shrink:0;line-height:1.4">${box}</span>
-            <span style="font-size:12px;line-height:1.6">${it.text}</span>
+            <span style="font-size:12px;line-height:1.6">${escapedText}</span>
           </div>${answerHtml}
+          <div style="margin-top:8px;margin-left:24px">
+            <div style="border-bottom:1px solid #bbb;height:24px;margin-bottom:4px"></div>
+            <div style="border-bottom:1px solid #bbb;height:24px"></div>
+          </div>
         </div>`
       }).join('')
 
@@ -433,14 +438,14 @@ ${itemRows}
                     )}
                   </button>
                   {/* 質問テキスト */}
-                  <input
-                    className={`flex-1 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                  <textarea
+                    className={`flex-1 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y ${
                       item.answered ? 'bg-white border-green-200 text-gray-600' : 'bg-white border-gray-300'
                     }`}
+                    rows={2}
                     value={item.text}
                     onChange={e => updateItem(i, { text: e.target.value })}
                     placeholder={`質問事項 ${i + 1}`}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem() } }}
                   />
                   {items.length > 1 && (
                     <button type="button" onClick={() => removeItem(i)}

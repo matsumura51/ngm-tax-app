@@ -240,12 +240,12 @@ function ClientQuestionNewForm() {
               <div key={i} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
                 <div className="flex items-start gap-2 mb-2">
                   <div className="mt-0.5 w-5 h-5 rounded border-2 border-gray-300 bg-white flex-shrink-0" />
-                  <input
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  <textarea
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y"
+                    rows={2}
                     value={item.text}
                     onChange={e => updateItem(i, { text: e.target.value })}
                     placeholder={`質問事項 ${i + 1}`}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem() } }}
                   />
                   {items.length > 1 && (
                     <button type="button" onClick={() => removeItem(i)}
