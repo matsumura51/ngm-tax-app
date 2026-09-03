@@ -37,6 +37,39 @@ function toLocalISOString(date: string, time: string): string {
   return `${date}T${time}:00${sign}${h}:${m}`
 }
 
+type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly'
+
+function generateDates(startDate: string, endDate: string, type: RecurrenceType): string[] {
+  if (type === 'none') return [startDate]
+  const toYMD = (d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${dd}`
+  }
+  const [sy, sm, sd] = startDate.split('-').map(Number)
+  const [ey, em, ed] = endDate.split('-').map(Number)
+  const endTs = new Date(ey, em - 1, ed).getTime()
+  const dates: string[] = []
+  const MAX = type === 'daily' ? 366 : type === 'weekly' ? 105 : 25
+  let cur = new Date(sy, sm - 1, sd)
+  while (cur.getTime() <= endTs && dates.length < MAX) {
+    dates.push(toYMD(cur))
+    if (type === 'daily') {
+      cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1)
+    } else if (type === 'weekly') {
+      cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 7)
+    } else {
+      const nm = cur.getMonth() + 1
+      const ny = nm > 11 ? cur.getFullYear() + 1 : cur.getFullYear()
+      const am = nm > 11 ? 0 : nm
+      const lastDay = new Date(ny, am + 1, 0).getDate()
+      cur = new Date(ny, am, Math.min(sd, lastDay))
+    }
+  }
+  return dates
+}
+
 function makeAutoTitle(clientName: string, color: string): string {
   const name = clientName.trim()
   const kind = color !== '白' ? color : ''
@@ -57,6 +90,8 @@ function ScheduleNewForm() {
   const [allUsers, setAllUsers] = useState<{ id: string; name: string }[]>([])
   const [selectedCompanions, setSelectedCompanions] = useState<string[]>([])
   const [breakMinutes, setBreakMinutes] = useState('')
+  const [recurrence, setRecurrence] = useState<RecurrenceType>('none')
+  const [recurrenceEnd, setRecurrenceEnd] = useState('')
 
   const paramDate = searchParams.get('date') || new Date().toISOString().split('T')[0]
   const [form, setForm] = useState({
@@ -172,15 +207,13 @@ function ScheduleNewForm() {
   async function save() {
     setSaving(true)
     const supabase = createClient()
-    // 毎回ユーザーを取得（state読み込み前に保存が走っても安全）
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { alert('ログインが必要です'); setSaving(false); return }
-    const { error } = await supabase.from('schedules').insert({
+
+    const base = {
       user_id: user.id,
       user_name: userName || userId,
       title: form.title || makeAutoTitle(form.client_name, form.color) || '（タイトルなし）',
-      start_datetime: toLocalISOString(form.date, form.start_time),
-      end_datetime: toLocalISOString(form.date, form.end_time),
       color: form.color,
       type: form.type,
       client_id: form.client_id || null,
@@ -190,8 +223,27 @@ function ScheduleNewForm() {
       facility: selectedFacilities.length > 0 ? selectedFacilities.join(',') : null,
       companions: selectedCompanions.length > 0 ? selectedCompanions.join(',') : null,
       break_minutes: breakMinutes ? parseInt(breakMinutes, 10) : null,
-    })
-    if (error) { alert('エラー: ' + error.message); setSaving(false); return }
+    }
+
+    if (recurrence === 'none' || !recurrenceEnd || recurrenceEnd < form.date) {
+      const { error } = await supabase.from('schedules').insert({
+        ...base,
+        start_datetime: toLocalISOString(form.date, form.start_time),
+        end_datetime: toLocalISOString(form.date, form.end_time),
+      })
+      if (error) { alert('エラー: ' + error.message); setSaving(false); return }
+    } else {
+      const dates = generateDates(form.date, recurrenceEnd, recurrence)
+      const recurringId = Date.now()
+      const records = dates.map(d => ({
+        ...base,
+        start_datetime: toLocalISOString(d, form.start_time),
+        end_datetime: toLocalISOString(d, form.end_time),
+        recurring_id: recurringId,
+      }))
+      const { error } = await supabase.from('schedules').insert(records)
+      if (error) { alert('エラー: ' + error.message); setSaving(false); return }
+    }
     router.push('/schedules')
   }
 
@@ -224,6 +276,35 @@ function ScheduleNewForm() {
               <input type="time" className={inputClass} value={form.end_time}
                 onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
             </div>
+          </div>
+
+          {/* 繰り返し */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-2">繰り返し</label>
+            <div className="flex flex-wrap gap-2">
+              {([['none', 'なし'], ['daily', '毎日'], ['weekly', '毎週'], ['monthly', '毎月']] as [RecurrenceType, string][]).map(([val, label]) => (
+                <button key={val} type="button" onClick={() => setRecurrence(val)}
+                  className={`px-3 py-1.5 rounded-lg text-xs border transition ${
+                    recurrence === val
+                      ? 'bg-blue-100 border-blue-400 text-blue-700 font-medium'
+                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {recurrence !== 'none' && (
+              <div className="mt-2 flex items-center gap-3">
+                <label className="text-xs text-gray-500 shrink-0">終了日</label>
+                <input type="date" className={inputClass} value={recurrenceEnd} min={form.date}
+                  onChange={e => setRecurrenceEnd(e.target.value)} />
+                {recurrenceEnd && recurrenceEnd >= form.date && (
+                  <span className="text-xs text-blue-600 shrink-0">
+                    {generateDates(form.date, recurrenceEnd, recurrence).length}件登録
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 種別（色） */}
