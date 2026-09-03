@@ -399,12 +399,20 @@ export default function DashboardPage() {
   async function updateMonthlyStatus(clientCode: string, progressId: string | null, newStatus: string) {
     // ローカル状態を即座に更新
     setMonthlyItems(prev => prev.map(i => i.client_code === clientCode ? { ...i, monthly_status: newStatus || null } : i))
-    if (!progressId) return
-    await fetch('/api/monthly-progress/update', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: progressId, updates: { monthly_status: newStatus || null } }),
-    })
+    // client_code で同一顧客の全月レコードを一括更新（複数月ある場合も再読み込み後に保持される）
+    if (clientCode) {
+      await fetch('/api/monthly-progress/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_code: clientCode, updates: { monthly_status: newStatus || null } }),
+      })
+    } else if (progressId) {
+      await fetch('/api/monthly-progress/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: progressId, updates: { monthly_status: newStatus || null } }),
+      })
+    }
   }
 
   // 担当者別集計
