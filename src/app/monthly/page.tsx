@@ -235,13 +235,16 @@ function MonthlyContent() {
     const progressData: MonthlyProgress[] = progressRes.ok ? await progressRes.json() : []
     setClients(clientsData || [])
     setAllUsers(usersData || [])
-    // 初回ロード時のみログイン中の担当者でデフォルトフィルター
+    // 初回ロード時のみデフォルトフィルターを設定
+    // highlight パラメータあり（リンク経由）の場合は全社表示にする
     if (isFirstLoad.current) {
       isFirstLoad.current = false
-      const currentUser = authResult.data.user
-      if (currentUser) {
-        const { data: me } = await supabase.from('users').select('name').eq('id', currentUser.id).maybeSingle()
-        if (me?.name) setFilterStaff(me.name)
+      if (!searchParams.get('highlight')) {
+        const currentUser = authResult.data.user
+        if (currentUser) {
+          const { data: me } = await supabase.from('users').select('name').eq('id', currentUser.id).maybeSingle()
+          if (me?.name) setFilterStaff(me.name)
+        }
       }
     }
     const map: Record<string, MonthlyProgress> = {}
