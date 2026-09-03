@@ -941,7 +941,8 @@ function MonthlyContent() {
               <thead>
                 <tr className={`${H1} text-white`}>
                   <th className={`sticky left-0 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-20`}>顧客コード</th>
-                  <th className={`sticky left-20 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44 border-r border-purple-600`}>顧客名</th>
+                  <th className={`sticky left-20 top-0 z-40 ${H1} px-3 py-2 text-left whitespace-nowrap w-44`}>顧客名</th>
+                  <th className={`${thH1} border-r border-purple-600`}>担当者</th>
                   <th className={thH1}>税目</th>
                   <th className={thH1}>納付額</th>
                   <th className={thH1}>回数</th>
@@ -955,7 +956,7 @@ function MonthlyContent() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={11} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
+                  <tr><td colSpan={12} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
                 ) : filtered.flatMap((c, ci) => {
                   const even = ci % 2 === 0
                   const bg = even ? 'bg-white' : 'bg-gray-50'
@@ -966,6 +967,7 @@ function MonthlyContent() {
                       <tr key={c.id} className={bg}>
                         <td className={stickyCode(even)}>{c.code}</td>
                         <td className={stickyName(even)}><Link href={`/clients/${c.id}`} className="hover:text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{c.name}</Link></td>
+                        <td className={`${td} border-r border-gray-200 text-gray-500`}>{c.primary_staff || ''}</td>
                         <td className={td}></td>
                         <td className="px-2 py-2 text-right text-gray-400 text-[11px] tabular-nums">0円</td>
                         <td className={td}></td>
@@ -982,6 +984,7 @@ function MonthlyContent() {
                     <tr key={s.id} className={bg}>
                       <td className={stickyCode(even)}>{ei === 0 ? c.code : ''}</td>
                       <td className={stickyName(even)}>{ei === 0 ? <Link href={`/clients/${c.id}`} className="hover:text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{c.name}</Link> : ''}</td>
+                      <td className={`${td} border-r border-gray-200 text-gray-500`}>{ei === 0 ? (c.primary_staff || '') : ''}</td>
                       <td className={td}>{s.tax_type || ''}</td>
                       <td className="px-2 py-2 text-right text-gray-800 text-[11px] font-medium tabular-nums">{s.amount || ''}</td>
                       <td className={td}>{s.installment || ''}</td>
