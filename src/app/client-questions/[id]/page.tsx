@@ -296,7 +296,9 @@ ${itemRows}
   async function uploadFile(file: File) {
     setUploading(true)
     const supabase = createClient()
-    const path = `client-questions/${id}/${Date.now()}_${file.name}`
+    // 日本語等の非ASCII文字はStorageのInvalid keyエラーになるためエンコードして除去
+    const safeName = encodeURIComponent(file.name).replace(/%/g, '_')
+    const path = `client-questions/${id}/${Date.now()}_${safeName}`
     const { error: upErr } = await supabase.storage.from('attachments').upload(path, file)
     if (upErr) { alert('アップロードエラー: ' + upErr.message); setUploading(false); return }
     const { error: dbErr } = await supabase.from('client_question_attachments').insert({

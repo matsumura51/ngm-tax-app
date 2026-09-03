@@ -106,7 +106,8 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
   async function uploadFile(file: File) {
     setUploading(true)
     const supabase = createClient()
-    const path = `client-checks/${id}/${Date.now()}_${file.name}`
+    const safeName = encodeURIComponent(file.name).replace(/%/g, '_')
+    const path = `client-checks/${id}/${Date.now()}_${safeName}`
     const { error: upErr } = await supabase.storage.from('attachments').upload(path, file)
     if (upErr) { alert('アップロードエラー: ' + upErr.message); setUploading(false); return }
     const { error: dbErr } = await supabase.from('client_check_attachments').insert({
