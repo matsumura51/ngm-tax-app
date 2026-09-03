@@ -20,10 +20,12 @@ interface BulletinRead {
   read_at: string
 }
 
+const EXCLUDE_NAMES = ['坂倉']
+
 export default function BulletinsPage() {
   const [bulletins, setBulletins] = useState<Bulletin[]>([])
   const [reads, setReads] = useState<BulletinRead[]>([])
-  const [activeUserCount, setActiveUserCount] = useState(0)
+  const [activeUsers, setActiveUsers] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState('')
   const [currentUserName, setCurrentUserName] = useState('')
@@ -48,16 +50,24 @@ export default function BulletinsPage() {
     const [{ data: bData }, { data: rData }, { data: uData }] = await Promise.all([
       supabase.from('bulletins').select('*').order('created_at', { ascending: false }),
       supabase.from('bulletin_reads').select('*'),
-      supabase.from('users').select('id').is('leave_date', null),
+      supabase.from('users').select('id, name').is('leave_date', null),
     ])
     setBulletins(bData || [])
     setReads(rData || [])
-    setActiveUserCount((uData || []).length)
+    // 坂倉を確認対象から除外
+    setActiveUsers((uData || []).filter((u: { id: string; name: string }) =>
+      !EXCLUDE_NAMES.some(ex => (u.name || '').includes(ex))
+    ))
     setLoading(false)
   }
 
   function readsFor(bulletinId: string) {
     return reads.filter(r => r.bulletin_id === bulletinId)
+  }
+
+  function unconfirmedUsers(bulletinId: string) {
+    const confirmedIds = new Set(readsFor(bulletinId).map(r => r.user_id))
+    return activeUsers.filter(u => !confirmedIds.has(u.id))
   }
 
   function fmtDate(b: Bulletin) {
@@ -70,7 +80,7 @@ export default function BulletinsPage() {
   }
 
   function isCompleted(bulletinId: string) {
-    return readsFor(bulletinId).length >= activeUserCount
+    return unconfirmedUsers(bulletinId).length === 0
   }
 
   async function confirmRead(bulletinId: string) {
@@ -209,34 +219,58 @@ export default function BulletinsPage() {
                           )}
                         </div>
 
-                        <div className="mt-3 flex items-center gap-2">
-                          <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                            <div className="bg-amber-400 h-full rounded-full transition-all"
-                              style={{ width: `${activeUserCount > 0 ? (bReads.length / activeUserCount) * 100 : 0}%` }} />
-                          </div>
-                          <button onClick={() => toggleExpand(b.id)}
-                            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
-                            <Users size={11} />
-                            {bReads.length}/{activeUserCount}名確認済み
-                            {isExp ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-                          </button>
-                        </div>
-
-                        {isExp && (
-                          <div className="mt-2 pt-2 border-t border-gray-100">
-                            {bReads.length === 0 ? (
-                              <p className="text-xs text-gray-400">まだ誰も確認していません</p>
-                            ) : (
-                              <div className="flex flex-wrap gap-1.5">
-                                {bReads.map(r => (
-                                  <span key={r.user_id} className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
-                                    {r.user_name || r.user_id}
-                                  </span>
-                                ))}
+                        {(() => {
+                          const unconf = unconfirmedUsers(b.id)
+                          const total = activeUsers.length
+                          return (
+                            <>
+                              <div className="mt-3 flex items-center gap-2">
+                                <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                  <div className="bg-amber-400 h-full rounded-full transition-all"
+                                    style={{ width: `${total > 0 ? (bReads.length / total) * 100 : 0}%` }} />
+                                </div>
+                                <button onClick={() => toggleExpand(b.id)}
+                                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
+                                  <Users size={11} />
+                                  {bReads.length}/{total}名確認済み
+                                  {isExp ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                                </button>
                               </div>
-                            )}
-                          </div>
-                        )}
+
+                              {isExp && (
+                                <div className="mt-2 pt-2 border-t border-gray-100 space-y-2">
+                                  {bReads.length > 0 && (
+                                    <div>
+                                      <div className="text-[10px] font-semibold text-green-600 mb-1">✓ 確認済み</div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {bReads.map(r => (
+                                          <span key={r.user_id} className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
+                                            {r.user_name || r.user_id}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {unconf.length > 0 && (
+                                    <div>
+                                      <div className="text-[10px] font-semibold text-red-500 mb-1">未確認</div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {unconf.map(u => (
+                                          <span key={u.id} className="text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded-full">
+                                            {u.name}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {bReads.length === 0 && unconf.length === 0 && (
+                                    <p className="text-xs text-gray-400">まだ誰も確認していません</p>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          )
+                        })()}
                       </div>
                       <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex justify-end">
                         <button onClick={() => deleteBulletin(b.id)}
@@ -288,12 +322,15 @@ export default function BulletinsPage() {
                           </button>
                         </div>
                         {isExp && bReads.length > 0 && (
-                          <div className="mt-2 pt-2 border-t border-gray-100 flex flex-wrap gap-1.5">
-                            {bReads.map(r => (
-                              <span key={r.user_id} className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
-                                {r.user_name || r.user_id}
-                              </span>
-                            ))}
+                          <div className="mt-2 pt-2 border-t border-gray-100">
+                            <div className="text-[10px] font-semibold text-green-600 mb-1">✓ 確認済み</div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {bReads.map(r => (
+                                <span key={r.user_id} className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
+                                  {r.user_name || r.user_id}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>

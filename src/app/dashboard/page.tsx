@@ -88,7 +88,9 @@ interface DashBulletin {
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats>({ corporateCount: 0, individualCount: 0, todaySchedules: 0, unreadReports: 0 })
   const [bulletins, setBulletins] = useState<DashBulletin[]>([])
-  const [activeUserCount, setActiveUserCount] = useState(0)
+  const [activeUsers, setActiveUsers] = useState<{ id: string; name: string }[]>([])
+  const [bulletinReads, setBulletinReads] = useState<{ bulletin_id: string; user_id: string; user_name: string | null }[]>([])
+  const BULLETIN_EXCLUDE = ['坂倉']
   const [currentUserId, setCurrentUserId] = useState('')
   const [currentUserName, setCurrentUserName] = useState('')
   const [bulletinConfirming, setBulletinConfirming] = useState<string | null>(null)
@@ -185,11 +187,21 @@ export default function DashboardPage() {
     }
     const [{ data: bData }, { data: rData }, { data: uData }] = await Promise.all([
       supabase.from('bulletins').select('*').order('created_at', { ascending: false }),
-      supabase.from('bulletin_reads').select('bulletin_id, user_id'),
-      supabase.from('users').select('id').is('leave_date', null),
+      supabase.from('bulletin_reads').select('bulletin_id, user_id, user_name'),
+      supabase.from('users').select('id, name').is('leave_date', null),
     ])
-    const totalActive = (uData || []).length
-    setActiveUserCount(totalActive)
+    // 坂倉を確認対象から除外
+    const filteredUsers = (uData || []).filter((u: { id: string; name: string }) =>
+      !BULLETIN_EXCLUDE.some(ex => (u.name || '').includes(ex))
+    )
+    setActiveUsers(filteredUsers)
+    setBulletinReads(rData || [])
+    const totalActive = filteredUsers.length
+    const confirmedIdsByBulletin: Record<string, Set<string>> = {}
+    for (const r of (rData || [])) {
+      if (!confirmedIdsByBulletin[r.bulletin_id]) confirmedIdsByBulletin[r.bulletin_id] = new Set()
+      confirmedIdsByBulletin[r.bulletin_id].add(r.user_id)
+    }
     const mapped: DashBulletin[] = (bData || []).map(b => {
       const bReads = (rData || []).filter(r => r.bulletin_id === b.id)
       return {
@@ -198,8 +210,11 @@ export default function DashboardPage() {
         is_read_by_me: bReads.some(r => r.user_id === myId),
       }
     })
-    // ダッシュボードには全員未確認のもののみ表示
-    setBulletins(mapped.filter(b => b.read_count < totalActive))
+    // 全対象ユーザーが確認済みのものはダッシュボードに表示しない
+    setBulletins(mapped.filter(b => {
+      const confirmed = confirmedIdsByBulletin[b.id] || new Set()
+      return filteredUsers.some(u => !confirmed.has(u.id))
+    }))
   }
 
   async function confirmBulletin(bulletinId: string) {
@@ -731,13 +746,29 @@ export default function DashboardPage() {
                     {b.content && (
                       <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed mb-2">{b.content}</p>
                     )}
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-amber-100 rounded-full h-1.5 max-w-[160px]">
-                        <div className="bg-amber-400 h-full rounded-full transition-all"
-                          style={{ width: `${activeUserCount > 0 ? (b.read_count / activeUserCount) * 100 : 0}%` }} />
-                      </div>
-                      <span className="text-xs text-gray-500">{b.read_count}/{activeUserCount}名確認済み</span>
-                    </div>
+                    {(() => {
+                      const total = activeUsers.length
+                      const unconf = activeUsers.filter(u => !bulletinReads.some(r => r.bulletin_id === b.id && r.user_id === u.id))
+                      return (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 bg-amber-100 rounded-full h-1.5 max-w-[160px]">
+                              <div className="bg-amber-400 h-full rounded-full transition-all"
+                                style={{ width: `${total > 0 ? (b.read_count / total) * 100 : 0}%` }} />
+                            </div>
+                            <span className="text-xs text-gray-500">{b.read_count}/{total}名確認済み</span>
+                          </div>
+                          {unconf.length > 0 && (
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              <span className="text-[10px] text-red-500 font-medium">未確認:</span>
+                              {unconf.map(u => (
+                                <span key={u.id} className="text-[10px] bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded-full">{u.name}</span>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )
+                    })()}
                   </div>
                   {!b.is_read_by_me ? (
                     <button
