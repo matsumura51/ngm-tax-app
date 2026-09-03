@@ -380,7 +380,11 @@ export default function DashboardPage() {
 
   function updateTaxSched(id: string, field: 'confirmation' | 'payment_date' | 'send_date' | 'payment_method' | 'contact_date', value: string) {
     setTaxSchedules(prev => prev.map(s => s.id === id ? { ...s, [field]: value || null } : s))
-    createClient().from('tax_schedules').update({ [field]: value || null }).eq('id', id)
+    fetch('/api/tax-schedules/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, field, value: value || null }),
+    })
   }
 
   function taxSchedNav(delta: number) {

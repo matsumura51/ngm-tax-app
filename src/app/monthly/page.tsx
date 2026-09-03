@@ -299,8 +299,11 @@ function MonthlyContent() {
     const { id, field, value } = editingCell
     setEditingCell(null)
     setTaxSchedules(prev => prev.map(s => s.id === id ? { ...s, [field]: value || null } : s))
-    const supabase = createClient()
-    supabase.from('tax_schedules').update({ [field]: value || null }).eq('id', id)
+    fetch('/api/tax-schedules/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, field, value: value || null }),
+    })
   }
 
   function edCell(s: TaxSchedule, field: 'payment_method' | 'send_date' | 'payment_date' | 'contact_date' | 'confirmation', extraClass = '') {
@@ -317,7 +320,11 @@ function MonthlyContent() {
               const v = e.target.value
               setEditingCell(null)
               setTaxSchedules(prev => prev.map(ts => ts.id === sid ? { ...ts, payment_method: v || null } : ts))
-              createClient().from('tax_schedules').update({ payment_method: v || null }).eq('id', sid)
+              fetch('/api/tax-schedules/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: sid, field: 'payment_method', value: v || null }),
+              })
             }}
             onBlur={() => setEditingCell(null)}
             onKeyDown={e => { if (e.key === 'Escape') setEditingCell(null) }}
