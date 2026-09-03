@@ -126,9 +126,12 @@ function SchedulesContent() {
       startDate = endDate = toDateStr(viewDate)
     }
 
+    // クエリ範囲を前後1日広げてUTC/JST境界による取りこぼしを防ぐ（表示フィルタはローカル時刻で行う）
+    const qStart = new Date(startDate); qStart.setDate(qStart.getDate() - 1)
+    const qEnd = new Date(endDate); qEnd.setDate(qEnd.getDate() + 1)
     const { data: schData } = await supabase.from('schedules').select('*')
-      .gte('start_datetime', startDate + 'T00:00:00')
-      .lte('start_datetime', endDate + 'T23:59:59')
+      .gte('start_datetime', toDateStr(qStart) + 'T00:00:00')
+      .lte('start_datetime', toDateStr(qEnd) + 'T23:59:59')
       .order('start_datetime')
     setSchedules(schData || [])
 
