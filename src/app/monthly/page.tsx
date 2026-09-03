@@ -486,6 +486,20 @@ function MonthlyContent() {
     setMonthModal({ client, month })
   }
 
+  function copyPrevMonth() {
+    if (!monthModal) return
+    const { client, month } = monthModal
+    if (month <= 1) return
+    const p = prog(client.code)
+    const prevMonth = month - 1
+    const dates: Record<string, string> = {}
+    for (const f of MONTHLY_FIELDS) {
+      const val = p?.[f.key as keyof MonthlyProgress] as Record<string, string | null> | undefined
+      dates[f.key] = val?.[String(prevMonth)] || ''
+    }
+    setMonthDates(dates)
+  }
+
   async function saveMonthModal(openNext = false) {
     if (!monthModal) return
     setSaving(true)
@@ -1041,8 +1055,15 @@ function MonthlyContent() {
             <div className="flex justify-between items-start mb-4">
               <div>
                 <div className="font-bold text-gray-800">{monthModal.client.name}</div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm text-blue-600 font-medium">{year}年 {monthModal.month}月</span>
+                  {monthModal.month > 1 && (
+                    <button
+                      onClick={copyPrevMonth}
+                      className="text-xs px-2 py-0.5 bg-gray-50 text-gray-600 border border-gray-300 rounded-full hover:bg-gray-100 transition">
+                      ← 前月の複写
+                    </button>
+                  )}
                   {monthModal.month < 12 && (
                     <button
                       onClick={() => saveMonthModal(true)}
