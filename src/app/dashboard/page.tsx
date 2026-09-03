@@ -71,6 +71,7 @@ interface TaxSchedItem {
   payment_method: string | null
   send_date: string | null
   payment_date: string | null
+  contact_date: string | null
   confirmation: string | null
 }
 
@@ -369,7 +370,7 @@ export default function DashboardPage() {
     const supabase = createClient()
     const { data } = await supabase
       .from('tax_schedules')
-      .select('id, client_name, tax_type, amount, installment, deadline, payment_method, send_date, payment_date, confirmation')
+      .select('id, client_name, tax_type, amount, installment, deadline, payment_method, send_date, payment_date, contact_date, confirmation')
       .eq('year', y)
       .eq('month', m)
       .order('client_name')
@@ -377,7 +378,7 @@ export default function DashboardPage() {
     setTaxSchedLoading(false)
   }
 
-  function updateTaxSched(id: string, field: 'confirmation' | 'payment_date' | 'send_date' | 'payment_method', value: string) {
+  function updateTaxSched(id: string, field: 'confirmation' | 'payment_date' | 'send_date' | 'payment_method' | 'contact_date', value: string) {
     setTaxSchedules(prev => prev.map(s => s.id === id ? { ...s, [field]: value || null } : s))
     createClient().from('tax_schedules').update({ [field]: value || null }).eq('id', id)
   }
@@ -1171,6 +1172,7 @@ export default function DashboardPage() {
                   <th className="text-center px-4 py-2 font-medium">納付方法</th>
                   <th className="text-center px-4 py-2 font-medium">送付日</th>
                   <th className="text-center px-4 py-2 font-medium">納付日</th>
+                  <th className="text-center px-4 py-2 font-medium">連絡日</th>
                   <th className="text-center px-4 py-2 font-medium w-28">確認</th>
                 </tr>
               </thead>
@@ -1190,8 +1192,11 @@ export default function DashboardPage() {
                         <option value=""></option>
                         <option value="納付書">納付書</option>
                         <option value="ダイレクト納付">ダイレクト納付</option>
+                        <option value="振替納税">振替納税</option>
+                        <option value="予納">予納</option>
                         <option value="クレジット">クレジット</option>
                         <option value="ネットバンク">ネットバンク</option>
+                        <option value="その他">その他</option>
                       </select>
                     </td>
                     <td className="px-4 py-2 text-center text-gray-600 text-xs">
@@ -1208,6 +1213,14 @@ export default function DashboardPage() {
                         className="border border-gray-200 rounded px-1 py-0.5 text-xs w-[108px]"
                         value={s.payment_date || ''}
                         onChange={e => updateTaxSched(s.id, 'payment_date', e.target.value)}
+                      />
+                    </td>
+                    <td className="px-4 py-2 text-center text-gray-600 text-xs">
+                      <input
+                        type="date"
+                        className="border border-gray-200 rounded px-1 py-0.5 text-xs w-[108px]"
+                        value={s.contact_date || ''}
+                        onChange={e => updateTaxSched(s.id, 'contact_date', e.target.value)}
                       />
                     </td>
                     <td className="px-4 py-2 text-center">
