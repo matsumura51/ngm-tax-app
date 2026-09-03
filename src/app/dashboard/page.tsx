@@ -55,8 +55,9 @@ interface MonthlyItem {
   client_name: string
   primary_staff: string | null
   sub_staff: string | null
-  material_date: string   // 資料預かり日
+  material_date: string   // 資料預かり日（最も古いもの）
   elapsed_days: number
+  months_count: number    // 未処理の月数
 }
 
 interface ReturnItem { client_code: string | null; client_name: string; staff_name: string | null; category: '決算業務' | '年末調整' | '確定申告' }
@@ -349,13 +350,26 @@ export default function DashboardPage() {
         if (matDate && !compDate && !seen.has(key)) {
           seen.add(key)
           const elapsed = Math.floor((todayTime - new Date(matDate).getTime()) / 86400000)
-          unfinished.push({ client_id: p.client_id, client_code: p.client_code, client_name: p.client_name, primary_staff: p.primary_staff, sub_staff: p.sub_staff, material_date: matDate, elapsed_days: elapsed })
+          unfinished.push({ client_id: p.client_id, client_code: p.client_code, client_name: p.client_name, primary_staff: p.primary_staff, sub_staff: p.sub_staff, material_date: matDate, elapsed_days: elapsed, months_count: 1 })
         }
       }
     }
 
-    unfinished.sort((a, b) => b.elapsed_days - a.elapsed_days)
-    setMonthlyItems(unfinished)
+    // client_code でグループ化し、最も経過日数が多い月を代表にする
+    const groupMap = new Map<string, MonthlyItem>()
+    for (const item of unfinished) {
+      const existing = groupMap.get(item.client_code)
+      if (!existing) {
+        groupMap.set(item.client_code, { ...item, months_count: 1 })
+      } else if (item.elapsed_days > existing.elapsed_days) {
+        groupMap.set(item.client_code, { ...item, months_count: existing.months_count + 1 })
+      } else {
+        existing.months_count += 1
+      }
+    }
+    const grouped = Array.from(groupMap.values())
+    grouped.sort((a, b) => b.elapsed_days - a.elapsed_days)
+    setMonthlyItems(grouped)
     setProgressLoading(false)
   }
 
@@ -1113,12 +1127,15 @@ export default function DashboardPage() {
                         const d = new Date(item.material_date)
                         const dateLabel = `${d.getMonth() + 1}/${d.getDate()}`
                         return (
-                          <tr key={`${item.client_id}-${item.material_date}`} className="hover:bg-gray-50">
+                          <tr key={item.client_code} className="hover:bg-gray-50">
                             <td className="px-4 py-2.5">
                               <Link href={`/monthly?tab=月次進捗&highlight=${item.client_id}`} className="font-medium text-gray-800 hover:text-blue-600">
                                 {item.client_name}
                               </Link>
                               <span className="ml-2 text-xs text-gray-400 font-mono">{item.client_code}</span>
+                              {item.months_count > 1 && (
+                                <span className="ml-1.5 text-xs font-medium bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{item.months_count}ヶ月</span>
+                              )}
                             </td>
                             <td className="px-3 py-2.5 text-gray-600 text-xs">{item.primary_staff || '—'}</td>
                             <td className="px-3 py-2.5 text-center text-gray-600 text-xs">{dateLabel}</td>
