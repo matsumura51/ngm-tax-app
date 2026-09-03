@@ -298,25 +298,25 @@ export default function DashboardPage() {
       .eq('fiscal_month', settleMonth)
       .is('contract_end_date', null)
 
-    const settleClientIds = (settleClients || []).map(c => c.id)
+    const settleClientCodes = (settleClients || []).map(c => c.code)
 
-    // 対象顧客の monthly_progress（settleYear）を取得
-    const { data: settleProgress } = settleClientIds.length > 0
+    // 対象顧客の monthly_progress（settleYear）を取得 — client_code で結合（client_id が null のレコードも対象にするため）
+    const { data: settleProgress } = settleClientCodes.length > 0
       ? await supabase
           .from('monthly_progress')
-          .select('client_id, settle_return_prepared')
+          .select('client_code, settle_return_prepared')
           .eq('year', settleYear)
-          .in('client_id', settleClientIds)
+          .in('client_code', settleClientCodes)
       : { data: [] }
 
-    const progressById: Record<string, string | null> = {}
+    const progressByCode: Record<string, string | null> = {}
     for (const p of (settleProgress || [])) {
-      progressById[p.client_id] = p.settle_return_prepared
+      progressByCode[p.client_code] = p.settle_return_prepared
     }
 
     // monthly_progress が存在しない、またはsettleフィールドが未入力 → 未処理
     const settleResult: SettleItem[] = (settleClients || [])
-      .filter(c => !progressById[c.id])   // keyがない(レコード未作成)か空文字/nullは未処理
+      .filter(c => !progressByCode[c.code])   // keyがない(レコード未作成)か空文字/nullは未処理
       .map(c => ({
         client_id: c.id,
         client_code: c.code,
@@ -324,7 +324,7 @@ export default function DashboardPage() {
         fiscal_month: c.fiscal_month,
         primary_staff: c.primary_staff,
         sub_staff: c.sub_staff,
-        settle_return_prepared: progressById[c.id] ?? null,
+        settle_return_prepared: progressByCode[c.code] ?? null,
       }))
 
     setSettleItems(settleResult)
