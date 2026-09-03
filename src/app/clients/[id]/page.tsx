@@ -521,6 +521,11 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                   <option value="その他">その他</option>
                 </select>
               </F>
+              <F label="報告間隔">
+                <select className={ic} value={form.report_interval?.toString() || '1'} onChange={e => set('report_interval', parseInt(e.target.value))}>
+                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={n}>{n}か月</option>)}
+                </select>
+              </F>
             </div>
           </Section>
 

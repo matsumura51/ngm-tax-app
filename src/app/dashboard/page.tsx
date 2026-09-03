@@ -72,6 +72,8 @@ interface MonthlyItem {
   elapsed_days: number
   months_count: number    // 未処理の月数
   monthly_status: string | null
+  is_mikaishuu: boolean   // 未回収フラグ
+  mikaishuu_months: number // 未回収の月数
 }
 
 interface ReturnItem { client_code: string | null; client_name: string; staff_name: string | null; category: '決算業務' | '年末調整' | '確定申告' }
@@ -355,8 +357,13 @@ export default function DashboardPage() {
     const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear
 
     const years = Array.from(new Set([currentYear, prevYear]))
-    const progressAllRes = await Promise.all(years.map(y => fetch(`/api/monthly-progress/list?year=${y}`)))
+    const [progressAllRes, { data: clientIntervalData }] = await Promise.all([
+      Promise.all(years.map(y => fetch(`/api/monthly-progress/list?year=${y}`))),
+      supabase.from('clients').select('id, report_interval').is('contract_end_date', null),
+    ])
     const progressRaw = (await Promise.all(progressAllRes.map(r => r.ok ? r.json() : []))).flat()
+    const reportIntervalMap: Record<string, number> = {}
+    for (const c of (clientIntervalData || [])) reportIntervalMap[c.id] = c.report_interval ?? 1
 
     const todayTime = now.getTime()
     const seen = new Set<string>()
@@ -372,7 +379,7 @@ export default function DashboardPage() {
         if (matDate && !compDate && !seen.has(key)) {
           seen.add(key)
           const elapsed = Math.floor((todayTime - new Date(matDate).getTime()) / 86400000)
-          unfinished.push({ progress_id: p.id ?? null, client_id: p.client_id, client_code: p.client_code, client_name: p.client_name, primary_staff: p.primary_staff, sub_staff: p.sub_staff, material_date: matDate, elapsed_days: elapsed, months_count: 1, monthly_status: p.monthly_status ?? null })
+          unfinished.push({ progress_id: p.id ?? null, client_id: p.client_id, client_code: p.client_code, client_name: p.client_name, primary_staff: p.primary_staff, sub_staff: p.sub_staff, material_date: matDate, elapsed_days: elapsed, months_count: 1, monthly_status: p.monthly_status ?? null, is_mikaishuu: false, mikaishuu_months: 0 })
         }
       }
     }
@@ -392,7 +399,66 @@ export default function DashboardPage() {
     }
     const grouped = Array.from(groupMap.values())
     grouped.sort((a, b) => b.elapsed_days - a.elapsed_days)
-    setMonthlyItems(grouped)
+
+    // ── 未回収計算 ──
+    // 前月（絶対月数）
+    const prevMonthAbs = now.getFullYear() * 12 + now.getMonth() // getMonth()は0始まりなので前月になる
+    // 未処理に含まれている client_id のセット
+    const unprocessedClientIds = new Set(grouped.map(i => i.client_id))
+    // client_id 別に progressRaw をグループ化
+    const progressByClient = new Map<string, any[]>()
+    for (const p of progressRaw) {
+      if (!p.client_id) continue
+      if (!progressByClient.has(p.client_id)) progressByClient.set(p.client_id, [])
+      progressByClient.get(p.client_id)!.push(p)
+    }
+    const mikaishuu: MonthlyItem[] = []
+    for (const [clientId, records] of progressByClient) {
+      if (unprocessedClientIds.has(clientId)) continue // 未処理に含まれていれば未回収対象外
+      const reportInterval = reportIntervalMap[clientId] ?? 1
+      const firstRec = records[0]
+      // 最後に「資料収集あり＋月次完成あり」の月（A）と「資料収集あり」の月（latestMat）を求める
+      let latestCompAbs = 0
+      let latestMatAbs = 0
+      for (const p of records) {
+        const year = p.year as number
+        const matObj: Record<string, string> = p.monthly_material || {}
+        const compObj: Record<string, string> = p.monthly_completion || {}
+        for (const mStr of Object.keys(matObj)) {
+          if (matObj[mStr]) {
+            const abs = year * 12 + parseInt(mStr)
+            if (abs > latestMatAbs) latestMatAbs = abs
+          }
+        }
+        for (const mStr of Object.keys(compObj)) {
+          if (compObj[mStr] && matObj[mStr]) {
+            const abs = year * 12 + parseInt(mStr)
+            if (abs > latestCompAbs) latestCompAbs = abs
+          }
+        }
+      }
+      if (latestCompAbs === 0) continue // 月次完成実績なし → スキップ
+      if (latestMatAbs > latestCompAbs) continue // 資料収集 > 月次完成 → 未処理対象のためスキップ
+      const monthDiff = prevMonthAbs - latestCompAbs
+      if (monthDiff > reportInterval) {
+        mikaishuu.push({
+          progress_id: firstRec.id ?? null,
+          client_id: firstRec.client_id,
+          client_code: firstRec.client_code || '',
+          client_name: firstRec.client_name,
+          primary_staff: firstRec.primary_staff ?? null,
+          sub_staff: firstRec.sub_staff ?? null,
+          material_date: '',
+          elapsed_days: monthDiff,
+          months_count: 1,
+          monthly_status: firstRec.monthly_status ?? null,
+          is_mikaishuu: true,
+          mikaishuu_months: monthDiff,
+        })
+      }
+    }
+    mikaishuu.sort((a, b) => b.mikaishuu_months - a.mikaishuu_months)
+    setMonthlyItems([...grouped, ...mikaishuu])
     setProgressLoading(false)
   }
 
@@ -1127,11 +1193,16 @@ export default function DashboardPage() {
             ) : (
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-yellow-600 bg-yellow-100 rounded-full px-2 py-0.5">
-                  未処理 {monthlyItems.length}件
+                  未処理 {monthlyItems.filter(i => !i.is_mikaishuu).length}件
                 </span>
-                {monthlyItems.filter(i => i.elapsed_days >= 14).length > 0 && (
+                {monthlyItems.filter(i => !i.is_mikaishuu && i.elapsed_days >= 14).length > 0 && (
                   <span className="text-xs font-bold text-red-600 bg-red-50 rounded-full px-2 py-0.5">
-                    期日超過 {monthlyItems.filter(i => i.elapsed_days >= 14).length}件
+                    期日超過 {monthlyItems.filter(i => !i.is_mikaishuu && i.elapsed_days >= 14).length}件
+                  </span>
+                )}
+                {monthlyItems.filter(i => i.is_mikaishuu).length > 0 && (
+                  <span className="text-xs font-bold text-purple-600 bg-purple-50 rounded-full px-2 py-0.5">
+                    未回収 {monthlyItems.filter(i => i.is_mikaishuu).length}件
                   </span>
                 )}
               </div>
@@ -1147,16 +1218,22 @@ export default function DashboardPage() {
             <>
               <div className="divide-y divide-gray-50">
                 {staffSummary(monthlyItems).map(([staff, total]) => {
-                  const overdue = monthlyItems.filter(i => (i.primary_staff || '未割当') === staff && i.elapsed_days >= 14).length
+                  const staffItems = monthlyItems.filter(i => (i.primary_staff || '未割当') === staff)
+                  const unprocessedCnt = staffItems.filter(i => !i.is_mikaishuu).length
+                  const overdue = staffItems.filter(i => !i.is_mikaishuu && i.elapsed_days >= 14).length
+                  const mikaishhuuCnt = staffItems.filter(i => i.is_mikaishuu).length
                   const active = monthlyShowTable && monthlyFilterStaff === staff
                   return (
                     <button key={staff} onClick={() => { setMonthlyFilterStaff(staff); setMonthlyShowTable(true) }}
                       className={`w-full flex items-center justify-between px-5 py-3 text-left transition ${active ? 'bg-yellow-50' : 'hover:bg-gray-50'}`}>
                       <span className={`text-base font-semibold ${active ? 'text-yellow-700' : 'text-gray-800'}`}>{staff}</span>
                       <div className="flex items-center gap-3 text-sm">
-                        <span className="text-gray-500">未処理 <span className="font-bold text-gray-800">{total}</span>件</span>
+                        <span className="text-gray-500">未処理 <span className="font-bold text-gray-800">{unprocessedCnt}</span>件</span>
                         {overdue > 0 && (
                           <span className="text-red-500 font-bold">期日超過 {overdue}件</span>
+                        )}
+                        {mikaishhuuCnt > 0 && (
+                          <span className="text-purple-500 font-bold">未回収 {mikaishhuuCnt}件</span>
                         )}
                         {active && <span className="text-yellow-500 text-xs">▶</span>}
                       </div>
@@ -1196,23 +1273,28 @@ export default function DashboardPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {monthlyItems.filter(item => !monthlyFilterStaff || (item.primary_staff || '未割当') === monthlyFilterStaff).map(item => {
-                        const d = new Date(item.material_date)
-                        const dateLabel = `${d.getMonth() + 1}/${d.getDate()}`
+                        const dateLabel = item.is_mikaishuu ? '—' : (() => { const d = new Date(item.material_date); return `${d.getMonth() + 1}/${d.getDate()}` })()
                         return (
-                          <tr key={item.client_code} className="hover:bg-gray-50">
+                          <tr key={item.client_code || item.client_id} className="hover:bg-gray-50">
                             <td className="px-4 py-2.5">
                               <Link href={`/monthly?tab=月次進捗&highlight=${item.client_id}`} className="font-medium text-gray-800 hover:text-blue-600">
                                 {item.client_name}
                               </Link>
                               <span className="ml-2 text-xs text-gray-400 font-mono">{item.client_code}</span>
-                              {item.months_count > 1 && (
+                              {item.is_mikaishuu ? (
+                                <span className="ml-1.5 text-xs font-medium bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">未回収{item.mikaishuu_months}か月</span>
+                              ) : item.months_count > 1 ? (
                                 <span className="ml-1.5 text-xs font-medium bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{item.months_count}ヶ月</span>
-                              )}
+                              ) : null}
                             </td>
                             <td className="px-3 py-2.5 text-gray-600 text-xs">{item.primary_staff || '—'}</td>
                             <td className="px-3 py-2.5 text-center text-gray-600 text-xs">{dateLabel}</td>
                             <td className="px-3 py-2.5 text-center">
-                              {item.elapsed_days >= 14 ? (
+                              {item.is_mikaishuu ? (
+                                <span className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                                  {item.mikaishuu_months}か月
+                                </span>
+                              ) : item.elapsed_days >= 14 ? (
                                 <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
                                   {item.elapsed_days}日
                                 </span>
