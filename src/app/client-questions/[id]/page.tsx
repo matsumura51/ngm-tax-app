@@ -264,7 +264,6 @@ export default function ClientQuestionDetailPage({ params }: { params: Promise<{
           </div>${answerHtml}
           <div style="margin-top:8px;margin-left:24px">
             <div style="height:24px"></div>
-            <div style="height:24px"></div>
           </div>
         </div>`
       }).join('')
