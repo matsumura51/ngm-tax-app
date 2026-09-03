@@ -177,6 +177,7 @@ function MonthlyContent() {
   const [monthModal, setMonthModal] = useState<{ client: Client; month: number } | null>(null)
   const [monthDates, setMonthDates] = useState<Record<string, string>>({})
   const [monthRangeEnd, setMonthRangeEnd] = useState<number | null>(null)
+  const [monthRangeFields, setMonthRangeFields] = useState<Set<string>>(new Set(MONTHLY_FIELDS.map(f => f.key)))
   const [settleModal, setSettleModal] = useState<Client | null>(null)
   const [settleForm, setSettleForm] = useState<Record<string, string>>({})
   const [taxSchedules, setTaxSchedules] = useState<TaxSchedule[]>([])
@@ -485,6 +486,7 @@ function MonthlyContent() {
     }
     setMonthDates(dates)
     setMonthRangeEnd(null)
+    setMonthRangeFields(new Set(MONTHLY_FIELDS.map(f => f.key)))
     setMonthModal({ client, month })
   }
 
@@ -512,13 +514,17 @@ function MonthlyContent() {
     let p = prog(client.code)
     if (!p) p = await ensureProgress(client)
     if (!p) { setSaving(false); return }
-    // 指定範囲の全月に同じデータを書き込む
+    const isRange = toMonth > fromMonth
     const updates: Record<string, Record<string, string | null>> = {}
     for (const f of MONTHLY_FIELDS) {
       const existing = (p[f.key as keyof MonthlyProgress] as Record<string, string | null>) || {}
       const patch: Record<string, string | null> = { ...existing }
-      for (let m = fromMonth; m <= toMonth; m++) {
-        patch[String(m)] = monthDates[f.key] || null
+      if (isRange && monthRangeFields.has(f.key)) {
+        // 選択された項目 → 範囲内の全月に適用
+        for (let m = fromMonth; m <= toMonth; m++) patch[String(m)] = monthDates[f.key] || null
+      } else if (!isRange || !monthRangeFields.has(f.key)) {
+        // 単月 or 未選択項目 → 開始月のみ更新
+        patch[String(fromMonth)] = monthDates[f.key] || null
       }
       updates[f.key] = patch
     }
@@ -545,6 +551,7 @@ function MonthlyContent() {
       }
       setMonthDates(dates)
       setMonthRangeEnd(null)
+      setMonthRangeFields(new Set(MONTHLY_FIELDS.map(f => f.key)))
       setMonthModal({ client, month: nextMonth })
     } else {
       setMonthModal(null)
@@ -1083,6 +1090,7 @@ function MonthlyContent() {
                     onChange={e => {
                       const v = Number(e.target.value)
                       setMonthRangeEnd(v === monthModal.month ? null : v)
+                      setMonthRangeFields(new Set(MONTHLY_FIELDS.map(f => f.key)))
                     }}
                     className="text-sm text-blue-600 font-medium border-0 bg-transparent focus:outline-none cursor-pointer">
                     {MONTHS.filter(m => Number(m) >= monthModal.month).map(m => <option key={m} value={m}>{m}月</option>)}
@@ -1106,9 +1114,26 @@ function MonthlyContent() {
               </div>
               <button onClick={() => setMonthModal(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
             </div>
+            {monthRangeEnd && monthRangeEnd !== monthModal.month && (
+              <div className="mb-3 px-3 py-2 bg-blue-50 rounded-lg text-xs text-blue-700">
+                <span className="font-medium">一括適用する項目を選択</span>（チェックした項目を {monthModal.month}〜{monthRangeEnd}月に適用）
+              </div>
+            )}
             <div className="space-y-3">
-              {MONTHLY_FIELDS.map(f => (
-                <div key={f.key} className="flex items-center gap-3">
+              {MONTHLY_FIELDS.map(f => {
+                const isRangeActive = !!monthRangeEnd && monthRangeEnd !== monthModal.month
+                const checked = monthRangeFields.has(f.key)
+                return (
+                <div key={f.key} className={`flex items-center gap-3 ${isRangeActive && !checked ? 'opacity-40' : ''}`}>
+                  {isRangeActive && (
+                    <input type="checkbox" checked={checked}
+                      onChange={() => setMonthRangeFields(prev => {
+                        const next = new Set(prev)
+                        next.has(f.key) ? next.delete(f.key) : next.add(f.key)
+                        return next
+                      })}
+                      className="w-3.5 h-3.5 rounded accent-blue-600 shrink-0 cursor-pointer" />
+                  )}
                   <label className="text-xs font-medium text-gray-500 w-16 shrink-0">{f.label}</label>
                   {f.type === 'date' ? (
                     <DatePartInput
@@ -1128,7 +1153,8 @@ function MonthlyContent() {
                     <button onClick={() => setMonthDates(d => ({ ...d, [f.key]: '' }))} className="text-gray-300 hover:text-gray-500 text-xs">✕</button>
                   )}
                 </div>
-              ))}
+                )
+              })}
             </div>
             <div className="flex gap-2 mt-5">
               <button onClick={() => setMonthModal(null)} className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">キャンセル</button>
