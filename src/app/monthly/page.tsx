@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { MonthlyProgress, Client, TaxSchedule } from '@/lib/types'
-import { Search, X, RefreshCw } from 'lucide-react'
+import { Search, X, RefreshCw, Calendar } from 'lucide-react'
 
 const MONTHS = ['1','2','3','4','5','6','7','8','9','10','11','12']
 const MONTHLY_FIELDS = [
@@ -25,6 +25,7 @@ function DatePartInput({ value, onChange }: { value: string; onChange: (v: strin
   const [ld, setLd] = useState(parsed ? parsed[3] : '')
   const mRef = useRef<HTMLInputElement>(null)
   const dRef = useRef<HTMLInputElement>(null)
+  const nativeRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const p = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
@@ -65,6 +66,14 @@ function DatePartInput({ value, onChange }: { value: string; onChange: (v: strin
           setLd(v); emit(ly, lm, v)
         }}
         className={`${seg} w-10`} />
+      {/* 非表示のネイティブ date input — カレンダーアイコンクリックで開く */}
+      <input ref={nativeRef} type="date" value={value || ''} tabIndex={-1}
+        onChange={e => onChange(e.target.value)}
+        className="sr-only" />
+      <button type="button" onClick={() => (nativeRef.current as HTMLInputElement & { showPicker?: () => void })?.showPicker?.()}
+        className="text-gray-400 hover:text-blue-500 shrink-0 ml-1">
+        <Calendar size={14} />
+      </button>
     </div>
   )
 }
