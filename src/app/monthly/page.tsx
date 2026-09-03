@@ -24,6 +24,27 @@ function fmtDate(s: string | null | undefined): string {
   return s
 }
 
+// "YYYY-MM-DD" → "M/D" for table display; pass-through other formats
+function fmtDate(s: string | null | undefined): string {
+  if (!s) return ''
+  const m = s.match(/^\d{4}-(\d{2})-(\d{2})$/)
+  if (m) return `${parseInt(m[1])}/${parseInt(m[2])}`
+  return s
+}
+
+// "M/D" or "YYYY-MM-DD" → "YYYY-MM-DD" (for date input value)
+function toIso(s: string | null | undefined): string {
+  if (!s) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  const parts = s.split('/')
+  if (parts.length === 2) {
+    const m = parts[0].padStart(2, '0')
+    const d = parts[1].padStart(2, '0')
+    return `${new Date().getFullYear()}-${m}-${d}`
+  }
+  return ''
+}
+
 function fmtFee(s: string | null | undefined): string {
   if (!s) return ''
   const n = parseInt(s.replace(/,/g, ''), 10)
@@ -34,11 +55,11 @@ const inp = 'w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:out
 
 const SETTLE_FIELDS: { key: string; label: string; placeholder?: string; type?: string }[] = [
   { key: 'settle_consumption_judged', label: '消費税判定',           placeholder: '例: 課税／免税' },
-  { key: 'settle_materials',          label: '資料収集',              placeholder: '例: 3/20' },
-  { key: 'settle_return_prepared',    label: '申告書作成',            placeholder: '例: 4/5' },
-  { key: 'settle_contact',            label: '連絡',                  placeholder: '例: 4/10' },
-  { key: 'settle_filed',              label: '電子申告',              placeholder: '例: 4/15' },
-  { key: 'settle_payment',            label: 'ダイレクト納付/納付書',  placeholder: '例: 4/20' },
+  { key: 'settle_materials',          label: '資料収集',              type: 'date' },
+  { key: 'settle_return_prepared',    label: '申告書作成',            type: 'date' },
+  { key: 'settle_contact',            label: '連絡',                  type: 'date' },
+  { key: 'settle_filed',              label: '電子申告',              type: 'date' },
+  { key: 'settle_payment',            label: 'ダイレクト納付/納付書',  type: 'date' },
   { key: 'settle_return_docs',        label: '返却書類',               type: 'checkbox' },
   { key: 'director_change',           label: '役員変更',              placeholder: '例: なし' },
 ]
@@ -888,11 +909,11 @@ function MonthlyContent() {
                     <td className={stickyCode(even)}>{c.code}</td>
                     <td className={stickyName(even)}>{c.name}</td>
                     <td className={`${td} border-l border-gray-100`}>{p?.settle_consumption_judged || ''}</td>
-                    <td className={td}>{p?.settle_materials || ''}</td>
-                    <td className={td}>{p?.settle_return_prepared || ''}</td>
-                    <td className={td}>{p?.settle_contact || ''}</td>
-                    <td className={td}>{p?.settle_filed || ''}</td>
-                    <td className={`${td} border-l border-gray-100 text-left whitespace-pre-line`}>{p?.settle_payment || ''}</td>
+                    <td className={td}>{fmtDate(p?.settle_materials)}</td>
+                    <td className={td}>{fmtDate(p?.settle_return_prepared)}</td>
+                    <td className={td}>{fmtDate(p?.settle_contact)}</td>
+                    <td className={td}>{fmtDate(p?.settle_filed)}</td>
+                    <td className={`${td} border-l border-gray-100 text-left whitespace-pre-line`}>{fmtDate(p?.settle_payment)}</td>
                     <td className={`${td} text-center`}>{p?.settle_return_docs === '1' ? '✓' : ''}</td>
                     <td className={`${td} border-l border-gray-100`}>{p?.director_change || ''}</td>
                     <td className={`${td} border-l border-gray-100 tabular-nums text-right`}>{fmtAmount(p?.settle_corp_tax_amount)}</td>
@@ -985,6 +1006,18 @@ function MonthlyContent() {
                       />
                       <span className="text-sm text-gray-700">{settleForm[key] === '1' ? '完了' : '未完了'}</span>
                     </label>
+                  ) : type === 'date' ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <input
+                        type="date"
+                        value={toIso(settleForm[key])}
+                        onChange={e => setSettleForm(f => ({ ...f, [key]: e.target.value }))}
+                        className={inp}
+                      />
+                      {settleForm[key] && (
+                        <button onClick={() => setSettleForm(f => ({ ...f, [key]: '' }))} className="text-gray-300 hover:text-gray-500 text-xs shrink-0">✕</button>
+                      )}
+                    </div>
                   ) : (
                     <input value={settleForm[key] || ''} onChange={e => setSettleForm(f => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} className={inp} />
                   )}

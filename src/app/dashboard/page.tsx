@@ -300,18 +300,16 @@ export default function DashboardPage() {
 
     const settleClientCodes = (settleClients || []).map(c => c.code)
 
-    // 対象顧客の monthly_progress（settleYear）を取得 — client_code で結合（client_id が null のレコードも対象にするため）
-    const { data: settleProgress } = settleClientCodes.length > 0
-      ? await supabase
-          .from('monthly_progress')
-          .select('client_code, settle_return_prepared')
-          .eq('year', settleYear)
-          .in('client_code', settleClientCodes)
-      : { data: [] }
+    // 対象顧客の monthly_progress（settleYear）を API 経由で取得（RLS 対策）
+    const settleProgressRes = await fetch(`/api/monthly-progress/list?year=${settleYear}`)
+    const settleProgressAll: { client_code: string; settle_return_prepared: string | null }[] =
+      settleProgressRes.ok ? await settleProgressRes.json() : []
 
     const progressByCode: Record<string, string | null> = {}
-    for (const p of (settleProgress || [])) {
-      progressByCode[p.client_code] = p.settle_return_prepared
+    for (const p of settleProgressAll) {
+      if (settleClientCodes.includes(p.client_code)) {
+        progressByCode[p.client_code] = p.settle_return_prepared
+      }
     }
 
     // monthly_progress が存在しない、またはsettleフィールドが未入力 → 未処理
@@ -333,10 +331,9 @@ export default function DashboardPage() {
     // 全年・全月をチェックし「資料収集あり・月次未完成・14日以上経過」を列挙
     const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear
 
-    const { data: progressRaw } = await supabase
-      .from('monthly_progress')
-      .select('client_id, client_code, client_name, primary_staff, sub_staff, monthly_material, monthly_completion')
-      .in('year', Array.from(new Set([currentYear, prevYear])))
+    const years = Array.from(new Set([currentYear, prevYear]))
+    const progressAllRes = await Promise.all(years.map(y => fetch(`/api/monthly-progress/list?year=${y}`)))
+    const progressRaw = (await Promise.all(progressAllRes.map(r => r.ok ? r.json() : []))).flat()
 
     const todayTime = now.getTime()
     const seen = new Set<string>()
