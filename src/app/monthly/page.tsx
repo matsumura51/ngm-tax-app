@@ -17,13 +17,6 @@ const MONTHLY_FIELDS = [
 ]
 type ActiveTab = '月次進捗' | '税務情報' | '決算業務'
 
-function fmtDate(s: string | null | undefined): string {
-  if (!s) return ''
-  const m = s.match(/^\d{4}-(\d{2})-(\d{2})$/)
-  if (m) return `${parseInt(m[1])}/${parseInt(m[2])}`
-  return s
-}
-
 // "YYYY-MM-DD" → "M/D" for table display; pass-through other formats
 function fmtDate(s: string | null | undefined): string {
   if (!s) return ''
@@ -502,6 +495,7 @@ function MonthlyContent() {
       }
 
       if (toInsert.length > 0) {
+        const supabase = createClient()
         await supabase.from('tax_schedules')
           .delete()
           .eq('matched_client_code', p.client_code)
