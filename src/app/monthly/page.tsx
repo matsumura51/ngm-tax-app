@@ -256,7 +256,7 @@ function MonthlyContent() {
               amount: interim.toLocaleString('ja-JP') + '円',
               installment: '年1回',
               deadline: null, payment_method: null,
-              send_date: null, payment_date: null,
+              send_date: null, payment_date: null, contact_date: null,
               confirmation: null, imported_at: now,
             })
           }
@@ -276,7 +276,7 @@ function MonthlyContent() {
               amount: perAmount.toLocaleString('ja-JP') + '円',
               installment: `年${count}回`,
               deadline: null, payment_method: null,
-              send_date: null, payment_date: null,
+              send_date: null, payment_date: null, contact_date: null,
               confirmation: null, imported_at: now,
             })
           }
@@ -303,10 +303,29 @@ function MonthlyContent() {
     supabase.from('tax_schedules').update({ [field]: value || null }).eq('id', id)
   }
 
-  function edCell(s: TaxSchedule, field: 'payment_method' | 'send_date' | 'payment_date' | 'confirmation', extraClass = '') {
+  function edCell(s: TaxSchedule, field: 'payment_method' | 'send_date' | 'payment_date' | 'contact_date' | 'confirmation', extraClass = '') {
     const isEditing = editingCell?.id === s.id && editingCell?.field === field
     const val = (s[field] as string | null) || ''
     if (isEditing) {
+      if (field === 'payment_method') {
+        return (
+          <select
+            autoFocus
+            value={editingCell!.value}
+            onChange={e => setEditingCell(c => c ? { ...c, value: e.target.value } : null)}
+            onBlur={saveCell}
+            onKeyDown={e => { if (e.key === 'Escape') setEditingCell(null) }}
+            className="w-full px-1 py-0.5 text-[11px] border border-blue-400 rounded focus:outline-none bg-white"
+          >
+            <option value="">-</option>
+            <option value="ダイレクト納付">ダイレクト納付</option>
+            <option value="振替納税">振替納税</option>
+            <option value="納付書">納付書</option>
+            <option value="予納">予納</option>
+            <option value="その他">その他</option>
+          </select>
+        )
+      }
       return (
         <input
           autoFocus
@@ -457,6 +476,7 @@ function MonthlyContent() {
           payment_method: null,
           send_date: null,
           payment_date: null,
+          contact_date: null,
           confirmation: null,
           imported_at: now,
         })))
@@ -756,12 +776,13 @@ function MonthlyContent() {
                   <th className={thH1}>納付方法</th>
                   <th className={thH1}>送付日・申告日</th>
                   <th className={thH1}>納付日</th>
+                  <th className={thH1}>連絡日</th>
                   <th className={thH1}>確認</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={10} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
+                  <tr><td colSpan={11} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
                 ) : filtered.flatMap((c, ci) => {
                   const even = ci % 2 === 0
                   const bg = even ? 'bg-white' : 'bg-gray-50'
@@ -774,6 +795,7 @@ function MonthlyContent() {
                         <td className={stickyName(even)}>{c.name}</td>
                         <td className={td}></td>
                         <td className="px-2 py-2 text-right text-gray-400 text-[11px] tabular-nums">0円</td>
+                        <td className={td}></td>
                         <td className={td}></td>
                         <td className={td}></td>
                         <td className={td}></td>
@@ -794,6 +816,7 @@ function MonthlyContent() {
                       <td className={`${td} hover:bg-yellow-50`}>{edCell(s, 'payment_method')}</td>
                       <td className={`${td} hover:bg-yellow-50`}>{edCell(s, 'send_date')}</td>
                       <td className={`${td} hover:bg-yellow-50`}>{edCell(s, 'payment_date')}</td>
+                      <td className={`${td} hover:bg-yellow-50`}>{edCell(s, 'contact_date')}</td>
                       <td className={`${td} hover:bg-yellow-50`}>{edCell(s, 'confirmation', s.confirmation ? 'text-green-600 font-medium' : '')}</td>
                     </tr>
                   ))

@@ -202,6 +202,7 @@ export interface TaxSchedule {
   payment_method: string | null
   send_date: string | null
   payment_date: string | null
+  contact_date: string | null
   confirmation: string | null
   imported_at: string
 }
