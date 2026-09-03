@@ -29,6 +29,7 @@ export interface Client {
   year_end_adjustment: string | null
   notification_send: string | null
   jumin_tax: string | null
+  report_interval: number | null
   // 代表者
   representative: string | null
   honorific: string | null
