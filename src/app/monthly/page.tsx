@@ -64,8 +64,10 @@ function DatePartInput({ value, onChange }: { value: string; onChange: (v: strin
       <input ref={dRef} type="text" inputMode="numeric" placeholder="DD" maxLength={2} value={ld}
         onChange={e => {
           const v = e.target.value.replace(/\D/g, '').slice(0, 2)
-          setLd(v); emit(ly, lm, v)
+          setLd(v)
+          if (v.length === 2) emit(ly, lm, v)
         }}
+        onBlur={() => { if (ld.length >= 1) emit(ly, lm, ld) }}
         className={`${seg} w-10`} />
       {/* 非表示のネイティブ date input — カレンダーアイコンクリックで開く */}
       <input ref={nativeRef} type="date" value={value || ''} tabIndex={-1}
