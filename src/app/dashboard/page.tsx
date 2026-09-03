@@ -349,9 +349,7 @@ export default function DashboardPage() {
         if (matDate && !compDate && !seen.has(key)) {
           seen.add(key)
           const elapsed = Math.floor((todayTime - new Date(matDate).getTime()) / 86400000)
-          if (elapsed >= 14) {
-            unfinished.push({ client_id: p.client_id, client_code: p.client_code, client_name: p.client_name, primary_staff: p.primary_staff, sub_staff: p.sub_staff, material_date: matDate, elapsed_days: elapsed })
-          }
+          unfinished.push({ client_id: p.client_id, client_code: p.client_code, client_name: p.client_name, primary_staff: p.primary_staff, sub_staff: p.sub_staff, material_date: matDate, elapsed_days: elapsed })
         }
       }
     }
@@ -1036,11 +1034,22 @@ export default function DashboardPage() {
           <div className="bg-yellow-50 border-b border-yellow-100 px-5 py-3 flex items-center justify-between">
             <div>
               <span className="font-bold text-yellow-700 text-sm">月次 未処理</span>
-              <span className="ml-2 text-xs text-gray-500">資料収集から2週間以上・月次未完成</span>
+              <span className="ml-2 text-xs text-gray-500">資料収集済み・月次未完成</span>
             </div>
-            <span className="text-xs font-bold text-yellow-600 bg-yellow-100 rounded-full px-2 py-0.5">
-              {progressLoading ? '...' : `${monthlyItems.length}件`}
-            </span>
+            {progressLoading ? (
+              <span className="text-xs text-gray-400">...</span>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-yellow-600 bg-yellow-100 rounded-full px-2 py-0.5">
+                  未処理 {monthlyItems.length}件
+                </span>
+                {monthlyItems.filter(i => i.elapsed_days >= 14).length > 0 && (
+                  <span className="text-xs font-bold text-red-600 bg-red-50 rounded-full px-2 py-0.5">
+                    期日超過 {monthlyItems.filter(i => i.elapsed_days >= 14).length}件
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 担当者バッジ（クリックで顧客一覧表示） */}
