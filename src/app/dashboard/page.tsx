@@ -400,11 +400,15 @@ export default function DashboardPage() {
     // ローカル状態を即座に更新
     setMonthlyItems(prev => prev.map(i => i.client_code === clientCode ? { ...i, monthly_status: newStatus || null } : i))
     // client_id（UUID）で同一顧客の全年・全月レコードを一括更新
-    await fetch('/api/monthly-progress/update', {
+    const res = await fetch('/api/monthly-progress/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ client_id: clientId, updates: { monthly_status: newStatus || null } }),
     })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      alert('ステータス保存エラー: ' + (body.error || res.status))
+    }
   }
 
   // 担当者別集計
