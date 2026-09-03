@@ -147,15 +147,16 @@ function MonthlyContent() {
   async function load() {
     setLoading(true)
     const supabase = createClient()
-    const [{ data: clientsData }, { data: progressData }, { data: usersData }] = await Promise.all([
+    const [{ data: clientsData }, { data: usersData }, progressRes] = await Promise.all([
       supabase.from('clients').select('*').is('contract_end_date', null).eq('show_in_monthly', true).order('code'),
-      supabase.from('monthly_progress').select('*').eq('year', year),
       supabase.from('users').select('name, division').order('name'),
+      fetch(`/api/monthly-progress/list?year=${year}`),
     ])
+    const progressData: MonthlyProgress[] = progressRes.ok ? await progressRes.json() : []
     setClients(clientsData || [])
     setAllUsers(usersData || [])
     const map: Record<string, MonthlyProgress> = {}
-    for (const p of (progressData || [])) map[p.client_code] = p
+    for (const p of progressData) map[p.client_code] = p
     setProgressMap(map)
     setLoading(false)
   }
