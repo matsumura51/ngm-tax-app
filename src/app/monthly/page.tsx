@@ -420,11 +420,17 @@ function MonthlyContent() {
       const existing = (p[f.key as keyof MonthlyProgress] as Record<string, string | null>) || {}
       updates[f.key] = { ...existing, [String(month)]: monthDates[f.key] || null }
     }
-    await fetch('/api/monthly-progress/update', {
+    const res = await fetch('/api/monthly-progress/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: p.id, updates }),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(`保存エラー: ${err.error || res.status}`)
+      setSaving(false)
+      return
+    }
     setProgressMap(prev => ({ ...prev, [client.code]: { ...p!, ...updates } }))
     setSaving(false)
     setMonthModal(null)
@@ -446,11 +452,17 @@ function MonthlyContent() {
     if (!p) { setSaving(false); return }
     const updates: Record<string, string | null> = {}
     for (const [k, v] of Object.entries(settleForm)) updates[k] = v || null
-    await fetch('/api/monthly-progress/update', {
+    const res = await fetch('/api/monthly-progress/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: p.id, updates }),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(`保存エラー: ${err.error || res.status}`)
+      setSaving(false)
+      return
+    }
     setProgressMap(prev => ({ ...prev, [settleModal.code]: { ...p!, ...updates } }))
 
     // 2026年7月決算以降は月次進捗の決算業務から予定納税を自動生成
