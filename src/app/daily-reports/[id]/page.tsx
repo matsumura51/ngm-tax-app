@@ -177,13 +177,16 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
   }
 
   function addRow() {
-    setDetails(d => [...d, {
-      id: '', report_id: id, sort_order: d.length,
-      start_time: null, end_time: null, work_time: null,
-      task_type: null, client_code: null, client_name: null,
-      task_code: null, task_name: null, report_type: null,
-      report_content: null, details: null, subject: null,
-    }])
+    setDetails(d => {
+      const prevEndTime = d.length > 0 ? (d[d.length - 1].end_time ?? null) : null
+      return [...d, {
+        id: '', report_id: id, sort_order: d.length,
+        start_time: prevEndTime, end_time: null, work_time: null,
+        task_type: null, client_code: null, client_name: null,
+        task_code: null, task_name: null, report_type: null,
+        report_content: null, details: null, subject: null,
+      }]
+    })
   }
 
   useEffect(() => {

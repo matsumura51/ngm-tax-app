@@ -125,7 +125,10 @@ export default function DailyReportNewPage() {
   }
 
   function addDetail() {
-    setDetails(d => [...d, emptyDetail()])
+    setDetails(d => {
+      const prevEndTime = d.length > 0 ? (d[d.length - 1].end_time ?? '') : ''
+      return [...d, { ...emptyDetail(), start_time: prevEndTime }]
+    })
   }
 
   function removeDetail(i: number) {
