@@ -235,7 +235,13 @@ function MonthlyContent() {
       supabase.auth.getUser(),
     ])
     const progressData: MonthlyProgress[] = progressRes.ok ? await progressRes.json() : []
-    setClients(clientsData || [])
+    setClients((clientsData || []).sort((a, b) => {
+      // 1〜12月順、個人(0)・未設定(null)は末尾、同一決算月内はコード順
+      const fa = !a.fiscal_month ? 13 : a.fiscal_month
+      const fb = !b.fiscal_month ? 13 : b.fiscal_month
+      if (fa !== fb) return fa - fb
+      return a.code.localeCompare(b.code)
+    }))
     setAllUsers(usersData || [])
     // 初回ロード時のみデフォルトフィルターを設定
     // highlight パラメータあり（リンク経由）の場合は全社表示にする
