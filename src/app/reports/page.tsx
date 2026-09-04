@@ -33,6 +33,17 @@ function fmtMinutes(m: number): string {
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`
 }
 
+function fmtPeriod(subject: string | null, details: string | null): string {
+  if (!subject) return ''
+  const [sy, sm] = subject.split('-').map(Number)
+  if (isNaN(sy) || isNaN(sm)) return ''
+  if (!details || details === subject) return `${sy}年${sm}月分`
+  const [ey, em] = details.split('-').map(Number)
+  if (isNaN(ey) || isNaN(em)) return `${sy}年${sm}月分`
+  if (sy === ey) return `${sy}年${sm}〜${em}月分`
+  return `${sy}年${sm}月〜${ey}年${em}月分`
+}
+
 function fmtFee(n: number): string {
   return Math.round(n).toLocaleString('ja-JP') + '円'
 }
@@ -485,6 +496,7 @@ ${tableHTML}
                     <th className="px-4 py-2 text-left w-24">日付</th>
                     <th className="px-3 py-2 text-left w-20">担当者</th>
                     <th className="px-3 py-2 text-left w-20">業務区分</th>
+                    <th className="px-3 py-2 text-left w-24">処理月</th>
                     <th className="px-3 py-2 text-right w-16">時間</th>
                     <th className="px-3 py-2 text-left">作業内容</th>
                   </tr>
@@ -499,6 +511,7 @@ ${tableHTML}
                           <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{e.task_type}</span>
                         )}
                       </td>
+                      <td className="px-3 py-2.5 text-xs text-purple-700 font-medium">{fmtPeriod(e.subject, e.details)}</td>
                       <td className="px-3 py-2.5 text-right font-mono text-xs text-gray-600">{fmtMinutes(e.work_minutes)}</td>
                       <td className="px-3 py-2.5 text-gray-600 text-xs">{e.report_content || ''}</td>
                     </tr>
@@ -506,7 +519,7 @@ ${tableHTML}
                 </tbody>
                 <tfoot className="bg-gray-50 border-t-2 border-gray-200 sticky bottom-0">
                   <tr>
-                    <td colSpan={3} className="px-4 py-2 font-bold text-gray-700 text-xs">合計</td>
+                    <td colSpan={4} className="px-4 py-2 font-bold text-gray-700 text-xs">合計</td>
                     <td className="px-3 py-2 text-right font-bold font-mono text-xs text-gray-800">{fmtMinutes(detailRow.total_minutes)}</td>
                     <td></td>
                   </tr>
