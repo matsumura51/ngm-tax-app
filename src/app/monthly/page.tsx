@@ -669,6 +669,9 @@ function MonthlyContent() {
   const divisionOptions = Array.from(new Set(allUsers.map(u => u.division).filter(Boolean))).sort() as string[]
   const staffInDivision = filterDivision ? allUsers.filter(u => u.division === filterDivision).map(u => u.name) : null
   const staffOptions = Array.from(new Set(clients.map(c => c.primary_staff).filter(s => !staffInDivision || staffInDivision.includes(s || '')).filter(Boolean))).sort()
+  const fiscalOrder = (fm: number | null | undefined) =>
+    fm === null || fm === undefined || fm === 0 ? 13 : fm
+
   const filtered = clients.filter(c => {
     if (search && !c.name.includes(search) && !c.code.includes(search)) return false
     if (filterDivision && staffInDivision && !staffInDivision.includes(c.primary_staff || '')) return false
@@ -678,6 +681,11 @@ function MonthlyContent() {
       if (c.fiscal_month !== fm) return false
     }
     return true
+  }).sort((a, b) => {
+    const fa = fiscalOrder(a.fiscal_month)
+    const fb = fiscalOrder(b.fiscal_month)
+    if (fa !== fb) return fa - fb
+    return a.code.localeCompare(b.code)
   })
   const currentMonth = new Date().getMonth() + 1
 
