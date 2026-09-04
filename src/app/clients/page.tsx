@@ -132,9 +132,10 @@ export default function ClientsPage() {
   const staffInDivision = filterDivision ? allUsers.filter(u => u.division === filterDivision).map(u => u.name) : null
   const staffOptions = Array.from(new Set(clients.map(c => c.primary_staff).filter(s => !staffInDivision || staffInDivision.includes(s || '')).filter(Boolean))).sort() as string[]
 
+  const norm = (s: string) => s.normalize('NFKC').toLowerCase()
   const filtered = clients.filter(c => {
     if (!showAll && (c.contract_end_date || c.contract_status === '契約終了')) return false
-    if (search && !c.name.includes(search) && !c.code.includes(search)) return false
+    if (search && !norm(c.name).includes(norm(search)) && !norm(c.code).includes(norm(search))) return false
     if (filterDivision && staffInDivision && !staffInDivision.includes(c.primary_staff || '')) return false
     if (staffFilter && c.primary_staff !== staffFilter) return false
     if (fiscalFilter !== '') {

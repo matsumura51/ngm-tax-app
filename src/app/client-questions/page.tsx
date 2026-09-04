@@ -32,7 +32,7 @@ export default function ClientQuestionsPage() {
     setSelectedIds(new Set())
     const supabase = createClient()
     let q = supabase.from('client_questions').select('*').order('question_date', { ascending: false }).limit(200)
-    const cn = params?.clientName ?? clientName
+    const cn = (params?.clientName ?? clientName).normalize('NFKC')
     const st = params?.status ?? status
     const ca = params?.category ?? category
     const df = params?.dateFrom ?? dateFrom

@@ -38,7 +38,7 @@ export default function ClientChecksPage() {
     setLoading(true)
     const supabase = createClient()
     let q = supabase.from('client_checks').select('*').order('check_date', { ascending: false }).limit(200)
-    const cn = params?.clientName ?? clientName
+    const cn = (params?.clientName ?? clientName).normalize('NFKC')
     const st = params?.status ?? status
     const ca = params?.category ?? category
     const tp = params?.type ?? type

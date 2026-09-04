@@ -672,8 +672,9 @@ function MonthlyContent() {
   const fiscalOrder = (fm: number | null | undefined) =>
     fm === null || fm === undefined || fm === 0 ? 13 : fm
 
+  const norm = (s: string) => s.normalize('NFKC').toLowerCase()
   const filtered = clients.filter(c => {
-    if (search && !c.name.includes(search) && !c.code.includes(search)) return false
+    if (search && !norm(c.name).includes(norm(search)) && !norm(c.code).includes(norm(search))) return false
     if (filterDivision && staffInDivision && !staffInDivision.includes(c.primary_staff || '')) return false
     if (filterStaff && c.primary_staff !== filterStaff) return false
     if (filterFiscalMonth !== '') {
