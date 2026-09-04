@@ -53,6 +53,7 @@ interface WorkEntry {
   report_id: string
   subject: string | null
   details: string | null
+  entry_fee: number  // 処理月の報酬
 }
 
 interface ClientRow {
@@ -164,16 +165,29 @@ export default function ReportsPage() {
       entries.sort((a, b) => a.date.localeCompare(b.date))
     }
 
-    // monthly_progressから当月報酬を取得
+    // monthly_progressから全年度の報酬を取得（処理月の報酬を参照するため全年度が必要）
     const { data: progress } = await supabase
       .from('monthly_progress')
-      .select('client_code, monthly_fee')
-      .eq('year', year)
+      .select('client_code, monthly_fee, year')
 
-    const feeMap: Record<string, number> = {}
+    // feeByMonth[client_code]['YYYY-M'] = fee
+    const feeByMonth: Record<string, Record<string, number>> = {}
     for (const p of (progress || [])) {
-      const fee = (p.monthly_fee || {})[monthStr]
-      if (fee) feeMap[p.client_code] = Number(String(fee).replace(/[^0-9]/g, ''))
+      if (!feeByMonth[p.client_code]) feeByMonth[p.client_code] = {}
+      for (const [m, f] of Object.entries(p.monthly_fee || {})) {
+        if (f) feeByMonth[p.client_code][`${p.year}-${m}`] = Number(String(f).replace(/[^0-9]/g, ''))
+      }
+    }
+    // 処理月（subject: 'YYYY-MM'）から報酬を取得。未入力の場合はレポート月の報酬にフォールバック
+    const getSubjectFee = (code: string, subject: string | null): number => {
+      if (subject) {
+        const parts = subject.split('-').map(Number)
+        if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+          const fee = feeByMonth[code]?.[`${parts[0]}-${parts[1]}`]
+          if (fee) return fee
+        }
+      }
+      return feeByMonth[code]?.[`${year}-${monthStr}`] || 0
     }
 
     // WorkEntryを組み立て（当月の日報に紐づくものだけ）
@@ -190,8 +204,20 @@ export default function ReportsPage() {
         report_id: d.report_id,
         subject: d.subject || null,
         details: d.details || null,
+        entry_fee: getSubjectFee(d.client_code!, d.subject || null),  // 処理月の報酬
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
+
+    // 表示用：顧客ごとに加重平均報酬（処理月の報酬を時間×月数で加重）
+    const clientDisplayFeeSum: Record<string, number> = {}
+    const clientDisplayFeeWeight: Record<string, number> = {}
+    for (const e of entries) {
+      const w = e.work_minutes * monthSpan(e.subject, e.details)
+      clientDisplayFeeSum[e.client_code] = (clientDisplayFeeSum[e.client_code] || 0) + e.entry_fee * w
+      clientDisplayFeeWeight[e.client_code] = (clientDisplayFeeWeight[e.client_code] || 0) + w
+    }
+    const clientDisplayFee = (code: string) =>
+      clientDisplayFeeWeight[code] > 0 ? clientDisplayFeeSum[code] / clientDisplayFeeWeight[code] : 0
 
     // クライアントごとに集計
     const clientMap: Record<string, ClientRow> = {}
@@ -200,7 +226,7 @@ export default function ReportsPage() {
         clientMap[e.client_code] = {
           client_code: e.client_code,
           client_name: e.client_name,
-          monthly_fee: feeMap[e.client_code] || 0,
+          monthly_fee: clientDisplayFee(e.client_code),  // 処理月の加重平均報酬
           total_minutes: 0,
           task_minutes: {},
           staff_alloc: {},
@@ -216,45 +242,47 @@ export default function ReportsPage() {
       row.entries.push(e)
     }
 
-    // 報酬配分を計算（処理月数を考慮・合計を月額報酬でキャップ）
+    // 報酬配分を計算（処理月の報酬を使用・合計を加重平均報酬でキャップ）
     for (const row of Object.values(clientMap)) {
-      const fee = row.monthly_fee
-      if (fee === 0) continue
+      if (row.monthly_fee === 0) continue
 
-      // task_typeごとにグループ化（処理月数を含む）
-      const byTask: Record<string, { user: string; mins: number; subject: string | null; details: string | null }[]> = {}
+      // task_typeごとにグループ化（entry_fee込み）
+      const byTask: Record<string, { user: string; mins: number; subject: string | null; details: string | null; entry_fee: number }[]> = {}
       for (const e of entries.filter(e => e.client_code === row.client_code)) {
         const tt = e.task_type || 'その他'
         if (!byTask[tt]) byTask[tt] = []
-        byTask[tt].push({ user: e.user_name, mins: e.work_minutes, subject: e.subject, details: e.details })
+        byTask[tt].push({ user: e.user_name, mins: e.work_minutes, subject: e.subject, details: e.details, entry_fee: e.entry_fee })
       }
 
-      // 各タスクの生プール（処理月数で乗算）を計算
+      // 各タスクの生プール（処理月の報酬×月数で計算）
       const rawPools: Record<string, number> = {}
       for (const [taskType, alloc] of Object.entries(TASK_ALLOC)) {
         const taskEntries = byTask[taskType] || []
         if (taskEntries.length === 0) continue
         if (alloc.splitBy === 'time') {
-          // 時間×月数で加重平均
-          const totalWeighted = taskEntries.reduce((s, e) => s + e.mins * monthSpan(e.subject, e.details), 0)
+          // entry_fee × 月数 × 時間 の加重和 / 総時間
+          const totalWeightedFee = taskEntries.reduce((s, e) => s + e.entry_fee * e.mins * monthSpan(e.subject, e.details), 0)
           const totalMins = taskEntries.reduce((s, e) => s + e.mins, 0)
-          const avgMonths = totalMins > 0 ? totalWeighted / totalMins : 1
-          rawPools[taskType] = fee * alloc.rate * avgMonths
+          rawPools[taskType] = totalMins > 0 ? alloc.rate * totalWeightedFee / totalMins : 0
         } else {
-          // 担当者ごとに最大月数を取り、平均で乗算
-          const personMonths: Record<string, number> = {}
+          // 担当者ごとに entry_fee × 最大月数
+          const personData: Record<string, { months: number; fee: number }> = {}
           for (const e of taskEntries) {
             const ms = monthSpan(e.subject, e.details)
-            personMonths[e.user] = Math.max(personMonths[e.user] || 0, ms)
+            if (!personData[e.user] || ms > personData[e.user].months) {
+              personData[e.user] = { months: ms, fee: e.entry_fee }
+            }
           }
-          const avgMonths = Object.values(personMonths).reduce((s, m) => s + m, 0) / Object.keys(personMonths).length
-          rawPools[taskType] = fee * alloc.rate * avgMonths
+          const totalFeeMonths = Object.values(personData).reduce((s, p) => s + p.fee * p.months, 0)
+          const numPersons = Object.keys(personData).length
+          rawPools[taskType] = numPersons > 0 ? alloc.rate * totalFeeMonths / numPersons : 0
         }
       }
 
-      // 合計が月額報酬を超えないよう正規化
+      // 合計が加重平均報酬を超えないよう正規化
+      const capFee = row.monthly_fee
       const totalRaw = Object.values(rawPools).reduce((s, v) => s + v, 0)
-      const normFactor = totalRaw > fee ? fee / totalRaw : 1
+      const normFactor = totalRaw > capFee ? capFee / totalRaw : 1
 
       // 配分を実行
       for (const [taskType, alloc] of Object.entries(TASK_ALLOC)) {
@@ -263,21 +291,23 @@ export default function ReportsPage() {
         const pool = (rawPools[taskType] || 0) * normFactor
 
         if (alloc.splitBy === 'time') {
-          const totalWeighted = taskEntries.reduce((s, e) => s + e.mins * monthSpan(e.subject, e.details), 0)
+          const totalWeightedFee = taskEntries.reduce((s, e) => s + e.entry_fee * e.mins * monthSpan(e.subject, e.details), 0)
           for (const e of taskEntries) {
-            const w = e.mins * monthSpan(e.subject, e.details)
-            const share = totalWeighted > 0 ? (w / totalWeighted) * pool : pool / taskEntries.length
+            const w = e.entry_fee * e.mins * monthSpan(e.subject, e.details)
+            const share = totalWeightedFee > 0 ? (w / totalWeightedFee) * pool : pool / taskEntries.length
             row.staff_alloc[e.user] = (row.staff_alloc[e.user] || 0) + share
           }
         } else {
-          const personMonths: Record<string, number> = {}
+          const personData: Record<string, { months: number; fee: number }> = {}
           for (const e of taskEntries) {
             const ms = monthSpan(e.subject, e.details)
-            personMonths[e.user] = Math.max(personMonths[e.user] || 0, ms)
+            if (!personData[e.user] || ms > personData[e.user].months) {
+              personData[e.user] = { months: ms, fee: e.entry_fee }
+            }
           }
-          const totalPersonMonths = Object.values(personMonths).reduce((s, m) => s + m, 0)
-          for (const [user, months] of Object.entries(personMonths)) {
-            const share = totalPersonMonths > 0 ? (months / totalPersonMonths) * pool : pool / Object.keys(personMonths).length
+          const totalFeeMonths = Object.values(personData).reduce((s, p) => s + p.fee * p.months, 0)
+          for (const [user, data] of Object.entries(personData)) {
+            const share = totalFeeMonths > 0 ? (data.fee * data.months / totalFeeMonths) * pool : pool / Object.keys(personData).length
             row.staff_alloc[user] = (row.staff_alloc[user] || 0) + share
           }
         }
