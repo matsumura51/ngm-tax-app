@@ -814,13 +814,17 @@ function MonthlyContent() {
                       MONTHLY_FIELDS.map((f, fi) => {
                         const val = getMonthVal(c.code, f.key, m, f.type === 'date')
                         const isCur = String(currentMonth) === m
+                        const isFiscal = !!c.fiscal_month && parseInt(m) === c.fiscal_month
                         const isFee = f.key === 'monthly_fee'
+                        const bgClass = isFiscal && isCur ? 'bg-purple-100'
+                          : isFiscal ? 'bg-blue-100'
+                          : isCur ? 'bg-pink-50' : ''
                         return (
                           <td key={`${m}-${f.key}`}
                             onClick={() => openMonthModal(c, parseInt(m))}
                             className={`px-1 py-2 text-center cursor-pointer hover:bg-blue-50 transition text-[11px] ${
-                              fi === 0 ? 'border-l border-gray-200' : ''
-                            } ${isCur ? 'bg-pink-50' : ''} ${isFee && val ? 'text-green-700 font-medium' : 'text-gray-700'}`}>
+                              fi === 0 ? (isFiscal ? 'border-l-2 border-blue-400' : 'border-l border-gray-200') : ''
+                            } ${bgClass} ${isFee && val ? 'text-green-700 font-medium' : 'text-gray-700'}`}>
                             {val}
                           </td>
                         )
