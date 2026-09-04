@@ -20,15 +20,19 @@ function calcWorkTime(start: string, end: string): string {
   return `${Math.floor(diff / 60)}:${(diff % 60).toString().padStart(2, '0')}`
 }
 
-function sumWorkTimes(rows: { work_time: string | null | undefined }[]): string {
-  let total = 0
-  for (const r of rows) {
-    const parts = (r.work_time || '').split(':')
-    if (parts.length === 2) {
-      const h = parseInt(parts[0]), m = parseInt(parts[1])
-      if (!isNaN(h) && !isNaN(m)) total += h * 60 + m
-    }
+function workTimeToMinutes(s: string | null | undefined): number {
+  if (!s) return 0
+  const str = String(s)
+  if (str.includes(':')) {
+    const [h, m] = str.split(':').map(Number)
+    return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m)
   }
+  const val = parseFloat(str)
+  if (isNaN(val)) return 0
+  return Math.floor(val) * 60 + Math.round((val - Math.floor(val)) * 100)
+}
+function sumWorkTimes(rows: { work_time: string | null | undefined }[]): string {
+  const total = rows.reduce((s, r) => s + workTimeToMinutes(r.work_time), 0)
   if (total === 0) return ''
   return `${Math.floor(total / 60)}:${(total % 60).toString().padStart(2, '0')}`
 }

@@ -14,8 +14,18 @@ const TASK_ALLOC: Record<string, { rate: number; splitBy: 'time' | 'person' }> =
 
 function toMinutes(s: string | null | undefined): number {
   if (!s) return 0
-  const [h, m] = s.split(':').map(Number)
-  return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m)
+  const str = String(s)
+  if (str.includes(':')) {
+    // "H:MM" 形式
+    const [h, m] = str.split(':').map(Number)
+    return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m)
+  }
+  // "H.MM" 小数形式（0.3=30分, 0.15=15分, 1.3=1時間30分）
+  const val = parseFloat(str)
+  if (isNaN(val)) return 0
+  const hours = Math.floor(val)
+  const mins = Math.round((val - hours) * 100)
+  return hours * 60 + mins
 }
 
 function fmtMinutes(m: number): string {
