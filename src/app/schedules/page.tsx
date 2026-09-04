@@ -16,6 +16,7 @@ type ViewMode = '月間' | '週間' | '日間'
 
 // kintone風カラー
 const COLOR_MAP: Record<string, { bg: string; text: string }> = {
+  '出勤':         { bg: '#26a69a', text: '#fff' },
   '外出':         { bg: '#e57373', text: '#fff' },
   '来客（顧問先）': { bg: '#64b5f6', text: '#fff' },
   '来客（業者）':  { bg: '#4fc3f7', text: '#fff' },
