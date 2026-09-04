@@ -299,7 +299,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
                 <th className="px-2 py-2 text-left w-20">終了</th>
                 <th className="px-2 py-2 text-left w-20">時間</th>
                 <th className="px-2 py-2 text-left w-28">業務区分</th>
-                <th className="px-2 py-2 text-left w-52">処理期間</th>
+                <th className="px-2 py-2 text-left w-36">処理期間</th>
                 <th className="px-2 py-2 text-left w-16">顧客コード</th>
                 <th className="px-2 py-2 text-left w-36">顧客名</th>
                 <th className="px-2 py-2 text-left">作業内容</th>
