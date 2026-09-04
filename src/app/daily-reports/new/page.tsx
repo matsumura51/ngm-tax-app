@@ -333,7 +333,7 @@ export default function DailyReportNewPage() {
                       onBlur={() => setTimeout(() => setSuggestions(null), 150)} />
                   </td>
                   <td className="px-1 py-1">
-                    <input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.report_content || ''} onChange={e => setDetail(i, 'report_content', e.target.value)} />
+                    <textarea rows={2} className="w-full border border-gray-200 rounded px-1 py-1 text-xs resize-y" value={d.report_content || ''} onChange={e => setDetail(i, 'report_content', e.target.value)} />
                   </td>
                   <td className="px-1 py-1">
                     {details.length > 1 && (

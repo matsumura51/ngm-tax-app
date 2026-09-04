@@ -327,7 +327,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
                   </td>
                   <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_code || ''} onChange={e => onClientCodeChange(i, e.target.value)} /></td>
                   <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_name || ''} onChange={e => onClientNameChange(i, e)} onBlur={() => setTimeout(() => setSuggestions(null), 150)} /></td>
-                  <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.report_content || ''} onChange={e => setRow(i, 'report_content', e.target.value)} /></td>
+                  <td className="px-1 py-1"><textarea rows={2} className="w-full border border-gray-200 rounded px-1 py-1 text-xs resize-y" value={d.report_content || ''} onChange={e => setRow(i, 'report_content', e.target.value)} /></td>
                   <td className="px-1 py-1">
                     <button onClick={() => setDetails(d => d.filter((_, idx) => idx !== i))} className="text-gray-300 hover:text-red-400">
                       <Trash2 size={14} />
