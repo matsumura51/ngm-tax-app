@@ -259,7 +259,7 @@ function SchedulesContent() {
                           <Link key={s.id} href={`/schedules/${s.id}`}>
                             <div className={`text-xs px-1.5 py-1 rounded leading-snug hover:opacity-80 transition ${isCompanionEvent ? 'ring-1 ring-white/60' : ''}`}
                               style={colorStyle(s.color)}>
-                              <div className="opacity-80 text-[10px] font-medium whitespace-nowrap">
+                              <div className="opacity-90 text-xs font-bold whitespace-nowrap">
                                 {formatTime(s.start_datetime)}{s.end_datetime ? ` - ${formatTime(s.end_datetime)}` : ''}
                                 {s.break_minutes ? <span className="ml-1 opacity-70">休{s.break_minutes}分</span> : null}
                               </div>
@@ -269,7 +269,7 @@ function SchedulesContent() {
                                   {s.user_name}{comps.length > 0 ? `・${comps.join('・')}` : ''}
                                 </div>
                               )}
-                              <div className="truncate text-[11px]">{s.title}</div>
+                              <div className="truncate text-[9px] opacity-70">{s.title}</div>
                             </div>
                           </Link>
                         )
@@ -343,7 +343,7 @@ function SchedulesContent() {
                           <Link key={s.id} href={`/schedules/${s.id}`}>
                             <div className={`text-xs px-1.5 py-1 rounded leading-snug hover:opacity-80 transition ${isCompanionEvent ? 'ring-1 ring-white/60' : ''}`}
                               style={colorStyle(s.color)}>
-                              <div className="opacity-80 text-[10px] font-medium whitespace-nowrap">
+                              <div className="opacity-90 text-xs font-bold whitespace-nowrap">
                                 {formatTime(s.start_datetime)}{s.end_datetime ? ` - ${formatTime(s.end_datetime)}` : ''}
                                 {breakMin ? <span className="ml-1 opacity-70">休{breakMin}分</span> : null}
                               </div>
@@ -353,11 +353,11 @@ function SchedulesContent() {
                                   {s.user_name}{comps.length > 0 ? `・${comps.join('・')}` : ''}
                                 </div>
                               )}
-                              <div className="truncate text-[11px]">{s.title}</div>
+                              <div className="truncate text-[9px] opacity-70">{s.title}</div>
                               {facs.length > 0 && (
                                 <div className="flex flex-wrap gap-0.5 mt-0.5">
                                   {facs.map(f => (
-                                    <span key={f} className={`text-[7px] px-0.5 rounded leading-none font-medium ${FACILITY_COLOR[f] || 'bg-gray-200 text-gray-600'}`}>{f}</span>
+                                    <span key={f} className={`text-[10px] px-1 py-0.5 rounded font-medium ${FACILITY_COLOR[f] || 'bg-gray-200 text-gray-600'}`}>{f}</span>
                                   ))}
                                 </div>
                               )}
@@ -400,7 +400,7 @@ function SchedulesContent() {
                               style={colorStyle(s.color)}>
                               <div className="opacity-80 text-[10px] font-medium">{formatTime(s.start_datetime)}{s.end_datetime ? `-${formatTime(s.end_datetime)}` : ''}</div>
                               <div className="truncate font-bold text-[11px]">{s.user_name}</div>
-                              <div className="truncate text-[11px] opacity-90">{s.title}</div>
+                              <div className="truncate text-[9px] opacity-70">{s.title}</div>
                             </div>
                           </Link>
                         ))
@@ -480,7 +480,7 @@ function SchedulesContent() {
                         {isCompanionEvent && <span className="opacity-70 font-normal">同行: </span>}
                         {s.user_name}{comps.length > 0 ? `・${comps.join('・')}` : ''}
                       </div>
-                      <div className="truncate text-[11px]">{s.title}</div>
+                      <div className="truncate text-[9px] opacity-70">{s.title}</div>
                       {facilities.length > 0 && (
                         <div className="flex flex-wrap gap-0.5 mt-0.5">
                           {facilities.map(f => (
@@ -535,9 +535,9 @@ function SchedulesContent() {
                       title={`${s.user_name} ${formatTime(s.start_datetime)}-${s.end_datetime ? formatTime(s.end_datetime) : ''}`}
                       className="absolute top-1 bottom-1 rounded text-xs overflow-hidden px-1.5 py-1 leading-snug hover:opacity-80 transition"
                       style={{ left: `${left}%`, width: `${width}%`, ...colorStyle(s.color) }}>
-                      <div className="opacity-80 text-[10px] font-medium whitespace-nowrap">{formatTime(s.start_datetime)}{s.end_datetime ? `-${formatTime(s.end_datetime)}` : ''}</div>
+                      <div className="opacity-90 text-xs font-bold whitespace-nowrap">{formatTime(s.start_datetime)}{s.end_datetime ? `-${formatTime(s.end_datetime)}` : ''}</div>
                       <div className="truncate font-bold text-[11px]">{s.user_name}</div>
-                      <div className="truncate text-[11px] opacity-90">{s.title}</div>
+                      <div className="truncate text-[9px] opacity-70">{s.title}</div>
                     </Link>
                   )
                 })}
