@@ -97,6 +97,7 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<FormData>(emptyForm())
   const [saving, setSaving] = useState(false)
+  const [focusedCell, setFocusedCell] = useState<string | null>(null)
 
   useEffect(() => { load() }, [year, clientId])
 
@@ -431,7 +432,9 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
                           </td>
                           <td className="px-1 py-0.5">
                             <input className="border border-gray-200 rounded px-2 py-1 text-xs text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
-                              value={fmtAmt(form.monthly[String(m)]?.amount || '')}
+                              value={focusedCell === `${m}-amount` ? (form.monthly[String(m)]?.amount || '') : fmtAmt(form.monthly[String(m)]?.amount || '')}
+                              onFocus={() => setFocusedCell(`${m}-amount`)}
+                              onBlur={() => setFocusedCell(null)}
                               onChange={e => setMonth(String(m), 'amount', sanitizeAmt(e.target.value))}
                               placeholder="0" />
                           </td>
@@ -452,7 +455,9 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
                       onChange={e => setForm(f => ({ ...f, renewal_date: zen2han(e.target.value) }))}
                       placeholder="支払日" />
                     <input className="border border-gray-300 rounded px-2 py-1 text-sm flex-1 text-right focus:outline-none focus:ring-1 focus:ring-blue-400"
-                      value={fmtAmt(form.renewal_amount)}
+                      value={focusedCell === 'renewal_amount' ? form.renewal_amount : fmtAmt(form.renewal_amount)}
+                      onFocus={() => setFocusedCell('renewal_amount')}
+                      onBlur={() => setFocusedCell(null)}
                       onChange={e => setForm(f => ({ ...f, renewal_amount: sanitizeAmt(e.target.value) }))}
                       placeholder="0" />
                   </div>
@@ -465,7 +470,9 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
                       onChange={e => setForm(f => ({ ...f, key_money_date: zen2han(e.target.value) }))}
                       placeholder="支払日" />
                     <input className="border border-gray-300 rounded px-2 py-1 text-sm flex-1 text-right focus:outline-none focus:ring-1 focus:ring-blue-400"
-                      value={fmtAmt(form.key_money_amount)}
+                      value={focusedCell === 'key_money_amount' ? form.key_money_amount : fmtAmt(form.key_money_amount)}
+                      onFocus={() => setFocusedCell('key_money_amount')}
+                      onBlur={() => setFocusedCell(null)}
                       onChange={e => setForm(f => ({ ...f, key_money_amount: sanitizeAmt(e.target.value) }))}
                       placeholder="0" />
                   </div>

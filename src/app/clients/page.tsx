@@ -26,8 +26,12 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [allUsers, setAllUsers] = useState<{ name: string; division: string | null }[]>([])
   const [search, setSearch] = useState('')
-  const [staffFilter, setStaffFilter] = useState('')
-  const [filterDivision, setFilterDivision] = useState('')
+  const [staffFilter, setStaffFilter] = useState(() => {
+    try { return sessionStorage.getItem('clients_staffFilter') ?? '' } catch { return '' }
+  })
+  const [filterDivision, setFilterDivision] = useState(() => {
+    try { return sessionStorage.getItem('clients_filterDivision') ?? '' } catch { return '' }
+  })
   const [fiscalFilter, setFiscalFilter] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -37,6 +41,8 @@ export default function ClientsPage() {
   const isFirstLoad = useRef(true)
 
   useEffect(() => { load() }, [])
+  useEffect(() => { try { sessionStorage.setItem('clients_staffFilter', staffFilter) } catch {} }, [staffFilter])
+  useEffect(() => { try { sessionStorage.setItem('clients_filterDivision', filterDivision) } catch {} }, [filterDivision])
 
   async function load() {
     setLoading(true)
@@ -48,13 +54,16 @@ export default function ClientsPage() {
     ])
     setClients(clientsData || [])
     setAllUsers(usersData || [])
-    // 初回ロード時のみログイン中の担当者でデフォルトフィルター
+    // 初回ロード時のみログイン中の担当者でデフォルトフィルター（sessionStorageに保存済みの場合はスキップ）
     if (isFirstLoad.current) {
       isFirstLoad.current = false
-      const currentUser = authResult.data.user
-      if (currentUser) {
-        const { data: me } = await supabase.from('users').select('name').eq('id', currentUser.id).maybeSingle()
-        if (me?.name) setStaffFilter(me.name)
+      const hasSaved = (() => { try { return sessionStorage.getItem('clients_staffFilter') !== null } catch { return false } })()
+      if (!hasSaved) {
+        const currentUser = authResult.data.user
+        if (currentUser) {
+          const { data: me } = await supabase.from('users').select('name').eq('id', currentUser.id).maybeSingle()
+          if (me?.name) setStaffFilter(me.name)
+        }
       }
     }
     setSelectedIds(new Set())

@@ -96,6 +96,7 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<FormData>(emptyForm())
   const [saving, setSaving] = useState(false)
+  const [focusedCell, setFocusedCell] = useState<string | null>(null)
   const [taxFeeMonthly, setTaxFeeMonthly] = useState<Record<string, number>>({})
   const [taxFeeTotal, setTaxFeeTotal] = useState(0)
 
@@ -579,7 +580,9 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
                             </td>
                             <td className="px-1 py-0.5">
                               <input className="border border-gray-200 rounded px-1.5 py-1 text-xs text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                value={fmtAmt(form.monthly[String(m)]?.gross || '')}
+                                value={focusedCell === `${m}-gross` ? (form.monthly[String(m)]?.gross || '') : fmtAmt(form.monthly[String(m)]?.gross || '')}
+                                onFocus={() => setFocusedCell(`${m}-gross`)}
+                                onBlur={() => setFocusedCell(null)}
                                 onChange={e => setMonth(String(m), 'gross', sanitizeAmt(e.target.value))}
                                 placeholder="0" />
                             </td>
@@ -590,9 +593,10 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
                                 </div>
                               ) : (
                                 <input className="border border-gray-200 rounded px-1.5 py-1 text-xs text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-400 text-red-600"
-                                  value={fmtAmt(form.monthly[String(m)]?.tax || '')}
+                                  value={focusedCell === `${m}-tax` ? (form.monthly[String(m)]?.tax || '') : fmtAmt(form.monthly[String(m)]?.tax || '')}
+                                  onFocus={() => { setFocusedCell(`${m}-tax`); autoCalcTax(String(m)) }}
+                                  onBlur={() => setFocusedCell(null)}
                                   onChange={e => setMonth(String(m), 'tax', sanitizeAmt(e.target.value))}
-                                  onFocus={() => autoCalcTax(String(m))}
                                   placeholder="0" />
                               )}
                             </td>
