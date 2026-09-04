@@ -76,7 +76,7 @@ function minutesToPct(min: number) {
   return Math.max(0, Math.min(100, ((min - 480) / 660) * 100)) // 8:00~19:00 = 660min
 }
 
-interface UserInfo { id: string; name: string }
+interface UserInfo { id: string; name: string; division: string | null }
 interface Report { user_id: string; date: string }
 
 function SchedulesContent() {
@@ -92,6 +92,7 @@ function SchedulesContent() {
   const [facilityFilter, setFacilityFilter] = useState<string | null>(null)
   const [users, setUsers] = useState<UserInfo[]>([])
   const [selectedUserId, setSelectedUserId] = useState<string>('all')
+  const [selectedDivision, setSelectedDivision] = useState<string>('all')
   const [currentUserId, setCurrentUserId] = useState<string>('')
 
   const year = viewDate.getFullYear()
@@ -110,7 +111,7 @@ function SchedulesContent() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (user) { setCurrentUserId(user.id); setSelectedUserId(user.id) }
-    const { data } = await supabase.from('users').select('id, name, leave_date, code').order('code')
+    const { data } = await supabase.from('users').select('id, name, leave_date, code, division').order('code')
     setUsers((data || []).filter((u: { leave_date: string | null }) => !u.leave_date))
   }
 
@@ -167,7 +168,9 @@ function SchedulesContent() {
     })
   }
 
-  const displayUsers = (selectedUserId === 'all' ? users : users.filter(u => u.id === selectedUserId))
+  const divisionOptions = Array.from(new Set(users.map(u => u.division).filter(Boolean))).sort() as string[]
+  const usersInDivision = selectedDivision === 'all' ? users : users.filter(u => u.division === selectedDivision)
+  const displayUsers = (selectedUserId === 'all' ? usersInDivision : usersInDivision.filter(u => u.id === selectedUserId))
     .slice()
     .sort((a, b) => {
       if (a.id === currentUserId) return -1
@@ -554,13 +557,23 @@ function SchedulesContent() {
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-gray-800">スケジュール</h1>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* チーム選択 */}
+          {divisionOptions.length > 0 && (
+            <select
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={selectedDivision}
+              onChange={e => { setSelectedDivision(e.target.value); setSelectedUserId('all') }}>
+              <option value="all">全チーム</option>
+              {divisionOptions.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
           {/* ユーザー選択 */}
           <select
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={selectedUserId}
             onChange={e => setSelectedUserId(e.target.value)}>
             <option value="all">全員</option>
-            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            {usersInDivision.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
           {/* ビュー切替 */}
           <div className="flex border border-gray-200 rounded-lg overflow-hidden text-sm">
