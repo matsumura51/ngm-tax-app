@@ -152,7 +152,7 @@ function SchedulesContent() {
     return reports.some(r => r.user_id === userId && r.date === dateStr)
   }
 
-  function daySchedules(date: Date, userId?: string): Schedule[] {
+  function daySchedules(date: Date, userId?: string, divisionUserIds?: Set<string> | null): Schedule[] {
     const ds = toDateStr(date)
     const userName = userId ? users.find(u => u.id === userId)?.name : undefined
     return schedules.filter(s => {
@@ -162,6 +162,8 @@ function SchedulesContent() {
         const companionNames = s.companions ? s.companions.split(',').map(c => c.trim()) : []
         const isCompanion = !!userName && companionNames.includes(userName)
         if (!isOwner && !isCompanion) return false
+      } else if (divisionUserIds) {
+        if (!divisionUserIds.has(s.user_id)) return false
       }
       if (facilityFilter && !s.facility?.split(',').map(f => f.trim()).includes(facilityFilter)) return false
       return true
@@ -214,7 +216,8 @@ function SchedulesContent() {
           {weeks.flat().map((d, i) => {
             const date = d ? new Date(year, month, d) : null
             const isToday = date ? toDateStr(date) === toDateStr(today) : false
-            const scheds = date ? daySchedules(date, selectedUserId !== 'all' ? selectedUserId : undefined) : []
+            const divisionUserIds = selectedDivision !== 'all' ? new Set(usersInDivision.map(u => u.id)) : null
+            const scheds = date ? daySchedules(date, selectedUserId !== 'all' ? selectedUserId : undefined, divisionUserIds) : []
             const ds = date ? toDateStr(date) : ''
             const dayOfWeek = i % 7
             const holiday = date ? getHolidayName(date) : null
