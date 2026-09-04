@@ -786,7 +786,7 @@ function MonthlyContent() {
                 <th className={`${thH1} w-20 border-r border-purple-600`} rowSpan={2}>主担当</th>
                 {MONTHS.map(m => (
                   <th key={m} colSpan={6}
-                    className={`${thH1} border-l border-purple-600 ${String(currentMonth) === m ? '!bg-[#8b2252]' : ''}`}>
+                    className={`${thH1} border-l border-purple-600`}>
                     {m}月分
                   </th>
                 ))}
@@ -796,7 +796,7 @@ function MonthlyContent() {
                 {MONTHS.map(m => (
                   MONTHLY_FIELDS.map(f => (
                     <th key={`${m}-${f.key}`}
-                      className={`${thH2} min-w-[3rem] border-l border-purple-500 ${String(currentMonth) === m ? '!bg-[#a03268]' : ''}`}>
+                      className={`${thH2} min-w-[3rem] border-l border-purple-500`}>
                       {f.label}
                     </th>
                   ))
@@ -821,12 +821,9 @@ function MonthlyContent() {
                     {MONTHS.map(m => (
                       MONTHLY_FIELDS.map((f, fi) => {
                         const val = getMonthVal(c.code, f.key, m, f.type === 'date')
-                        const isCur = String(currentMonth) === m
                         const isFiscal = !!c.fiscal_month && parseInt(m) === c.fiscal_month
                         const isFee = f.key === 'monthly_fee'
-                        const bgClass = isFiscal && isCur ? 'bg-purple-100'
-                          : isFiscal ? 'bg-blue-100'
-                          : isCur ? 'bg-pink-50' : ''
+                        const bgClass = isFiscal ? 'bg-blue-100' : ''
                         return (
                           <td key={`${m}-${f.key}`}
                             onClick={() => openMonthModal(c, parseInt(m))}
