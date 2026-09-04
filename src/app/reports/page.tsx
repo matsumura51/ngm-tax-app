@@ -178,7 +178,7 @@ export default function ReportsPage() {
         if (f) feeByMonth[p.client_code][`${p.year}-${m}`] = Number(String(f).replace(/[^0-9]/g, ''))
       }
     }
-    // 処理月（subject: 'YYYY-MM'）から報酬を取得。未入力の場合はレポート月の報酬にフォールバック
+    // 処理月（subject: 'YYYY-MM'）から報酬を取得。見つからない場合はレポート月→任意月の順でフォールバック
     const getSubjectFee = (code: string, subject: string | null): number => {
       if (subject) {
         const parts = subject.split('-').map(Number)
@@ -187,7 +187,11 @@ export default function ReportsPage() {
           if (fee) return fee
         }
       }
-      return feeByMonth[code]?.[`${year}-${monthStr}`] || 0
+      const reportMonthFee = feeByMonth[code]?.[`${year}-${monthStr}`]
+      if (reportMonthFee) return reportMonthFee
+      // 当月データなし → 登録済みの非ゼロ最大値を使用
+      const allFees = Object.values(feeByMonth[code] || {}).filter(f => f > 0)
+      return allFees.length > 0 ? Math.max(...allFees) : 0
     }
 
     // WorkEntryを組み立て（当月の日報に紐づくものだけ）
@@ -208,16 +212,15 @@ export default function ReportsPage() {
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
-    // 表示用：顧客ごとに加重平均報酬（処理月の報酬を時間×月数で加重）
-    const clientDisplayFeeSum: Record<string, number> = {}
-    const clientDisplayFeeWeight: Record<string, number> = {}
-    for (const e of entries) {
-      const w = e.work_minutes * monthSpan(e.subject, e.details)
-      clientDisplayFeeSum[e.client_code] = (clientDisplayFeeSum[e.client_code] || 0) + e.entry_fee * w
-      clientDisplayFeeWeight[e.client_code] = (clientDisplayFeeWeight[e.client_code] || 0) + w
+    // 表示用：当月の月次報酬を直接参照（加重平均は0費用のエントリで歪む）
+    const clientDisplayFee = (code: string): number => {
+      const thisMonth = feeByMonth[code]?.[`${year}-${monthStr}`]
+      if (thisMonth) return thisMonth
+      // 当月データなし → エントリの非ゼロentry_fee最大値
+      const maxFee = entries.filter(e => e.client_code === code && e.entry_fee > 0)
+                            .reduce((mx, e) => Math.max(mx, e.entry_fee), 0)
+      return maxFee
     }
-    const clientDisplayFee = (code: string) =>
-      clientDisplayFeeWeight[code] > 0 ? clientDisplayFeeSum[code] / clientDisplayFeeWeight[code] : 0
 
     // クライアントごとに集計
     const clientMap: Record<string, ClientRow> = {}
@@ -368,7 +371,7 @@ export default function ReportsPage() {
           const staffStr = Object.entries(r.staff_alloc).map(([u, a]) => `${u}：${Math.round(a).toLocaleString()}円`).join('　')
           return `<tr>
             <td>${r.client_name}</td>
-            <td style="text-align:right">${r.monthly_fee > 0 ? r.monthly_fee.toLocaleString('ja-JP') + '円' : '未入力'}</td>
+            <td style="text-align:right">${r.monthly_fee > 0 ? Math.round(r.monthly_fee).toLocaleString('ja-JP') + '円' : '未入力'}</td>
             <td style="text-align:right">${fmtMinutes(r.total_minutes)}</td>
             <td style="text-align:right;color:${color}">${fmtRate(r.monthly_fee, r.total_minutes)}</td>
             <td>${staffStr}</td>
@@ -725,7 +728,7 @@ ${tableHTML}
                           <div className="text-xs text-gray-400 font-mono">{r.client_code}</div>
                         </td>
                         <td className="px-3 py-3 text-right text-gray-700">
-                          {r.monthly_fee > 0 ? r.monthly_fee.toLocaleString('ja-JP') + '円' : <span className="text-gray-300">未入力</span>}
+                          {r.monthly_fee > 0 ? Math.round(r.monthly_fee).toLocaleString('ja-JP') + '円' : <span className="text-gray-300">未入力</span>}
                         </td>
                         <td className="px-3 py-3 text-right">
                           <button onClick={() => setDetailRow(r)}
