@@ -31,11 +31,12 @@ const COLOR_OPTIONS = [
 
 // タイムゾーンオフセット付きで保存（UTC解釈によるずれを防ぐ）
 function toLocalISOString(date: string, time: string): string {
+  const t = time || '00:00'
   const offset = -new Date().getTimezoneOffset()
   const sign = offset >= 0 ? '+' : '-'
   const h = Math.floor(Math.abs(offset) / 60).toString().padStart(2, '0')
   const m = (Math.abs(offset) % 60).toString().padStart(2, '0')
-  return `${date}T${time}:00${sign}${h}:${m}`
+  return `${date}T${t}:00${sign}${h}:${m}`
 }
 
 type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly'
@@ -269,12 +270,16 @@ function ScheduleNewForm() {
                 onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">開始時刻</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                開始時刻{(form.color === '休み' || form.color === '出勤') && <span className="ml-1 text-gray-400 font-normal">（任意）</span>}
+              </label>
               <input type="time" className={inputClass} value={form.start_time}
                 onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">終了時刻</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                終了時刻{(form.color === '休み' || form.color === '出勤') && <span className="ml-1 text-gray-400 font-normal">（任意）</span>}
+              </label>
               <input type="time" className={inputClass} value={form.end_time}
                 onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
             </div>
