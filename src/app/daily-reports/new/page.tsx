@@ -10,6 +10,7 @@ import { Schedule } from '@/lib/types'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const TASK_TYPES = ['記帳', 'チェック', '決算', '来所', '訪問', '所内相談', '電話・メール', '給与計算', '環境整備', '朝礼', '確定申告', '年末調整', '相続税', '建設業', '医療法人', '社会保険', '税務調査', 'その他']
+const REQUIRED_PERIOD_TASKS = ['記帳', 'チェック', '訪問', '来所']
 
 function calcWorkTime(start: string, end: string): string {
   if (!start || !end) return ''
@@ -187,6 +188,15 @@ export default function DailyReportNewPage() {
   }
 
   async function save() {
+    // 処理期間必須チェック
+    const missing = details.filter(d =>
+      d.task_type && REQUIRED_PERIOD_TASKS.includes(d.task_type) && !d.subject
+    )
+    if (missing.length > 0) {
+      const names = missing.map(d => d.task_type).join('・')
+      alert(`「${names}」は処理期間（開始月）の入力が必須です。`)
+      return
+    }
     setSaving(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -322,7 +332,7 @@ export default function DailyReportNewPage() {
                   </td>
                   <td className="px-1 py-1">
                     <div className="flex items-center gap-0.5">
-                      <input type="month" className="border border-gray-200 rounded px-1 py-1 text-xs w-[88px]" value={d.subject || ''} onChange={e => setDetail(i, 'subject', e.target.value)} />
+                      <input type="month" className={`border rounded px-1 py-1 text-xs w-[88px] ${d.task_type && REQUIRED_PERIOD_TASKS.includes(d.task_type) && !d.subject ? 'border-red-400 bg-red-50' : 'border-gray-200'}`} value={d.subject || ''} onChange={e => setDetail(i, 'subject', e.target.value)} />
                       <span className="text-gray-400 text-xs shrink-0">～</span>
                       <input type="month" className="border border-gray-200 rounded px-1 py-1 text-xs w-[88px]" value={d.details || ''} onChange={e => setDetail(i, 'details', e.target.value)} />
                     </div>
