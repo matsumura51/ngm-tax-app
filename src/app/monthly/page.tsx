@@ -124,8 +124,8 @@ const SETTLE_TAX_FIELDS = [
   { key: 'settle_corp_tax_amount',        label: '法人税確定額' },
   { key: 'settle_con_tax_amount',         label: '消費税確定額' },
   { key: 'settle_con_tax_installments',   label: '消費税中間回数' },
-  { key: 'settle_next_corp_interim',      label: '来期法人税中間（手動）' },
-  { key: 'settle_next_con_interim',       label: '来期消費税中間（手動）' },
+  { key: 'settle_next_corp_interim',      label: '来期法人税中間' },
+  { key: 'settle_next_con_interim',       label: '来期消費税中間' },
 ]
 const CON_INSTALLMENT_OPTIONS = [
   { value: '0',  label: '0回（中間申告不要）' },
@@ -346,13 +346,10 @@ function MonthlyContent() {
       for (const p of prevProgress) {
         const clientName = p.client_name || ''
         const clientCode = p.client_code
-        // 法人税中間
-        if (p.settle_corp_tax_amount) {
-          const base = parseInt(p.settle_corp_tax_amount.replace(/[^0-9]/g, ''), 10)
-          if (!isNaN(base) && base > 0) {
-            const interim = p.settle_next_corp_interim
-              ? parseInt(p.settle_next_corp_interim.replace(/[^0-9]/g, ''), 10)
-              : Math.floor(base / 2)
+        // 法人税中間（手動入力がある場合のみ）
+        if (p.settle_next_corp_interim) {
+          const interim = parseInt(p.settle_next_corp_interim.replace(/[^0-9]/g, ''), 10)
+          if (!isNaN(interim) && interim > 0) {
             toInsert.push({
               client_id: null, client_name: clientName,
               matched_client_code: clientCode,
@@ -365,14 +362,11 @@ function MonthlyContent() {
             })
           }
         }
-        // 消費税中間
-        if (p.settle_con_tax_amount && p.settle_con_tax_installments && p.settle_con_tax_installments !== '0') {
-          const base = parseInt(p.settle_con_tax_amount.replace(/[^0-9]/g, ''), 10)
+        // 消費税中間（手動入力がある場合のみ）
+        if (p.settle_next_con_interim && p.settle_con_tax_installments && p.settle_con_tax_installments !== '0') {
+          const perAmount = parseInt(p.settle_next_con_interim.replace(/[^0-9]/g, ''), 10)
           const count = parseInt(p.settle_con_tax_installments, 10)
-          if (!isNaN(base) && base > 0 && !isNaN(count) && count > 0) {
-            const perAmount = p.settle_next_con_interim
-              ? parseInt(p.settle_next_con_interim.replace(/[^0-9]/g, ''), 10)
-              : Math.floor(base / (count === 1 ? 2 : count === 3 ? 4 : 12))
+          if (!isNaN(perAmount) && perAmount > 0 && !isNaN(count) && count > 0) {
             toInsert.push({
               client_id: null, client_name: clientName,
               matched_client_code: clientCode,
@@ -617,22 +611,16 @@ function MonthlyContent() {
       type TaxRow = { tax_type: string; amount: string; installment: string }
       const toInsert: TaxRow[] = []
 
-      if (corpAmt) {
-        const base = parseInt(corpAmt.replace(/[^0-9]/g, ''), 10)
-        if (!isNaN(base) && base > 0) {
-          const interim = nextCorp
-            ? parseInt(nextCorp.replace(/[^0-9]/g, ''), 10)
-            : Math.floor(base / 2)
+      if (nextCorp) {
+        const interim = parseInt(nextCorp.replace(/[^0-9]/g, ''), 10)
+        if (!isNaN(interim) && interim > 0) {
           toInsert.push({ tax_type: '法人税中間', amount: interim.toLocaleString('ja-JP') + '円', installment: '年1回' })
         }
       }
-      if (conAmt && conCount && conCount !== '0') {
-        const base = parseInt(conAmt.replace(/[^0-9]/g, ''), 10)
+      if (nextCon && conCount && conCount !== '0') {
+        const perAmount = parseInt(nextCon.replace(/[^0-9]/g, ''), 10)
         const count = parseInt(conCount, 10)
-        if (!isNaN(base) && base > 0 && !isNaN(count) && count > 0) {
-          const perAmount = nextCon
-            ? parseInt(nextCon.replace(/[^0-9]/g, ''), 10)
-            : Math.floor(base / (count === 1 ? 2 : count === 3 ? 4 : 12))
+        if (!isNaN(perAmount) && perAmount > 0 && !isNaN(count) && count > 0) {
           toInsert.push({ tax_type: '消費税中間', amount: perAmount.toLocaleString('ja-JP') + '円', installment: `年${count}回` })
         }
       }
