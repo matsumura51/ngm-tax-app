@@ -622,7 +622,20 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
                                 {m > 1 && (
                                   <button
                                     type="button"
-                                    onClick={() => setMonth(String(m), 'gross', form.monthly[String(m - 1)]?.gross || '')}
+                                    onClick={() => {
+                                      const prev = form.monthly[String(m - 1)]
+                                      setForm(f => ({
+                                        ...f,
+                                        monthly: {
+                                          ...f.monthly,
+                                          [String(m)]: {
+                                            ...f.monthly[String(m)],
+                                            gross: prev?.gross || '',
+                                            tax: prev?.tax || '',
+                                          }
+                                        }
+                                      }))
+                                    }}
                                     className="shrink-0 text-[10px] px-1.5 py-1 bg-gray-100 hover:bg-blue-100 hover:text-blue-700 text-gray-500 rounded border border-gray-200 whitespace-nowrap"
                                     title={`${m - 1}月と同額`}
                                   >前月同額</button>
