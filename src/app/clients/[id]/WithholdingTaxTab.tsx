@@ -593,7 +593,7 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
                         <th className="px-2 py-1.5 text-center">
                           支払金額{!form.exempt && form.taxIncluded ? <span className="text-blue-500">（税込）</span> : !form.exempt ? <span className="text-gray-400">（税抜）</span> : ''}
                         </th>
-                        <th className={`px-2 py-1.5 text-center ${form.exempt ? 'text-gray-300' : ''}`}>源泉税額</th>
+                        <th className={`px-2 py-1.5 text-center w-24 ${form.exempt ? 'text-gray-300' : ''}`}>源泉税額</th>
                         <th className="px-2 py-1.5 text-center w-28">差引支払額</th>
                       </tr>
                     </thead>
@@ -648,7 +648,7 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
                                   —
                                 </div>
                               ) : (
-                                <input className="border border-gray-200 rounded px-1.5 py-1 text-xs text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-400 text-red-600"
+                                <input className="border border-gray-200 rounded px-1.5 py-1 text-xs text-right w-full min-w-[80px] focus:outline-none focus:ring-1 focus:ring-blue-400 text-red-600"
                                   value={focusedCell === `${m}-tax` ? (form.monthly[String(m)]?.tax || '') : fmtAmt(form.monthly[String(m)]?.tax || '')}
                                   onFocus={() => { setFocusedCell(`${m}-tax`); autoCalcTax(String(m)) }}
                                   onBlur={() => setFocusedCell(null)}
