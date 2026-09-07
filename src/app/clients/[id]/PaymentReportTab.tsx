@@ -504,43 +504,58 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
               </div>
 
               {/* 更新料・礼金 */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">更新料</label>
-                  <div className="flex gap-1.5">
-                    <input className="border border-gray-300 rounded px-2 py-1 text-sm w-24 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                      value={form.renewal_date}
-                      onChange={e => setForm(f => ({ ...f, renewal_date: zen2han(e.target.value) }))}
-                      placeholder="支払日" />
-                    <input className="border border-gray-300 rounded px-2 py-1 text-sm flex-1 text-right focus:outline-none focus:ring-1 focus:ring-blue-400"
-                      value={focusedCell === 'renewal_amount' ? form.renewal_amount : fmtAmt(form.renewal_amount)}
-                      onFocus={() => setFocusedCell('renewal_amount')}
-                      onBlur={() => setFocusedCell(null)}
-                      onChange={e => setForm(f => ({ ...f, renewal_amount: sanitizeAmt(e.target.value) }))}
-                      placeholder="0" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">礼金</label>
-                  <div className="flex gap-1.5">
-                    <input className="border border-gray-300 rounded px-2 py-1 text-sm w-24 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                      value={form.key_money_date}
-                      onChange={e => setForm(f => ({ ...f, key_money_date: zen2han(e.target.value) }))}
-                      placeholder="支払日" />
-                    <input className="border border-gray-300 rounded px-2 py-1 text-sm flex-1 text-right focus:outline-none focus:ring-1 focus:ring-blue-400"
-                      value={focusedCell === 'key_money_amount' ? form.key_money_amount : fmtAmt(form.key_money_amount)}
-                      onFocus={() => setFocusedCell('key_money_amount')}
-                      onBlur={() => setFocusedCell(null)}
-                      onChange={e => setForm(f => ({ ...f, key_money_amount: sanitizeAmt(e.target.value) }))}
-                      placeholder="0" />
-                  </div>
-                </div>
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-xs text-gray-400">
+                    <tr>
+                      <th className="px-3 py-1.5 text-left w-20">項目</th>
+                      <th className="px-2 py-1.5 text-center w-28">支払日</th>
+                      <th className="px-2 py-1.5 text-center">金額（円）</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="px-3 py-1 text-xs text-gray-600 font-medium">更新料</td>
+                      <td className="px-1 py-1">
+                        <input className="border border-gray-200 rounded px-2 py-1 text-xs text-center w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          value={form.renewal_date}
+                          onChange={e => setForm(f => ({ ...f, renewal_date: zen2han(e.target.value) }))}
+                          placeholder="例: 12/25" />
+                      </td>
+                      <td className="px-1 py-1">
+                        <input className="border border-gray-200 rounded px-2 py-1 text-xs text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          value={focusedCell === 'renewal_amount' ? form.renewal_amount : fmtAmt(form.renewal_amount)}
+                          onFocus={() => setFocusedCell('renewal_amount')}
+                          onBlur={() => setFocusedCell(null)}
+                          onChange={e => setForm(f => ({ ...f, renewal_amount: sanitizeAmt(e.target.value) }))}
+                          placeholder="0" />
+                      </td>
+                    </tr>
+                    <tr className="bg-gray-50/50">
+                      <td className="px-3 py-1 text-xs text-gray-600 font-medium">礼金</td>
+                      <td className="px-1 py-1">
+                        <input className="border border-gray-200 rounded px-2 py-1 text-xs text-center w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          value={form.key_money_date}
+                          onChange={e => setForm(f => ({ ...f, key_money_date: zen2han(e.target.value) }))}
+                          placeholder="例: 12/25" />
+                      </td>
+                      <td className="px-1 py-1">
+                        <input className="border border-gray-200 rounded px-2 py-1 text-xs text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          value={focusedCell === 'key_money_amount' ? form.key_money_amount : fmtAmt(form.key_money_amount)}
+                          onFocus={() => setFocusedCell('key_money_amount')}
+                          onBlur={() => setFocusedCell(null)}
+                          onChange={e => setForm(f => ({ ...f, key_money_amount: sanitizeAmt(e.target.value) }))}
+                          placeholder="0" />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
-              {/* 敷金 */}
+              {/* 敷金・保証金 */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">
-                  敷金
+                  敷金・保証金
                   <span className="ml-2 text-gray-400 font-normal">（年度をまたいで引き継がれます）</span>
                 </label>
                 <input className="border border-gray-300 rounded px-2 py-1 text-sm text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
