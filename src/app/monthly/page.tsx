@@ -868,9 +868,8 @@ function MonthlyContent() {
                         const p = prog(c.code)
                         const even = ri % 2 === 0
                         const bg = even ? 'bg-white' : 'bg-gray-50'
-                        const corpInterim = p?.settle_next_corp_interim ? fmtAmount(p.settle_next_corp_interim) : calcInterim(p?.settle_corp_tax_amount)
-                        const conDetail = calcConInterimDetail(p?.settle_con_tax_amount, p?.settle_con_tax_installments)
-                        const conInterim = p?.settle_next_con_interim ? fmtAmount(p.settle_next_con_interim) : (conDetail?.perAmount || '')
+                        const corpInterim = fmtAmount(p?.settle_next_corp_interim)
+                        const conInterim = fmtAmount(p?.settle_next_con_interim)
                         const conCount = p?.settle_con_tax_installments && p.settle_con_tax_installments !== '0'
                           ? `年${p.settle_con_tax_installments}回`
                           : p?.settle_con_tax_installments === '0' ? '不要' : ''
@@ -879,16 +878,10 @@ function MonthlyContent() {
                             <td className={stickyCode(even)}>{c.code}</td>
                             <td className={stickyName(even)}><Link href={`/clients/${c.id}`} className="hover:text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{c.name}</Link></td>
                             <td className={`${td} tabular-nums text-right`}>{fmtAmount(p?.settle_corp_tax_amount)}</td>
-                            <td className={`${td} tabular-nums text-right font-semibold text-blue-700`}>
-                              {corpInterim}
-                              {p?.settle_next_corp_interim && <span className="ml-1 text-gray-400 font-normal text-[10px]">手動</span>}
-                            </td>
+                            <td className={`${td} tabular-nums text-right font-semibold text-blue-700`}>{corpInterim}</td>
                             <td className={`${td} tabular-nums text-right border-l border-gray-200`}>{fmtAmount(p?.settle_con_tax_amount)}</td>
                             <td className={`${td} text-center`}>{conCount}</td>
-                            <td className={`${td} tabular-nums text-right font-semibold text-blue-700`}>
-                              {conInterim}
-                              {p?.settle_next_con_interim && <span className="ml-1 text-gray-400 font-normal text-[10px]">手動</span>}
-                            </td>
+                            <td className={`${td} tabular-nums text-right font-semibold text-blue-700`}>{conInterim}</td>
                           </tr>
                         )
                       })}
@@ -1057,15 +1050,10 @@ function MonthlyContent() {
                     <td className={`${td} border-l border-gray-100 tabular-nums text-right`}>{fmtAmount(p?.settle_corp_tax_amount)}</td>
                     <td className={`${td} tabular-nums text-right`}>{fmtAmount(p?.settle_con_tax_amount)}</td>
                     <td className={`${td} tabular-nums text-right text-blue-700 font-medium`}>
-                      {p?.settle_next_corp_interim ? fmtAmount(p.settle_next_corp_interim) : calcInterim(p?.settle_corp_tax_amount)}
+                      {fmtAmount(p?.settle_next_corp_interim)}
                     </td>
                     <td className={`${td} tabular-nums text-right text-blue-700 font-medium`}>
-                      {(() => {
-                        if (p?.settle_next_con_interim) return <>{fmtAmount(p.settle_next_con_interim)}<span className="text-[10px] text-gray-400 ml-0.5">手動</span></>
-                        const det = calcConInterimDetail(p?.settle_con_tax_amount, p?.settle_con_tax_installments)
-                        if (!det) return ''
-                        return <>{det.perAmount}<span className="text-[10px] text-gray-400 ml-0.5">×{det.count}回</span></>
-                      })()}
+                      {fmtAmount(p?.settle_next_con_interim)}
                     </td>
                   </tr>
                 )
