@@ -197,12 +197,14 @@ function MonthlyContent() {
 
   const SHEET_ID = '1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc'
 
-  // URLパラムでタブ切替・行ハイライト
+  // URLパラムでタブ切替・行ハイライト・検索
   useEffect(() => {
     const tab = searchParams.get('tab') as ActiveTab | null
     const highlight = searchParams.get('highlight')
+    const searchParam = searchParams.get('search')
     if (tab && ['月次進捗', '税務情報', '決算業務'].includes(tab)) setActiveTab(tab)
     if (highlight) setHighlightClientId(highlight)
+    if (searchParam) setSearch(searchParam)
   }, [searchParams])
 
   // ローディング完了後にスクロール＋モーダル自動オープン

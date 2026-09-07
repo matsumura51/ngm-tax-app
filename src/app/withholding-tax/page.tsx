@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { Search, Landmark } from 'lucide-react'
@@ -33,6 +34,7 @@ function parseFee(s: string | number | null | undefined): number {
 }
 
 export default function WithholdingTaxPage() {
+  const router = useRouter()
   const [year, setYear] = useState(new Date().getFullYear())
   const [tab, setTab] = useState<'社労士等' | '税理士報酬'>('社労士等')
   const [summaries, setSummaries] = useState<Summary[]>([])
@@ -296,8 +298,10 @@ export default function WithholdingTaxPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredFees.map(r => (
-                  <tr key={r.client_code || r.client_name} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-800">{r.client_name}</td>
+                  <tr key={r.client_code || r.client_name}
+                    className="hover:bg-blue-50 cursor-pointer"
+                    onClick={() => router.push(`/monthly?search=${encodeURIComponent(r.client_code || r.client_name)}`)}>
+                    <td className="px-4 py-3 font-medium text-gray-800 hover:text-blue-700">{r.client_name}</td>
                     <td className="px-4 py-3 font-mono text-gray-500 text-xs">{r.client_code}</td>
                     <td className="px-4 py-3 text-right font-mono font-bold text-gray-800">
                       {r.total > 0 ? r.total.toLocaleString('ja-JP') + '円' : '—'}
