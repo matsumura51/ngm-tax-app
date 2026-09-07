@@ -249,7 +249,7 @@ function MonthlyContent() {
     // highlight パラメータあり（リンク経由）の場合は全社表示にする
     if (isFirstLoad.current) {
       isFirstLoad.current = false
-      if (!searchParams.get('highlight')) {
+      if (!searchParams.get('highlight') && !searchParams.get('search')) {
         const currentUser = authResult.data.user
         if (currentUser) {
           const { data: me } = await supabase.from('users').select('name').eq('id', currentUser.id).maybeSingle()
