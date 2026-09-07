@@ -4,7 +4,7 @@ import { useEffect, useState, use, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ClientCheck, ClientCheckAttachment } from '@/lib/types'
-import { ChevronLeft, Trash2, Paperclip, Download, X } from 'lucide-react'
+import { ChevronLeft, Trash2, Paperclip, Download, X, Printer } from 'lucide-react'
 import Link from 'next/link'
 
 const ic = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
@@ -135,7 +135,76 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
 
   if (!check) return <div className="p-6 text-gray-400">読み込み中...</div>
 
+  function fmtDate(d: string | null | undefined) {
+    if (!d) return '—'
+    const [y, m, day] = d.split('-')
+    return `${y}年${Number(m)}月${Number(day)}日`
+  }
+
+  const contentLabel = form.type === '処理方法' ? '処理方法・特殊対応の内容' : form.type === 'クレーム' ? 'クレーム内容' : '指摘内容'
+
   return (
+    <>
+    {/* ===== 印刷専用レイアウト ===== */}
+    <style>{`
+      @media print {
+        body > * { display: none !important; }
+        #print-area { display: block !important; }
+        #print-area { position: fixed; inset: 0; padding: 24px; font-size: 11pt; color: #000; background: #fff; }
+      }
+    `}</style>
+    <div id="print-area" style={{ display: 'none' }}>
+      <div style={{ borderBottom: '2px solid #333', paddingBottom: 8, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div style={{ fontSize: 18, fontWeight: 'bold' }}>指摘事項</div>
+        <div style={{ fontSize: 11 }}>{form.client_code} {form.client_name}</div>
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16, fontSize: 10 }}>
+        <tbody>
+          <tr>
+            <td style={{ width: '15%', padding: '4px 8px', background: '#f3f4f6', border: '1px solid #ccc', fontWeight: 'bold' }}>指摘日</td>
+            <td style={{ padding: '4px 8px', border: '1px solid #ccc', width: '35%' }}>{fmtDate(form.check_date)}</td>
+            <td style={{ padding: '4px 8px', background: '#f3f4f6', border: '1px solid #ccc', fontWeight: 'bold', width: '15%' }}>確認者</td>
+            <td style={{ padding: '4px 8px', border: '1px solid #ccc' }}>{form.checker || '—'}</td>
+          </tr>
+          <tr>
+            <td style={{ padding: '4px 8px', background: '#f3f4f6', border: '1px solid #ccc', fontWeight: 'bold' }}>種別</td>
+            <td style={{ padding: '4px 8px', border: '1px solid #ccc' }}>{form.type || '—'}</td>
+            <td style={{ padding: '4px 8px', background: '#f3f4f6', border: '1px solid #ccc', fontWeight: 'bold' }}>区分</td>
+            <td style={{ padding: '4px 8px', border: '1px solid #ccc' }}>{form.category || '—'}</td>
+          </tr>
+          <tr>
+            <td style={{ padding: '4px 8px', background: '#f3f4f6', border: '1px solid #ccc', fontWeight: 'bold' }}>状況</td>
+            <td colSpan={3} style={{ padding: '4px 8px', border: '1px solid #ccc' }}>{form.status || '—'}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontWeight: 'bold', fontSize: 10, marginBottom: 4, background: '#f3f4f6', padding: '4px 8px', border: '1px solid #ccc' }}>{contentLabel}</div>
+        <div style={{ padding: '8px', border: '1px solid #ccc', minHeight: 80, whiteSpace: 'pre-wrap', fontSize: 10 }}>{form.content || ''}</div>
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12, fontSize: 10 }}>
+        <tbody>
+          <tr>
+            <td style={{ width: '15%', padding: '4px 8px', background: '#f3f4f6', border: '1px solid #ccc', fontWeight: 'bold' }}>訂正日</td>
+            <td style={{ padding: '4px 8px', border: '1px solid #ccc' }}>{fmtDate(form.corrected_date)}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontWeight: 'bold', fontSize: 10, marginBottom: 4, background: '#f3f4f6', padding: '4px 8px', border: '1px solid #ccc' }}>訂正メモ</div>
+        <div style={{ padding: '8px', border: '1px solid #ccc', minHeight: 60, whiteSpace: 'pre-wrap', fontSize: 10 }}>{form.correction_note || ''}</div>
+      </div>
+      {attachments.length > 0 && (
+        <div style={{ fontSize: 10 }}>
+          <div style={{ fontWeight: 'bold', marginBottom: 4, background: '#f3f4f6', padding: '4px 8px', border: '1px solid #ccc' }}>添付ファイル</div>
+          <ul style={{ margin: 0, padding: '4px 8px 4px 24px', border: '1px solid #ccc' }}>
+            {attachments.map(a => <li key={a.id}>{a.file_name}</li>)}
+          </ul>
+        </div>
+      )}
+    </div>
+
+    {/* ===== 通常レイアウト ===== */}
     <div className="p-6 max-w-2xl">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -147,9 +216,14 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
             </span>
           )}
         </div>
-        <button onClick={remove} className="flex items-center gap-1 text-sm text-red-500 hover:text-red-700">
-          <Trash2 size={14} /> 削除
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={() => window.print()} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+            <Printer size={14} /> 印刷
+          </button>
+          <button onClick={remove} className="flex items-center gap-1 text-sm text-red-500 hover:text-red-700">
+            <Trash2 size={14} /> 削除
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow p-6 space-y-4">
@@ -292,5 +366,6 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
         </div>
       )}
     </div>
+    </>
   )
 }
