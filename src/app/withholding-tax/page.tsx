@@ -142,7 +142,9 @@ export default function WithholdingTaxPage() {
   }
 
   const filteredSummaries = summaries.filter(s => !filter || s.client_name.includes(filter))
-  const filteredFees = taxFees.filter(r => !filter || r.client_name.includes(filter))
+  const filteredFees = taxFees
+    .filter(r => !filter || r.client_name.includes(filter))
+    .sort((a, b) => b.total - a.total)
   const grandGross = filteredSummaries.reduce((s, r) => s + r.total_gross, 0)
   const grandTax = filteredSummaries.reduce((s, r) => s + r.total_tax, 0)
   const grandFeeTotal = filteredFees.reduce((s, r) => s + r.total, 0)
