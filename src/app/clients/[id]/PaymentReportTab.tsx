@@ -430,12 +430,22 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
                               placeholder="例: 12/25" />
                           </td>
                           <td className="px-1 py-0.5">
-                            <input className="border border-gray-200 rounded px-2 py-1 text-xs text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
-                              value={focusedCell === `${m}-amount` ? (form.monthly[String(m)]?.amount || '') : fmtAmt(form.monthly[String(m)]?.amount || '')}
-                              onFocus={() => setFocusedCell(`${m}-amount`)}
-                              onBlur={() => setFocusedCell(null)}
-                              onChange={e => setMonth(String(m), 'amount', sanitizeAmt(e.target.value))}
-                              placeholder="0" />
+                            <div className="flex items-center gap-1">
+                              <input className="border border-gray-200 rounded px-2 py-1 text-xs text-right flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                value={focusedCell === `${m}-amount` ? (form.monthly[String(m)]?.amount || '') : fmtAmt(form.monthly[String(m)]?.amount || '')}
+                                onFocus={() => setFocusedCell(`${m}-amount`)}
+                                onBlur={() => setFocusedCell(null)}
+                                onChange={e => setMonth(String(m), 'amount', sanitizeAmt(e.target.value))}
+                                placeholder="0" />
+                              {m > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setMonth(String(m), 'amount', form.monthly[String(m - 1)]?.amount || '')}
+                                  className="shrink-0 text-[10px] px-1.5 py-1 bg-gray-100 hover:bg-blue-100 hover:text-blue-700 text-gray-500 rounded border border-gray-200 whitespace-nowrap"
+                                  title={`${m - 1}月と同額`}
+                                >前月同額</button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
