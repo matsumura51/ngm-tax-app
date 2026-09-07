@@ -39,6 +39,7 @@ type FormData = {
   renewal_amount: string
   key_money_date: string
   key_money_amount: string
+  shikikin_amount: string
 }
 
 function emptyForm(): FormData {
@@ -46,6 +47,7 @@ function emptyForm(): FormData {
     payee_name: '', payee_address: '', property_address: '', property_use: '',
     monthly: Object.fromEntries(MONTHS.map(m => [String(m), { date: '', amount: '' }])),
     renewal_date: '', renewal_amount: '', key_money_date: '', key_money_amount: '',
+    shikikin_amount: '',
   }
 }
 
@@ -55,6 +57,7 @@ function itemToForm(item: PaymentReportItem): FormData {
     const d = item.monthly_data?.[String(m)]
     monthly[String(m)] = { date: d?.date || '', amount: d?.amount ? String(d.amount) : '' }
   }
+  const rawShikikin = (item.monthly_data as Record<string, unknown>)?._shikikin
   return {
     payee_name: item.payee_name || '',
     payee_address: item.payee_address || '',
@@ -65,6 +68,7 @@ function itemToForm(item: PaymentReportItem): FormData {
     renewal_amount: item.renewal_amount ? String(item.renewal_amount) : '',
     key_money_date: item.key_money_date || '',
     key_money_amount: item.key_money_amount ? String(item.key_money_amount) : '',
+    shikikin_amount: rawShikikin ? String(rawShikikin) : '',
   }
 }
 
@@ -78,8 +82,15 @@ function calcFormTotal(form: FormData): number {
 }
 
 function itemTotal(item: PaymentReportItem): number {
-  const monthly = Object.values(item.monthly_data || {}).reduce((s, d) => s + (d.amount || 0), 0)
+  const monthly = Object.entries(item.monthly_data || {})
+    .filter(([k]) => !k.startsWith('_'))
+    .reduce((s, [, d]) => s + ((d as { amount?: number }).amount || 0), 0)
   return monthly + (item.renewal_amount || 0) + (item.key_money_amount || 0)
+}
+
+function itemShikikin(item: PaymentReportItem): number {
+  const v = (item.monthly_data as Record<string, unknown>)?._shikikin
+  return v ? Number(v) : 0
 }
 
 interface Props {
@@ -98,8 +109,10 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
   const [form, setForm] = useState<FormData>(emptyForm())
   const [saving, setSaving] = useState(false)
   const [focusedCell, setFocusedCell] = useState<string | null>(null)
+  const [shikikinByPayee, setShikikinByPayee] = useState<Record<string, string>>({})
 
   useEffect(() => { load() }, [year, clientId])
+  useEffect(() => { loadShikikinCache() }, [clientId])
 
   async function load() {
     setLoading(true)
@@ -115,6 +128,26 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
     setLoading(false)
   }
 
+  async function loadShikikinCache() {
+    const supabase = createClient()
+    let q = supabase.from('payment_reports').select('id')
+    if (clientCode) q = q.eq('client_code', clientCode)
+    else q = q.eq('client_id', clientId)
+    const { data: allReports } = await q
+    if (!allReports?.length) return
+    const { data: allItems } = await supabase
+      .from('payment_report_items')
+      .select('payee_name, monthly_data')
+      .in('report_id', allReports.map(r => r.id))
+    const cache: Record<string, string> = {}
+    for (const item of (allItems || [])) {
+      if (!item.payee_name) continue
+      const sk = (item.monthly_data as Record<string, unknown>)?._shikikin
+      if (sk && !cache[item.payee_name]) cache[item.payee_name] = String(sk)
+    }
+    setShikikinByPayee(cache)
+  }
+
   function openAdd() {
     setEditingId(null)
     setForm(emptyForm())
@@ -123,7 +156,12 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
 
   function openEdit(item: PaymentReportItem) {
     setEditingId(item.id)
-    setForm(itemToForm(item))
+    const f = itemToForm(item)
+    // 当年に敷金未入力の場合、過去年度から引き継ぎ
+    if (!f.shikikin_amount && item.payee_name && shikikinByPayee[item.payee_name]) {
+      f.shikikin_amount = shikikinByPayee[item.payee_name]
+    }
+    setForm(f)
     setModalOpen(true)
   }
 
@@ -141,11 +179,12 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
       setReportId(repId)
     }
 
-    const monthly_data: Record<string, { date: string; amount: number }> = {}
+    const monthly_data: Record<string, unknown> = {}
     for (const m of MONTHS) {
       const d = form.monthly[String(m)]
       monthly_data[String(m)] = { date: d.date, amount: parseAmt(d.amount) }
     }
+    if (form.shikikin_amount) monthly_data._shikikin = parseAmt(form.shikikin_amount)
 
     const payload = {
       report_id: repId,
@@ -333,6 +372,7 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
                 <th className="text-left px-4 py-2">支払先</th>
                 <th className="text-left px-4 py-2">物件所在地</th>
                 <th className="text-left px-4 py-2">用途</th>
+                <th className="text-right px-4 py-2">敷金</th>
                 <th className="text-right px-4 py-2">年間合計</th>
                 <th className="px-3 py-2 w-16"></th>
               </tr>
@@ -343,6 +383,9 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
                   <td className="px-4 py-2.5 font-medium text-gray-800">{item.payee_name || '—'}</td>
                   <td className="px-4 py-2.5 text-gray-600 text-xs">{item.property_address || '—'}</td>
                   <td className="px-4 py-2.5 text-gray-500 text-xs">{item.property_use || '—'}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-gray-500 text-xs">
+                    {itemShikikin(item) > 0 ? itemShikikin(item).toLocaleString('ja-JP') + '円' : '—'}
+                  </td>
                   <td className="px-4 py-2.5 text-right font-mono text-gray-700">
                     {itemTotal(item) > 0 ? itemTotal(item).toLocaleString('ja-JP') + '円' : '—'}
                   </td>
@@ -383,7 +426,13 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">支払先名</label>
                   <input className={ic} value={form.payee_name}
-                    onChange={e => setForm(f => ({ ...f, payee_name: e.target.value }))} />
+                    onChange={e => setForm(f => ({ ...f, payee_name: e.target.value }))}
+                    onBlur={e => {
+                      const name = e.target.value
+                      if (!form.shikikin_amount && name && shikikinByPayee[name]) {
+                        setForm(f => ({ ...f, shikikin_amount: shikikinByPayee[name] }))
+                      }
+                    }} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">物件用途</label>
@@ -486,6 +535,20 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
                       placeholder="0" />
                   </div>
                 </div>
+              </div>
+
+              {/* 敷金 */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  敷金
+                  <span className="ml-2 text-gray-400 font-normal">（年度をまたいで引き継がれます）</span>
+                </label>
+                <input className="border border-gray-300 rounded px-2 py-1 text-sm text-right w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  value={focusedCell === 'shikikin_amount' ? form.shikikin_amount : fmtAmt(form.shikikin_amount)}
+                  onFocus={() => setFocusedCell('shikikin_amount')}
+                  onBlur={() => setFocusedCell(null)}
+                  onChange={e => setForm(f => ({ ...f, shikikin_amount: sanitizeAmt(e.target.value) }))}
+                  placeholder="0" />
               </div>
 
               {/* 合計プレビュー */}
