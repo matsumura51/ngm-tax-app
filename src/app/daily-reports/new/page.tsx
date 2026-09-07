@@ -92,8 +92,8 @@ export default function DailyReportNewPage() {
       if (!user) return
       const { data } = await supabase.from('schedules').select('*')
         .eq('user_id', user.id)
-        .gte('start_datetime', form.date + 'T00:00:00')
-        .lte('start_datetime', form.date + 'T23:59:59')
+        .gte('start_datetime', form.date + 'T00:00:00+09:00')
+        .lte('start_datetime', form.date + 'T23:59:59+09:00')
         .order('start_datetime')
       setDaySchedules(data || [])
       if ((data || []).length > 0) setShowScheduleImport(true)
