@@ -1086,8 +1086,8 @@ function MonthlyContent() {
 
       {/* ===== 月次進捗 モーダル ===== */}
       {monthModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setMonthModal(null)}>
-          <div className="bg-white rounded-xl shadow-xl p-6 w-80" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-80">
             <div className="flex justify-between items-start mb-4">
               <div>
                 <div className="font-bold text-gray-800">{monthModal.client.name}</div>
@@ -1187,8 +1187,8 @@ function MonthlyContent() {
 
       {/* ===== 決算業務 モーダル ===== */}
       {settleModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSettleModal(null)}>
-          <div className="bg-white rounded-xl shadow-xl p-6 w-[460px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-[460px] max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-5">
               <div>
                 <div className="font-bold text-gray-800">{settleModal.name}</div>
