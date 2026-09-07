@@ -39,6 +39,7 @@ type FormData = {
   payee_name: string
   payee_type: string
   exempt: boolean
+  taxIncluded: boolean  // 支払金額が税込かどうか
   monthly: Record<string, MonthData>
 }
 
@@ -47,12 +48,15 @@ function emptyForm(): FormData {
     payee_name: '',
     payee_type: '社労士',
     exempt: false,
+    taxIncluded: false,
     monthly: Object.fromEntries(MONTHS.map(m => [String(m), { date: '', gross: '', tax: '' }])),
   }
 }
 
 function itemToForm(item: WithholdingRecordItem): FormData {
-  const exempt = !!((item.monthly_data as Record<string, unknown>)._exempt)
+  const md = item.monthly_data as Record<string, unknown>
+  const exempt = !!(md._exempt)
+  const taxIncluded = !!(md._taxIncluded)
   const monthly: Record<string, MonthData> = {}
   for (const m of MONTHS) {
     const d = item.monthly_data?.[String(m)]
@@ -66,6 +70,7 @@ function itemToForm(item: WithholdingRecordItem): FormData {
     payee_name: item.payee_name || '',
     payee_type: item.payee_type || '社労士',
     exempt,
+    taxIncluded,
     monthly,
   }
 }
@@ -184,6 +189,7 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
       }
     }
     if (form.exempt) monthly_data._exempt = true
+    if (form.taxIncluded) monthly_data._taxIncluded = true
 
     const payload = {
       record_id: recId,
@@ -220,7 +226,9 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
     if (form.monthly[m]?.tax) return  // 手入力済みの場合は上書きしない
     const gross = parseAmt(form.monthly[m]?.gross || '')
     if (!gross) return
-    const tax = Math.floor(gross * 0.1021)
+    // 税込の場合は税抜金額（÷1.1）を基準に計算
+    const base = form.taxIncluded ? Math.round(gross / 1.1) : gross
+    const tax = Math.floor(base * 0.1021)
     setForm(f => ({ ...f, monthly: { ...f.monthly, [m]: { ...f.monthly[m], tax: String(tax) } } }))
   }
 
@@ -496,9 +504,8 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
 
       {/* 追加・編集モーダル */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 overflow-y-auto"
-          onClick={() => setModalOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl my-8" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl my-8">
             <div className="flex items-center justify-between px-6 py-4 border-b">
               <h3 className="font-bold text-gray-800">{editingId ? '支払先編集' : '支払先追加'}</h3>
               <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
@@ -531,7 +538,7 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
               </div>
 
               {/* 源泉対象/非対象トグル */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-xs font-medium text-gray-500">源泉徴収</span>
                 <button
                   onClick={() => setForm(f => ({ ...f, exempt: false }))}
@@ -545,12 +552,36 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
                 </button>
               </div>
 
+              {/* 税込/税抜トグル（源泉対象の場合のみ） */}
+              {!form.exempt && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-medium text-gray-500">支払金額</span>
+                  <button
+                    onClick={() => setForm(f => ({ ...f, taxIncluded: false }))}
+                    className={`px-4 py-1.5 text-xs rounded-full font-medium border transition-colors ${!form.taxIncluded ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}>
+                    税抜金額
+                  </button>
+                  <button
+                    onClick={() => setForm(f => ({ ...f, taxIncluded: true }))}
+                    className={`px-4 py-1.5 text-xs rounded-full font-medium border transition-colors ${form.taxIncluded ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}>
+                    税込金額
+                  </button>
+                  {form.taxIncluded && (
+                    <span className="text-xs text-gray-400">税抜換算（÷1.1）後に10.21%計算</span>
+                  )}
+                </div>
+              )}
+
               {/* 月次グリッド */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-medium text-gray-500">月次支払</label>
                   {!form.exempt && (
-                    <span className="text-xs text-gray-400">支払金額入力後、源泉欄をクリックで自動計算（10.21%）</span>
+                    <span className="text-xs text-gray-400">
+                      {form.taxIncluded
+                        ? '税込金額入力後、源泉欄をクリックで自動計算（税抜換算後10.21%）'
+                        : '支払金額入力後、源泉欄をクリックで自動計算（10.21%）'}
+                    </span>
                   )}
                 </div>
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -559,7 +590,9 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
                       <tr>
                         <th className="px-2 py-1.5 text-center w-10">月</th>
                         <th className="px-2 py-1.5 text-center w-24">支払日</th>
-                        <th className="px-2 py-1.5 text-center">支払金額</th>
+                        <th className="px-2 py-1.5 text-center">
+                          支払金額{!form.exempt && form.taxIncluded ? <span className="text-blue-500">（税込）</span> : !form.exempt ? <span className="text-gray-400">（税抜）</span> : ''}
+                        </th>
                         <th className={`px-2 py-1.5 text-center ${form.exempt ? 'text-gray-300' : ''}`}>源泉税額</th>
                         <th className="px-2 py-1.5 text-center w-28">差引支払額</th>
                       </tr>
