@@ -1237,11 +1237,6 @@ function MonthlyContent() {
                       className={inp}
                     />
                   </div>
-                  {calcInterim(settleForm['settle_corp_tax_amount']) && (
-                    <p className="text-xs text-blue-600 mt-1 ml-[156px]">
-                      ÷2 → 来期法人税中間 <span className="font-semibold">{calcInterim(settleForm['settle_corp_tax_amount'])}</span>
-                    </p>
-                  )}
                 </div>
                 {/* 消費税確定額 + 回数 */}
                 <div>
@@ -1271,27 +1266,14 @@ function MonthlyContent() {
                       ))}
                     </select>
                   </div>
-                  {(() => {
-                    const detail = calcConInterimDetail(settleForm['settle_con_tax_amount'], settleForm['settle_con_tax_installments'])
-                    if (!detail) return null
-                    return (
-                      <p className="text-xs text-blue-600 mt-1 ml-[156px]">
-                        自動計算 → 来期消費税中間 <span className="font-semibold">{detail.perAmount}</span>
-                        <span className="text-gray-500 ml-1">×{detail.count}回 / 年</span>
-                      </p>
-                    )
-                  })()}
                 </div>
               </div>
 
-              <p className="text-xs font-semibold text-gray-600 mt-4 mb-2">
-                来期予定納税額（手動）
-                <span className="ml-1 font-normal text-gray-400">— 自動計算と異なる場合のみ入力</span>
-              </p>
+              <p className="text-xs font-semibold text-gray-600 mt-4 mb-2">来期予定納税額</p>
               <div className="space-y-3">
                 {([
-                  { key: 'settle_next_corp_interim', label: '来期法人税中間（手動）' },
-                  { key: 'settle_next_con_interim',  label: '来期消費税中間（手動）' },
+                  { key: 'settle_next_corp_interim', label: '来期法人税中間' },
+                  { key: 'settle_next_con_interim',  label: '来期消費税中間' },
                 ] as const).map(({ key, label }) => (
                   <div key={key} className="flex items-center gap-3">
                     <label className="text-xs font-medium text-gray-500 w-36 shrink-0">{label}</label>
