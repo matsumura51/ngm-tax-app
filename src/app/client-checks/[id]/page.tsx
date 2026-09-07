@@ -148,12 +148,15 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
     {/* ===== 印刷専用レイアウト ===== */}
     <style>{`
       @media print {
-        body > * { display: none !important; }
-        #print-area { display: block !important; }
-        #print-area { position: fixed; inset: 0; padding: 24px; font-size: 11pt; color: #000; background: #fff; }
+        body { visibility: hidden; }
+        #print-area { visibility: visible; position: fixed; inset: 0; padding: 24px; font-size: 11pt; color: #000; background: #fff; }
+        #print-area * { visibility: visible; }
+      }
+      @media screen {
+        #print-area { display: none; }
       }
     `}</style>
-    <div id="print-area" style={{ display: 'none' }}>
+    <div id="print-area">
       <div style={{ borderBottom: '2px solid #333', paddingBottom: 8, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div style={{ fontSize: 18, fontWeight: 'bold' }}>指摘事項</div>
         <div style={{ fontSize: 11 }}>{form.client_code} {form.client_name}</div>
