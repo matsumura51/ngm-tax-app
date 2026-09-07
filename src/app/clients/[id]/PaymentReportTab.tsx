@@ -372,9 +372,8 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
 
       {/* 追加・編集モーダル */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 overflow-y-auto"
-          onClick={() => setModalOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl my-8" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl my-8">
             <div className="flex items-center justify-between px-6 py-4 border-b">
               <h3 className="font-bold text-gray-800">{editingId ? '物件編集' : '物件追加'}</h3>
               <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
