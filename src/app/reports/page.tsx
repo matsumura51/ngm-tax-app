@@ -113,6 +113,7 @@ export default function ReportsPage() {
   const [viewMode, setViewMode] = useState<'staff' | 'client'>('staff')
   const [detailRow, setDetailRow] = useState<ClientRow | null>(null)
   const [detailStaffRow, setDetailStaffRow] = useState<StaffRow | null>(null)
+  const [feeBreakStaff, setFeeBreakStaff] = useState<StaffRow | null>(null)
   const [filterDivision, setFilterDivision] = useState('')
   const [allUsers, setAllUsers] = useState<{ name: string; division: string | null }[]>([])
 
@@ -578,6 +579,51 @@ ${tableHTML}
         </div>
       )}
 
+      {/* 配分報酬内訳モーダル */}
+      {feeBreakStaff && (() => {
+        const items = clientRows
+          .filter(r => (r.staff_alloc[feeBreakStaff.user_name] || 0) > 0)
+          .map(r => ({ client_name: r.client_name, alloc: r.staff_alloc[feeBreakStaff.user_name] }))
+          .sort((a, b) => b.alloc - a.alloc)
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setFeeBreakStaff(null)}>
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b">
+                <div>
+                  <div className="font-bold text-gray-800 text-lg">{feeBreakStaff.user_name}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{year}年{month}月 配分報酬内訳　合計：{fmtFee(feeBreakStaff.total_alloc)}</div>
+                </div>
+                <button onClick={() => setFeeBreakStaff(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+              </div>
+              <div className="overflow-y-auto flex-1">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-xs text-gray-500 border-b sticky top-0">
+                    <tr>
+                      <th className="px-4 py-2 text-left">顧客名</th>
+                      <th className="px-4 py-2 text-right w-32">配分報酬</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {items.map((item, i) => (
+                      <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                        <td className="px-4 py-2.5 text-gray-700 text-xs">{item.client_name}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-xs font-semibold text-blue-700">{fmtFee(item.alloc)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-gray-50 border-t-2 border-gray-200 sticky bottom-0">
+                    <tr>
+                      <td className="px-4 py-2 font-bold text-gray-700 text-xs">合計（{items.length}社）</td>
+                      <td className="px-4 py-2 text-right font-bold font-mono text-xs text-blue-800">{fmtFee(feeBreakStaff.total_alloc)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* サマリーカード */}
       {!loading && (
         <div className="grid grid-cols-3 gap-4 mb-6">
@@ -693,7 +739,11 @@ ${tableHTML}
                       <tr key={r.user_name} className="hover:bg-gray-50">
                         <td className="px-5 py-3 font-semibold text-gray-800">{r.user_name}</td>
                         {hasDivisions && <td className="px-4 py-3 text-xs text-gray-500">{staffDivMap[r.user_name] || '—'}</td>}
-                        <td className="px-4 py-3 text-right font-bold text-blue-700">{fmtFee(r.total_alloc)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-blue-700">
+                          <button onClick={() => setFeeBreakStaff(r)} className="hover:underline">
+                            {fmtFee(r.total_alloc)}
+                          </button>
+                        </td>
                         <td className="px-4 py-3 text-right">
                           <button onClick={() => setDetailStaffRow(r)}
                             className="font-mono text-blue-600 hover:underline text-sm">
