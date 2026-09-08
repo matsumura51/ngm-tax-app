@@ -143,8 +143,10 @@ export default function ReportsPage() {
     const reportMap: Record<string, { user_name: string; date: string }> = {}
     const priorReportIds = new Set<string>()
     const allReportDate: Record<string, string> = {}
+    const allReportUser: Record<string, string> = {}
     for (const r of (allReportsMeta || [])) {
       allReportDate[r.id] = r.date
+      allReportUser[r.id] = r.user_name
       if (r.date >= startDate && r.date <= endDate) {
         reportMap[r.id] = { user_name: r.user_name, date: r.date }
       } else if (r.date < startDate) {
@@ -254,10 +256,43 @@ export default function ReportsPage() {
       for (const key of monthsInRange(d.subject, d.details)) claimedMonths[d.client_code][tt].add(key)
     }
 
-    // 決算報酬（Pot B）の二重配分防止: 過去のレポートで既に「決算」区分、または
-    // 「決算月・翌月の訪問／来所」が計上済みかどうかを顧客ごとに判定する
-    // （実績が先に発生した月が優先してそのまま独占する仕様）
-    const settlementClaimed: Record<string, boolean> = {}
+    // 決算月から半年以内（作成・チェックの遅れ等を考慮した猶予期間）かどうか。年をまたぐ決算月にも対応
+    const inDecisionWindow = (st: SettlementInfo, ry: number, rm: number): boolean => {
+      for (let i = 0; i <= 6; i++) {
+        const mm = ((st.fiscalMonth - 1 + i) % 12) + 1
+        const yy = year + Math.floor((st.fiscalMonth - 1 + i) / 12)
+        if (ry === yy && rm === mm) return true
+      }
+      return false
+    }
+
+    // 決算65%: 作成・チェックいずれも「決算」区分で計上されるため、月をまたいでも全担当者で均等割する。
+    // 顧問先ごとに、決算区分を計上した担当者と、その担当者が最初に計上した月（'YYYY-M'）を集計
+    const settlementDecisionInfo: Record<string, { totalStaff: number; earliestKeyByUser: Record<string, string> }> = {}
+    {
+      const earliestByUser: Record<string, Record<string, { y: number; m: number }>> = {}
+      for (const d of details) {
+        if (!d.client_code || d.task_type !== '決算') continue
+        const st = settlementInfo[d.client_code]
+        if (!st) continue
+        const rdate = allReportDate[d.report_id]
+        const user = allReportUser[d.report_id]
+        if (!rdate || !user) continue
+        const [ry, rm] = rdate.split('-').map(Number)
+        if (!inDecisionWindow(st, ry, rm)) continue
+        if (!earliestByUser[d.client_code]) earliestByUser[d.client_code] = {}
+        const cur = earliestByUser[d.client_code][user]
+        if (!cur || ry < cur.y || (ry === cur.y && rm < cur.m)) earliestByUser[d.client_code][user] = { y: ry, m: rm }
+      }
+      for (const [code, byUser] of Object.entries(earliestByUser)) {
+        const earliestKeyByUser: Record<string, string> = {}
+        for (const [user, ym] of Object.entries(byUser)) earliestKeyByUser[user] = `${ym.y}-${ym.m}`
+        settlementDecisionInfo[code] = { totalStaff: Object.keys(byUser).length, earliestKeyByUser }
+      }
+    }
+
+    // 訪問来所35%の二重配分防止: 過去のレポートで既に「決算月・翌月の訪問／来所」が
+    // 計上済みかどうかを顧客ごとに判定する（実績が先に発生した月が優先してそのまま独占する仕様）
     const settlementVisitClaimed: Record<string, boolean> = {}
     for (const d of details) {
       if (!d.client_code) continue
@@ -266,7 +301,6 @@ export default function ReportsPage() {
       const rdate = allReportDate[d.report_id]
       if (!rdate) continue
       const [ry, rm] = rdate.split('-').map(Number)
-      if (d.task_type === '決算') settlementClaimed[d.client_code] = true
       if ((d.task_type === '訪問' || d.task_type === '来所') &&
           ((ry === year && rm === st.fiscalMonth) || (ry === st.nextY && rm === st.nextM))) {
         settlementVisitClaimed[d.client_code] = true
@@ -347,11 +381,15 @@ export default function ReportsPage() {
         const isFmMonth = Number(monthStr) === st.fiscalMonth
         const isFmNextMonth = year === st.nextY && Number(monthStr) === st.nextM
 
-        if (!settlementClaimed[row.client_code]) {
-          const settlementUsers = Array.from(new Set(rowEntries.filter(e => e.task_type === '決算').map(e => e.user_name)))
-          if (settlementUsers.length > 0) {
-            const share = (st.fee * 0.65) / settlementUsers.length
-            for (const u of settlementUsers) row.staff_alloc[u] = (row.staff_alloc[u] || 0) + share
+        // 決算65%: 作成・チェックとも「決算」区分で計上されるため月をまたいでも良い。
+        // 決算区分を計上した全担当者（複数月にまたがってもOK）で均等割し、各担当者は自分が最初に
+        // 計上した月のレポートでのみ受け取る（同一人物への二重配分を防止）
+        const decisionInfo = settlementDecisionInfo[row.client_code]
+        if (decisionInfo && decisionInfo.totalStaff > 0) {
+          const share = (st.fee * 0.65) / decisionInfo.totalStaff
+          const thisMonthKey = `${year}-${Number(monthStr)}`
+          for (const [user, key] of Object.entries(decisionInfo.earliestKeyByUser)) {
+            if (key === thisMonthKey) row.staff_alloc[user] = (row.staff_alloc[user] || 0) + share
           }
         }
         if ((isFmMonth || isFmNextMonth) && !settlementVisitClaimed[row.client_code]) {
