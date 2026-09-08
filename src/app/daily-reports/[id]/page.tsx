@@ -4,7 +4,7 @@ import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { DailyReport, DailyReportDetail } from '@/lib/types'
-import { ChevronLeft, Trash2, Plus, ChevronDown, Calendar } from 'lucide-react'
+import { ChevronLeft, Trash2, Plus, ChevronDown, ChevronUp, Calendar } from 'lucide-react'
 import Link from 'next/link'
 import { Schedule } from '@/lib/types'
 
@@ -196,6 +196,16 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
     router.push('/daily-reports')
   }
 
+  function moveRow(i: number, dir: -1 | 1) {
+    setDetails(d => {
+      const j = i + dir
+      if (j < 0 || j >= d.length) return d
+      const copy = [...d]
+      ;[copy[i], copy[j]] = [copy[j], copy[i]]
+      return copy
+    })
+  }
+
   function addRow() {
     setDetails(d => {
       const prevEndTime = d.length > 0 ? (d[d.length - 1].end_time ?? null) : null
@@ -323,7 +333,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
                 <th className="px-2 py-2 text-left w-16">顧客コード</th>
                 <th className="px-2 py-2 text-left w-36">顧客名</th>
                 <th className="px-2 py-2 text-left">作業内容</th>
-                <th className="px-2 py-2 w-8"></th>
+                <th className="px-2 py-2 w-16"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -362,9 +372,21 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
                   <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_name || ''} onChange={e => onClientNameChange(i, e)} onBlur={() => setTimeout(() => setSuggestions(null), 150)} /></td>
                   <td className="px-1 py-1"><textarea rows={2} className="w-full border border-gray-200 rounded px-1 py-1 text-xs resize-y" value={d.report_content || ''} onChange={e => setRow(i, 'report_content', e.target.value)} /></td>
                   <td className="px-1 py-1">
-                    <button onClick={() => setDetails(d => d.filter((_, idx) => idx !== i))} className="text-gray-300 hover:text-red-400">
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center gap-0.5">
+                      <div className="flex flex-col">
+                        <button type="button" onClick={() => moveRow(i, -1)} disabled={i === 0}
+                          className="text-gray-300 hover:text-blue-500 disabled:opacity-20 disabled:cursor-not-allowed">
+                          <ChevronUp size={12} />
+                        </button>
+                        <button type="button" onClick={() => moveRow(i, 1)} disabled={i === details.length - 1}
+                          className="text-gray-300 hover:text-blue-500 disabled:opacity-20 disabled:cursor-not-allowed">
+                          <ChevronDown size={12} />
+                        </button>
+                      </div>
+                      <button onClick={() => setDetails(d => d.filter((_, idx) => idx !== i))} className="text-gray-300 hover:text-red-400">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
