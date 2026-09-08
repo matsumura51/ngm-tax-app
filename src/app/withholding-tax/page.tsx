@@ -112,7 +112,7 @@ export default function WithholdingTaxPage() {
     // 年フィルターなし・全期間取得（月次進捗のyearと選択年がずれる場合に対応）
     const { data } = await supabase
       .from('monthly_progress')
-      .select('client_code, client_name, monthly_fee, year')
+      .select('client_code, client_name, monthly_fee, monthly_fee_settlement, monthly_fee_yearend, year')
       .gte('year', 2020)
       .order('year', { ascending: false })
 
@@ -121,10 +121,12 @@ export default function WithholdingTaxPage() {
 
     for (const p of (data || [])) {
       const feeObj: Record<string, string | number | null> = (p.monthly_fee as Record<string, string | number | null>) || {}
+      const settlementObj: Record<string, string | number | null> = (p.monthly_fee_settlement as Record<string, string | number | null>) || {}
+      const yearendObj: Record<string, string | number | null> = (p.monthly_fee_yearend as Record<string, string | number | null>) || {}
       const monthly: Record<string, number> = {}
       let total = 0
       for (const m of MONTHS) {
-        const amt = parseFee(feeObj[m])
+        const amt = parseFee(feeObj[m]) + parseFee(settlementObj[m]) + parseFee(yearendObj[m])
         monthly[m] = amt
         total += amt
       }
@@ -285,7 +287,7 @@ export default function WithholdingTaxPage() {
             <div className="text-center py-12 text-gray-400">
               <Landmark size={32} className="mx-auto mb-2 text-gray-300" />
               <p>報酬データがありません</p>
-              <p className="text-xs mt-1">月次進捗表の「報酬」列に入力すると自動で反映されます</p>
+              <p className="text-xs mt-1">月次進捗表の「報酬」「決算報酬」「年末調整」列に入力すると自動で反映されます</p>
             </div>
           ) : (
             <table className="w-full text-sm">
