@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { DailyReportDetail } from '@/lib/types'
-import { ChevronLeft, Plus, Trash2, ChevronDown, ChevronUp, Calendar } from 'lucide-react'
+import { ChevronLeft, Plus, Trash2, ChevronDown, ChevronUp, Calendar, ArrowUpDown } from 'lucide-react'
 import Link from 'next/link'
 import { Schedule } from '@/lib/types'
 
@@ -149,6 +149,15 @@ export default function DailyReportNewPage() {
       const copy = [...d]
       ;[copy[i], copy[j]] = [copy[j], copy[i]]
       return copy
+    })
+  }
+
+  function sortByTime() {
+    setDetails(d => {
+      const withTime = d.filter(r => r.start_time)
+      const withoutTime = d.filter(r => !r.start_time)
+      withTime.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+      return [...withTime, ...withoutTime]
     })
   }
 
@@ -309,9 +318,14 @@ export default function DailyReportNewPage() {
       <div className="bg-white rounded-xl shadow p-6 mb-4">
         <div className="flex justify-between items-center mb-3">
           <h2 className="font-semibold text-gray-700">業務明細</h2>
-          <button onClick={addDetail} className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700">
-            <Plus size={14} /> 行を追加
-          </button>
+          <div className="flex items-center gap-4">
+            <button onClick={sortByTime} className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800">
+              <ArrowUpDown size={14} /> 時間順に並べ替え
+            </button>
+            <button onClick={addDetail} className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700">
+              <Plus size={14} /> 行を追加
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -380,18 +394,18 @@ export default function DailyReportNewPage() {
                   </td>
                   <td className="px-1 py-1">
                     <div className="flex items-center gap-0.5">
-                      <div className="flex flex-col">
+                      <div className="flex flex-col border border-gray-200 rounded overflow-hidden">
                         <button type="button" onClick={() => moveDetail(i, -1)} disabled={i === 0}
-                          className="text-gray-300 hover:text-blue-500 disabled:opacity-20 disabled:cursor-not-allowed">
-                          <ChevronUp size={12} />
+                          className="px-0.5 bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                          <ChevronUp size={13} />
                         </button>
                         <button type="button" onClick={() => moveDetail(i, 1)} disabled={i === details.length - 1}
-                          className="text-gray-300 hover:text-blue-500 disabled:opacity-20 disabled:cursor-not-allowed">
-                          <ChevronDown size={12} />
+                          className="px-0.5 bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed border-t border-gray-200">
+                          <ChevronDown size={13} />
                         </button>
                       </div>
                       {details.length > 1 && (
-                        <button onClick={() => removeDetail(i)} className="text-gray-300 hover:text-red-400">
+                        <button onClick={() => removeDetail(i)} className="text-gray-400 hover:text-red-500">
                           <Trash2 size={14} />
                         </button>
                       )}
