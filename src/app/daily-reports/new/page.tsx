@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { DailyReportDetail } from '@/lib/types'
@@ -13,6 +13,47 @@ const TASK_TYPES = ['記帳', 'チェック', '決算', '来所', '訪問', '所
 const REQUIRED_PERIOD_TASKS = ['記帳', 'チェック', '訪問', '来所', '決算', '確定申告', '年末調整']
 const SINGLE_MONTH_TASKS = ['決算']
 const YEAR_TASKS = ['確定申告', '年末調整']
+
+// 年4桁→月へ自動移動する年月入力（"YYYY-MM"形式）
+function MonthPartInput({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
+  const parsed = value?.match(/^(\d{4})-(\d{2})$/)
+  const [ly, setLy] = useState(parsed ? parsed[1] : '')
+  const [lm, setLm] = useState(parsed ? parsed[2] : '')
+  const mRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const p = value?.match(/^(\d{4})-(\d{2})$/)
+    if (p) { setLy(p[1]); setLm(p[2]) }
+    else if (!value) { setLy(''); setLm('') }
+  }, [value])
+
+  function emit(ny: string, nm: string) {
+    if (ny.length === 4 && nm.length >= 1) onChange(`${ny}-${nm.padStart(2, '0')}`)
+    else if (!ny && !nm) onChange('')
+  }
+
+  const seg = 'text-center border rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500'
+  return (
+    <div className="flex items-center gap-0.5">
+      <input type="text" inputMode="numeric" placeholder="YYYY" maxLength={4} value={ly}
+        onChange={e => {
+          const v = e.target.value.replace(/\D/g, '').slice(0, 4)
+          setLy(v); emit(v, lm)
+          if (v.length === 4) mRef.current?.focus()
+        }}
+        className={`${seg} w-12 ${className || 'border-gray-200'}`} />
+      <span className="text-gray-400 text-xs">/</span>
+      <input ref={mRef} type="text" inputMode="numeric" placeholder="MM" maxLength={2} value={lm}
+        onChange={e => {
+          const v = e.target.value.replace(/\D/g, '').slice(0, 2)
+          setLm(v)
+          if (v.length >= 1) emit(ly, v)
+        }}
+        onBlur={() => { if (lm.length >= 1) emit(ly, lm) }}
+        className={`${seg} w-8 ${className || 'border-gray-200'}`} />
+    </div>
+  )
+}
 
 function calcWorkTime(start: string, end: string): string {
   if (!start || !end) return ''
@@ -370,11 +411,12 @@ export default function DailyReportNewPage() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-0.5">
-                        <input type="month" className={`border rounded px-1 py-1 text-xs w-[88px] ${d.task_type && REQUIRED_PERIOD_TASKS.includes(d.task_type) && !d.subject ? 'border-red-400 bg-red-50' : 'border-gray-200'}`} value={d.subject || ''} onChange={e => setDetail(i, 'subject', e.target.value)} />
+                        <MonthPartInput value={d.subject || ''} onChange={v => setDetail(i, 'subject', v)}
+                          className={d.task_type && REQUIRED_PERIOD_TASKS.includes(d.task_type) && !d.subject ? 'border-red-400 bg-red-50' : 'border-gray-200'} />
                         {!(d.task_type && SINGLE_MONTH_TASKS.includes(d.task_type)) && (
                           <>
                             <span className="text-gray-400 text-xs shrink-0">～</span>
-                            <input type="month" className="border border-gray-200 rounded px-1 py-1 text-xs w-[88px]" value={d.details || ''} onChange={e => setDetail(i, 'details', e.target.value)} />
+                            <MonthPartInput value={d.details || ''} onChange={v => setDetail(i, 'details', v)} />
                           </>
                         )}
                       </div>
