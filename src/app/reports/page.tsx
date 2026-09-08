@@ -279,7 +279,9 @@ export default function ReportsPage() {
         byTask[tt].push({ user: e.user_name, mins: e.work_minutes, subject: e.subject, details: e.details, entry_fee: e.entry_fee })
       }
 
-      // 各タスクの生プール（処理月の報酬×月数で計算）
+      // 各タスクの生プール（処理月の報酬×月数で計算）。区分ごとのレート上限（rate×当月報酬）でキャップし、
+      // 複数月分の実績（monthSpan）がその区分自体の取り分を超えて他区分の枠まで食い込まないようにする
+      const capFee = row.monthly_fee
       const rawPools: Record<string, number> = {}
       for (const [taskType, alloc] of Object.entries(TASK_ALLOC)) {
         const taskEntries = byTask[taskType] || []
@@ -288,7 +290,8 @@ export default function ReportsPage() {
           // entry_fee × 月数 × 時間 の加重和 / 総時間
           const totalWeightedFee = taskEntries.reduce((s, e) => s + e.entry_fee * e.mins * monthSpan(e.subject, e.details), 0)
           const totalMins = taskEntries.reduce((s, e) => s + e.mins, 0)
-          rawPools[taskType] = totalMins > 0 ? alloc.rate * totalWeightedFee / totalMins : 0
+          const raw = totalMins > 0 ? alloc.rate * totalWeightedFee / totalMins : 0
+          rawPools[taskType] = Math.min(raw, alloc.rate * capFee)
         } else {
           // 担当者ごとに entry_fee × 最大月数
           const personData: Record<string, { months: number; fee: number }> = {}
@@ -300,12 +303,12 @@ export default function ReportsPage() {
           }
           const totalFeeMonths = Object.values(personData).reduce((s, p) => s + p.fee * p.months, 0)
           const numPersons = Object.keys(personData).length
-          rawPools[taskType] = numPersons > 0 ? alloc.rate * totalFeeMonths / numPersons : 0
+          const raw = numPersons > 0 ? alloc.rate * totalFeeMonths / numPersons : 0
+          rawPools[taskType] = Math.min(raw, alloc.rate * capFee)
         }
       }
 
-      // 合計が加重平均報酬を超えないよう正規化
-      const capFee = row.monthly_fee
+      // 合計が加重平均報酬を超えないよう正規化（区分をまたいだ合算が100%を超える場合の保険）
       const totalRaw = Object.values(rawPools).reduce((s, v) => s + v, 0)
       const normFactor = totalRaw > capFee ? capFee / totalRaw : 1
 
