@@ -347,7 +347,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
                 <th className="px-2 py-2 text-left w-16">顧客コード</th>
                 <th className="px-2 py-2 text-left w-36">顧客名</th>
                 <th className="px-2 py-2 text-left">作業内容</th>
-                <th className="px-2 py-2 w-16"></th>
+                <th className="px-2 py-2 w-20"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -386,15 +386,15 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
                   <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.client_name || ''} onChange={e => onClientNameChange(i, e)} onBlur={() => setTimeout(() => setSuggestions(null), 150)} /></td>
                   <td className="px-1 py-1"><textarea rows={2} className="w-full border border-gray-200 rounded px-1 py-1 text-xs resize-y" value={d.report_content || ''} onChange={e => setRow(i, 'report_content', e.target.value)} /></td>
                   <td className="px-1 py-1">
-                    <div className="flex items-center gap-0.5">
-                      <div className="flex flex-col border border-gray-200 rounded overflow-hidden">
-                        <button type="button" onClick={() => moveRow(i, -1)} disabled={i === 0}
-                          className="px-0.5 bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed">
-                          <ChevronUp size={13} />
+                    <div className="flex items-center gap-1">
+                      <div className="flex flex-col border border-gray-300 rounded overflow-hidden shadow-sm">
+                        <button type="button" title="上へ移動" onClick={() => moveRow(i, -1)} disabled={i === 0}
+                          className="px-1 py-0.5 bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed">
+                          <ChevronUp size={16} />
                         </button>
-                        <button type="button" onClick={() => moveRow(i, 1)} disabled={i === details.length - 1}
-                          className="px-0.5 bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed border-t border-gray-200">
-                          <ChevronDown size={13} />
+                        <button type="button" title="下へ移動" onClick={() => moveRow(i, 1)} disabled={i === details.length - 1}
+                          className="px-1 py-0.5 bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed border-t border-gray-300">
+                          <ChevronDown size={16} />
                         </button>
                       </div>
                       <button onClick={() => setDetails(d => d.filter((_, idx) => idx !== i))} className="text-gray-400 hover:text-red-500">
