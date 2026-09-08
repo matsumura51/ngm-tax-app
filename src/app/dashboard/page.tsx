@@ -161,7 +161,7 @@ export default function DashboardPage() {
 
   async function loadStats() {
     const supabase = createClient()
-    const today = now.toISOString().split('T')[0]
+    const today = new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().split('T')[0]
 
     // ログインユーザーID取得（今日の予定カウントに使用）
     const { data: { user: authUser } } = await supabase.auth.getUser()
@@ -179,15 +179,15 @@ export default function DashboardPage() {
       supabase.from('clients').select('entity_type').is('contract_end_date', null),
       // 自分の今日の予定のみカウント
       supabase.from('schedules').select('*', { count: 'exact', head: true })
-        .gte('start_datetime', today + 'T00:00:00')
-        .lte('start_datetime', today + 'T23:59:59')
+        .gte('start_datetime', today + 'T00:00:00+09:00')
+        .lte('start_datetime', today + 'T23:59:59+09:00')
         .eq('user_id', myUserId),
       // 未読日報は全員分
       supabase.from('daily_reports').select('*', { count: 'exact', head: true }).eq('unread_check', '未チェック'),
       Promise.resolve({ data: [] }),  // 最近の日報は削除
       supabase.from('schedules').select('id, title, start_datetime, end_datetime, user_name, facility, color')
-        .gte('start_datetime', today + 'T00:00:00')
-        .lte('start_datetime', today + 'T23:59:59')
+        .gte('start_datetime', today + 'T00:00:00+09:00')
+        .lte('start_datetime', today + 'T23:59:59+09:00')
         .in('facility', ['会議室①', '会議室②', 'アクア'])
         .order('start_datetime').limit(50),
       supabase.from('client_question_attachments').select('file_size'),
