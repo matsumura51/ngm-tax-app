@@ -133,17 +133,22 @@ export default function ReportsPage() {
       setClientRows([]); setStaffRows([]); setLoading(false); return
     }
 
-    // 明細のreport_idで日報を取得し、当月のものだけ残す
+    // 明細のreport_idで日報を取得（月をまたいだ二重計上チェックのため全期間分を取得し、当月のものと当月より前のものに分ける）
     const allReportIds = [...new Set(details.map(d => d.report_id))]
-    const { data: reports } = await supabase
+    const { data: allReportsMeta } = await supabase
       .from('daily_reports')
       .select('id, user_name, date')
       .in('id', allReportIds)
-      .gte('date', startDate)
-      .lte('date', endDate)
 
     const reportMap: Record<string, { user_name: string; date: string }> = {}
-    for (const r of (reports || [])) reportMap[r.id] = { user_name: r.user_name, date: r.date }
+    const priorReportIds = new Set<string>()
+    for (const r of (allReportsMeta || [])) {
+      if (r.date >= startDate && r.date <= endDate) {
+        reportMap[r.id] = { user_name: r.user_name, date: r.date }
+      } else if (r.date < startDate) {
+        priorReportIds.add(r.id)
+      }
+    }
 
     if (Object.keys(reportMap).length === 0) {
       setClientRows([]); setStaffRows([]); setLoading(false); return
@@ -221,10 +226,27 @@ export default function ReportsPage() {
       return keys
     }
 
-    // 処理期間が含む各月の「登録済み」報酬の合計（未登録月は0円・他月からの借用なし）
-    // 複数月分をまとめて処理した実績を、実際に発生した報酬の範囲内で正しく評価するために使う
-    const sumFeeForRange = (code: string, subject: string | null, details: string | null): number =>
-      monthsInRange(subject, details).reduce((s, key) => s + (feeByMonth[code]?.[key] || 0), 0)
+    // 過去（当月より前）の日報で、同じ顧問先・同じ業務区分について既に処理済みの月を集計
+    // 例：8月のレポートで「記帳 7月〜8月」を計上済みなら、9月のレポートで再び「記帳 7月〜8月」が
+    // 入力されても、既に計上済みの月の報酬を二重に配分しないようにする
+    const claimedMonths: Record<string, Record<string, Set<string>>> = {}
+    for (const d of details) {
+      if (!d.client_code || !d.subject || !priorReportIds.has(d.report_id)) continue
+      const tt = d.task_type || 'その他'
+      if (!claimedMonths[d.client_code]) claimedMonths[d.client_code] = {}
+      if (!claimedMonths[d.client_code][tt]) claimedMonths[d.client_code][tt] = new Set()
+      for (const key of monthsInRange(d.subject, d.details)) claimedMonths[d.client_code][tt].add(key)
+    }
+
+    // 処理期間が含む各月の「登録済み」報酬の合計（未登録月は0円・他月からの借用なし）。
+    // 複数月分をまとめて処理した実績を、実際に発生した報酬の範囲内で正しく評価するために使う。
+    // 過去の日報で同じ業務区分について既に計上済みの月は、二重配分を避けるため0円として扱う
+    const sumFeeForRange = (code: string, taskType: string, subject: string | null, details: string | null): number => {
+      const claimed = claimedMonths[code]?.[taskType]
+      return monthsInRange(subject, details)
+        .filter(key => !claimed?.has(key))
+        .reduce((s, key) => s + (feeByMonth[code]?.[key] || 0), 0)
+    }
 
     // WorkEntryを組み立て（当月の日報に紐づくものだけ）
     const entries: WorkEntry[] = details
@@ -289,7 +311,7 @@ export default function ReportsPage() {
       for (const e of rowEntries) {
         const tt = e.task_type || 'その他'
         if (!byTask[tt]) byTask[tt] = []
-        byTask[tt].push({ user: e.user_name, mins: e.work_minutes, fee: sumFeeForRange(row.client_code, e.subject, e.details) })
+        byTask[tt].push({ user: e.user_name, mins: e.work_minutes, fee: sumFeeForRange(row.client_code, tt, e.subject, e.details) })
       }
 
       // この顧客の実績が参照する全月（当月＋処理期間で遡及した月）の登録済み報酬合計を配分原資とする
