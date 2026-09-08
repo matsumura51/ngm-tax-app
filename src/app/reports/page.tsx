@@ -5,11 +5,11 @@ import { createClient } from '@/lib/supabase'
 
 // 業務区分ごとの配分率と分割方法
 const TASK_ALLOC: Record<string, { rate: number; splitBy: 'time' | 'person' }> = {
-  '記帳':  { rate: 0.4, splitBy: 'time' },
-  '決算':  { rate: 0.4, splitBy: 'time' },
-  '訪問':  { rate: 0.4, splitBy: 'person' },
-  '来所':  { rate: 0.4, splitBy: 'person' },
-  'チェック': { rate: 0.2, splitBy: 'person' },
+  '記帳':  { rate: 0.35, splitBy: 'time' },
+  '決算':  { rate: 0.35, splitBy: 'time' },
+  '訪問':  { rate: 0.35, splitBy: 'person' },
+  '来所':  { rate: 0.35, splitBy: 'person' },
+  'チェック': { rate: 0.3, splitBy: 'person' },
 }
 
 function toMinutes(s: string | null | undefined): number {
@@ -413,7 +413,7 @@ tfoot td{font-weight:bold;background:#f9fafb}
 @media print{@page{margin:15mm}}
 </style></head><body>
 <h1>${title}</h1>
-<p>記帳・決算40%／訪問・来所40%（人数均等割）／チェック20% を報酬から配分</p>
+<p>記帳・決算35%／訪問・来所35%（人数均等割）／チェック30% を報酬から配分</p>
 ${tableHTML}
 <script>window.onload=function(){window.print()}<\/script>
 </body></html>`
@@ -461,7 +461,7 @@ ${tableHTML}
     <div className="p-6">
       <h1 className="text-2xl font-bold text-gray-800 mb-1">実績レポート</h1>
       <p className="text-xs text-gray-500 mb-5">
-        記帳・決算40%／訪問・来所40%（人数均等割）／チェック20% を報酬から配分
+        記帳・決算35%／訪問・来所35%（人数均等割）／チェック30% を報酬から配分
       </p>
 
       {/* 年月セレクター */}
