@@ -190,7 +190,7 @@ export default function ReportsPage() {
     // monthly_progressから全年度の報酬を取得（処理月の報酬を参照するため全年度が必要）
     const { data: progress } = await supabase
       .from('monthly_progress')
-      .select('client_code, monthly_fee, monthly_fee_settlement, fiscal_month, year')
+      .select('client_code, monthly_fee, monthly_fee_settlement, monthly_fee_yearend, fiscal_month, year')
 
     // feeByMonth[client_code]['YYYY-M'] = fee
     const feeByMonth: Record<string, Record<string, number>> = {}
@@ -201,18 +201,31 @@ export default function ReportsPage() {
       }
     }
 
-    // 決算報酬（decision fee）が登録されている顧客: 今年度分の決算月・金額を取得
-    // 決算報酬がある法人は、決算・訪問・来所の配分方法を「決算65%／訪問来所35%」の専用ルールに置き換える
-    interface SettlementInfo { fiscalMonth: number; fee: number; nextY: number; nextM: number }
+    // 決算報酬（decision fee）が登録されている顧客: 決算月・金額を取得。
+    // 決算月=12月の場合、翌月（1月）の実績は翌年のレポートで扱うことになるため、
+    // 前年12月分の決算報酬（year-1のレコード）も対象に含める
+    interface SettlementInfo { fiscalYear: number; fiscalMonth: number; fee: number; nextY: number; nextM: number }
     const settlementInfo: Record<string, SettlementInfo> = {}
     for (const p of (progress || [])) {
-      if (p.year !== year || !p.fiscal_month) continue
+      if (!p.fiscal_month) continue
+      if (p.year !== year && !(p.year === year - 1 && p.fiscal_month === 12)) continue
       const raw = (p.monthly_fee_settlement || {})[String(p.fiscal_month)]
       const fee = raw ? Number(String(raw).replace(/[^0-9]/g, '')) : 0
       if (fee <= 0) continue
       const nextY = p.fiscal_month === 12 ? p.year + 1 : p.year
       const nextM = p.fiscal_month === 12 ? 1 : p.fiscal_month + 1
-      settlementInfo[p.client_code] = { fiscalMonth: p.fiscal_month, fee, nextY, nextM }
+      settlementInfo[p.client_code] = { fiscalYear: p.year, fiscalMonth: p.fiscal_month, fee, nextY, nextM }
+    }
+
+    // 年末調整報酬が登録されている顧客: 1月分の金額を取得。
+    // 年末調整の実績は前年12月に計上されることも多いため、翌年1月分（year+1のレコード）も対象に含める
+    const yearendInfo: Record<string, { fee: number; feeYear: number }> = {}
+    for (const p of (progress || [])) {
+      if (p.year !== year && p.year !== year + 1) continue
+      const raw = (p.monthly_fee_yearend || {})['1']
+      const fee = raw ? Number(String(raw).replace(/[^0-9]/g, '')) : 0
+      if (fee <= 0) continue
+      yearendInfo[p.client_code] = { fee, feeYear: p.year }
     }
     // 処理月（subject: 'YYYY-MM'）から報酬を取得。見つからない場合はレポート月の報酬にフォールバック。
     // 年1回払いなど報酬が未登録の月は0円として扱う（他の月の金額を借用しない）
@@ -256,40 +269,57 @@ export default function ReportsPage() {
       for (const key of monthsInRange(d.subject, d.details)) claimedMonths[d.client_code][tt].add(key)
     }
 
-    // 決算月から半年以内（作成・チェックの遅れ等を考慮した猶予期間）かどうか。年をまたぐ決算月にも対応
-    const inDecisionWindow = (st: SettlementInfo, ry: number, rm: number): boolean => {
-      for (let i = 0; i <= 6; i++) {
-        const mm = ((st.fiscalMonth - 1 + i) % 12) + 1
-        const yy = year + Math.floor((st.fiscalMonth - 1 + i) / 12)
+    // 基準月から指定ヶ月数以内かどうか（年をまたぐ場合にも対応）
+    const inMonthWindow = (baseYear: number, baseMonth: number, span: number, ry: number, rm: number): boolean => {
+      for (let i = 0; i < span; i++) {
+        const mm = ((baseMonth - 1 + i) % 12) + 1
+        const yy = baseYear + Math.floor((baseMonth - 1 + i) / 12)
         if (ry === yy && rm === mm) return true
       }
       return false
     }
 
-    // 決算65%: 作成・チェックいずれも「決算」区分で計上されるため、月をまたいでも全担当者で均等割する。
-    // 顧問先ごとに、決算区分を計上した担当者と、その担当者が最初に計上した月（'YYYY-M'）を集計
-    const settlementDecisionInfo: Record<string, { totalStaff: number; earliestKeyByUser: Record<string, string> }> = {}
-    {
+    // 指定した業務区分について、対象月の窓の中で計上した全担当者と、各担当者が最初に計上した月（'YYYY-M'）を
+    // 顧問先ごとに集計する（複数月にまたがって計上されても良い区分の配分に使う）
+    function earliestStaffByClient(
+      taskType: string,
+      hasFee: (code: string) => boolean,
+      inWindow: (code: string, ry: number, rm: number) => boolean
+    ): Record<string, { totalStaff: number; earliestKeyByUser: Record<string, string> }> {
       const earliestByUser: Record<string, Record<string, { y: number; m: number }>> = {}
-      for (const d of details) {
-        if (!d.client_code || d.task_type !== '決算') continue
-        const st = settlementInfo[d.client_code]
-        if (!st) continue
+      for (const d of details!) {
+        if (!d.client_code || d.task_type !== taskType || !hasFee(d.client_code)) continue
         const rdate = allReportDate[d.report_id]
         const user = allReportUser[d.report_id]
         if (!rdate || !user) continue
         const [ry, rm] = rdate.split('-').map(Number)
-        if (!inDecisionWindow(st, ry, rm)) continue
+        if (!inWindow(d.client_code, ry, rm)) continue
         if (!earliestByUser[d.client_code]) earliestByUser[d.client_code] = {}
         const cur = earliestByUser[d.client_code][user]
         if (!cur || ry < cur.y || (ry === cur.y && rm < cur.m)) earliestByUser[d.client_code][user] = { y: ry, m: rm }
       }
+      const result: Record<string, { totalStaff: number; earliestKeyByUser: Record<string, string> }> = {}
       for (const [code, byUser] of Object.entries(earliestByUser)) {
         const earliestKeyByUser: Record<string, string> = {}
         for (const [user, ym] of Object.entries(byUser)) earliestKeyByUser[user] = `${ym.y}-${ym.m}`
-        settlementDecisionInfo[code] = { totalStaff: Object.keys(byUser).length, earliestKeyByUser }
+        result[code] = { totalStaff: Object.keys(byUser).length, earliestKeyByUser }
       }
+      return result
     }
+
+    // 決算65%: 作成・チェックいずれも「決算」区分で計上されるため、決算月から半年以内なら月をまたいでも良い
+    const settlementDecisionInfo = earliestStaffByClient(
+      '決算',
+      code => !!settlementInfo[code],
+      (code, ry, rm) => inMonthWindow(settlementInfo[code].fiscalYear, settlementInfo[code].fiscalMonth, 7, ry, rm)
+    )
+
+    // 年末調整: 前年12月〜当年3月の間に「年末調整」区分で計上されれば良い（複数月にまたがってもOK）
+    const yearendDecisionInfo = earliestStaffByClient(
+      '年末調整',
+      code => !!yearendInfo[code],
+      (code, ry, rm) => inMonthWindow(yearendInfo[code].feeYear - 1, 12, 4, ry, rm)
+    )
 
     // 訪問来所35%の二重配分防止: 過去のレポートで既に「決算月・翌月の訪問／来所」が
     // 計上済みかどうかを顧客ごとに判定する（実績が先に発生した月が優先してそのまま独占する仕様）
@@ -405,6 +435,21 @@ export default function ReportsPage() {
           if ((isFmMonth || isFmNextMonth) && (e.task_type === '訪問' || e.task_type === '来所')) return false
           return true
         })
+      }
+
+      // 年末調整報酬: 登録がある法人は全額を「年末調整」区分の担当者に配分する。
+      // 複数月にまたがって計上されても良く、各担当者は自分が最初に計上した月のレポートでのみ受け取る
+      const ye = yearendInfo[row.client_code]
+      if (ye) {
+        const yearendStaff = yearendDecisionInfo[row.client_code]
+        if (yearendStaff && yearendStaff.totalStaff > 0) {
+          const share = ye.fee / yearendStaff.totalStaff
+          const thisMonthKey = `${year}-${Number(monthStr)}`
+          for (const [user, key] of Object.entries(yearendStaff.earliestKeyByUser)) {
+            if (key === thisMonthKey) row.staff_alloc[user] = (row.staff_alloc[user] || 0) + share
+          }
+        }
+        // 年末調整はTASK_ALLOCに含まれずPot Aでは元々配分されないため、rowEntriesからの除外は不要
       }
 
       if (row.monthly_fee === 0) continue
