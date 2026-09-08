@@ -34,6 +34,9 @@ export default function BulletinsPage() {
   const today = new Date().toISOString().split('T')[0]
   const [form, setForm] = useState({ title: '', content: '', post_date: today })
   const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ title: '', content: '', post_date: today })
+  const [editSaving, setEditSaving] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -106,6 +109,29 @@ export default function BulletinsPage() {
     setForm({ title: '', content: '', post_date: today })
     setShowForm(false)
     setSaving(false)
+    await load()
+  }
+
+  function startEdit(b: Bulletin) {
+    setEditingId(b.id)
+    setEditForm({ title: b.title, content: b.content || '', post_date: b.post_date || today })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+  }
+
+  async function saveEdit() {
+    if (!editingId || !editForm.title.trim()) return
+    setEditSaving(true)
+    const supabase = createClient()
+    await supabase.from('bulletins').update({
+      title: editForm.title.trim(),
+      content: editForm.content.trim() || null,
+      post_date: editForm.post_date || null,
+    }).eq('id', editingId)
+    setEditingId(null)
+    setEditSaving(false)
     await load()
   }
 
@@ -191,6 +217,36 @@ export default function BulletinsPage() {
                   const bReads = readsFor(b.id)
                   const myRead = isReadByMe(b.id)
                   const isExp = expanded.has(b.id)
+                  if (editingId === b.id) {
+                    return (
+                      <div key={b.id} className="bg-amber-50 border border-amber-300 rounded-xl p-4 space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">掲示日</label>
+                          <input type="date" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                            value={editForm.post_date} onChange={e => setEditForm(f => ({ ...f, post_date: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">タイトル <span className="text-red-500">*</span></label>
+                          <input className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                            value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">内容</label>
+                          <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                            rows={5} value={editForm.content} onChange={e => setEditForm(f => ({ ...f, content: e.target.value }))} />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button onClick={cancelEdit} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                            キャンセル
+                          </button>
+                          <button onClick={saveEdit} disabled={editSaving || !editForm.title.trim()}
+                            className="px-4 py-2 text-sm bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg disabled:opacity-50">
+                            {editSaving ? '保存中...' : '保存する'}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  }
                   return (
                     <div key={b.id} className="bg-white border border-amber-200 rounded-xl shadow-sm overflow-hidden">
                       <div className="p-4">
@@ -272,7 +328,9 @@ export default function BulletinsPage() {
                           )
                         })()}
                       </div>
-                      <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex justify-end">
+                      <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+                        <button onClick={() => startEdit(b)}
+                          className="text-xs text-blue-500 hover:text-blue-700">編集</button>
                         <button onClick={() => deleteBulletin(b.id)}
                           className="text-xs text-red-400 hover:text-red-600">削除</button>
                       </div>
@@ -294,6 +352,36 @@ export default function BulletinsPage() {
                 {completed.map(b => {
                   const bReads = readsFor(b.id)
                   const isExp = expanded.has(b.id)
+                  if (editingId === b.id) {
+                    return (
+                      <div key={b.id} className="bg-amber-50 border border-amber-300 rounded-xl p-4 space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">掲示日</label>
+                          <input type="date" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                            value={editForm.post_date} onChange={e => setEditForm(f => ({ ...f, post_date: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">タイトル <span className="text-red-500">*</span></label>
+                          <input className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                            value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">内容</label>
+                          <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                            rows={5} value={editForm.content} onChange={e => setEditForm(f => ({ ...f, content: e.target.value }))} />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button onClick={cancelEdit} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                            キャンセル
+                          </button>
+                          <button onClick={saveEdit} disabled={editSaving || !editForm.title.trim()}
+                            className="px-4 py-2 text-sm bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg disabled:opacity-50">
+                            {editSaving ? '保存中...' : '保存する'}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  }
                   return (
                     <div key={b.id} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden opacity-70">
                       <div className="p-4">
@@ -334,7 +422,9 @@ export default function BulletinsPage() {
                           </div>
                         )}
                       </div>
-                      <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex justify-end">
+                      <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+                        <button onClick={() => startEdit(b)}
+                          className="text-xs text-blue-500 hover:text-blue-700">編集</button>
                         <button onClick={() => deleteBulletin(b.id)}
                           className="text-xs text-red-400 hover:text-red-600">削除</button>
                       </div>
