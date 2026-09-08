@@ -200,7 +200,8 @@ export default function ReportsPage() {
         if (f) feeByMonth[p.client_code][`${p.year}-${m}`] = Number(String(f).replace(/[^0-9]/g, ''))
       }
     }
-    // 処理月（subject: 'YYYY-MM'）から報酬を取得。見つからない場合はレポート月→任意月の順でフォールバック
+    // 処理月（subject: 'YYYY-MM'）から報酬を取得。見つからない場合はレポート月の報酬にフォールバック。
+    // 年1回払いなど報酬が未登録の月は0円として扱う（他の月の金額を借用しない）
     const getSubjectFee = (code: string, subject: string | null): number => {
       if (subject) {
         const parts = subject.split('-').map(Number)
@@ -209,11 +210,7 @@ export default function ReportsPage() {
           if (fee) return fee
         }
       }
-      const reportMonthFee = feeByMonth[code]?.[`${year}-${monthStr}`]
-      if (reportMonthFee) return reportMonthFee
-      // 当月データなし → 登録済みの非ゼロ最大値を使用
-      const allFees = Object.values(feeByMonth[code] || {}).filter(f => f > 0)
-      return allFees.length > 0 ? Math.max(...allFees) : 0
+      return feeByMonth[code]?.[`${year}-${monthStr}`] || 0
     }
 
     // WorkEntryを組み立て（当月の日報に紐づくものだけ）
