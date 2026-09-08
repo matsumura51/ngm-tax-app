@@ -16,6 +16,14 @@ const MONTHLY_FIELDS = [
   { key: 'monthly_report',     label: '報告',    type: 'date' },
   { key: 'monthly_fee',        label: '報酬',    type: 'text' },
 ]
+// 特定の月にだけ表示する追加報酬（1月＝年末調整、決算月＝決算報酬）
+const EXTRA_FEE_KEYS = ['monthly_fee_yearend', 'monthly_fee_settlement'] as const
+function extraFeeFieldsFor(client: Client, month: number): { key: string; label: string }[] {
+  const out: { key: string; label: string }[] = []
+  if (month === 1) out.push({ key: 'monthly_fee_yearend', label: '年末調整' })
+  if (client.fiscal_month && month === client.fiscal_month) out.push({ key: 'monthly_fee_settlement', label: '決算報酬' })
+  return out
+}
 type ActiveTab = '月次進捗' | '税務情報' | '決算業務'
 
 // 年4桁→月へ、月2桁→日へ自動移動するカスタム日付入力
@@ -487,6 +495,10 @@ function MonthlyContent() {
       const val = p?.[f.key as keyof MonthlyProgress] as Record<string, string | null> | undefined
       dates[f.key] = val?.[String(month)] || ''
     }
+    for (const key of EXTRA_FEE_KEYS) {
+      const val = p?.[key as keyof MonthlyProgress] as Record<string, string | null> | undefined
+      dates[key] = val?.[String(month)] || ''
+    }
     setMonthDates(dates)
     setMonthRangeEnd(null)
     setMonthRangeFields(new Set(MONTHLY_FIELDS.map(f => f.key)))
@@ -531,6 +543,11 @@ function MonthlyContent() {
       }
       updates[f.key] = patch
     }
+    // 追加報酬（年末調整・決算報酬）は範囲適用の対象外。開始月のみ更新
+    for (const key of EXTRA_FEE_KEYS) {
+      const existing = (p[key as keyof MonthlyProgress] as Record<string, string | null>) || {}
+      updates[key] = { ...existing, [String(fromMonth)]: monthDates[key] || null }
+    }
     const res = await fetch('/api/monthly-progress/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -551,6 +568,10 @@ function MonthlyContent() {
       for (const f of MONTHLY_FIELDS) {
         const val = newP[f.key as keyof MonthlyProgress] as Record<string, string | null> | undefined
         dates[f.key] = val?.[String(nextMonth)] || ''
+      }
+      for (const key of EXTRA_FEE_KEYS) {
+        const val = newP[key as keyof MonthlyProgress] as Record<string, string | null> | undefined
+        dates[key] = val?.[String(nextMonth)] || ''
       }
       setMonthDates(dates)
       setMonthRangeEnd(null)
@@ -816,6 +837,7 @@ function MonthlyContent() {
                         const isFiscal = !!c.fiscal_month && parseInt(m) === c.fiscal_month
                         const isFee = f.key === 'monthly_fee'
                         const bgClass = isFiscal ? 'bg-blue-100' : ''
+                        const extras = isFee ? extraFeeFieldsFor(c, parseInt(m)) : []
                         return (
                           <td key={`${m}-${f.key}`}
                             onClick={() => openMonthModal(c, parseInt(m))}
@@ -823,6 +845,13 @@ function MonthlyContent() {
                               fi === 0 ? (isFiscal ? 'border-l-2 border-blue-400' : 'border-l border-gray-200') : ''
                             } ${bgClass} ${isFee && val ? 'text-green-700 font-medium' : 'text-gray-700'}`}>
                             {val}
+                            {extras.map(ef => {
+                              const raw = (p?.[ef.key as keyof MonthlyProgress] as Record<string, string | null> | undefined)?.[m] || ''
+                              const shown = fmtFee(raw)
+                              return shown ? (
+                                <div key={ef.key} className="text-[9px] text-purple-600 leading-tight font-normal">{ef.label} {shown}</div>
+                              ) : null
+                            })}
                           </td>
                         )
                       })
@@ -1153,6 +1182,21 @@ function MonthlyContent() {
                 </div>
                 )
               })}
+              {extraFeeFieldsFor(monthModal.client, monthModal.month).map(f => (
+                <div key={f.key} className="flex items-center gap-3">
+                  <label className="text-xs font-medium text-gray-500 w-16 shrink-0">{f.label}</label>
+                  <input type="text" inputMode="numeric"
+                    value={fmtFee(monthDates[f.key])}
+                    onChange={e => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '')
+                      setMonthDates(d => ({ ...d, [f.key]: raw }))
+                    }}
+                    placeholder="例: 50,000" className={inp} />
+                  {monthDates[f.key] && (
+                    <button onClick={() => setMonthDates(d => ({ ...d, [f.key]: '' }))} className="text-gray-300 hover:text-gray-500 text-xs">✕</button>
+                  )}
+                </div>
+              ))}
             </div>
             <div className="flex gap-2 mt-5">
               <button onClick={() => setMonthModal(null)} className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">キャンセル</button>
