@@ -142,7 +142,9 @@ export default function ReportsPage() {
 
     const reportMap: Record<string, { user_name: string; date: string }> = {}
     const priorReportIds = new Set<string>()
+    const allReportDate: Record<string, string> = {}
     for (const r of (allReportsMeta || [])) {
+      allReportDate[r.id] = r.date
       if (r.date >= startDate && r.date <= endDate) {
         reportMap[r.id] = { user_name: r.user_name, date: r.date }
       } else if (r.date < startDate) {
@@ -186,7 +188,7 @@ export default function ReportsPage() {
     // monthly_progressから全年度の報酬を取得（処理月の報酬を参照するため全年度が必要）
     const { data: progress } = await supabase
       .from('monthly_progress')
-      .select('client_code, monthly_fee, year')
+      .select('client_code, monthly_fee, monthly_fee_settlement, fiscal_month, year')
 
     // feeByMonth[client_code]['YYYY-M'] = fee
     const feeByMonth: Record<string, Record<string, number>> = {}
@@ -195,6 +197,20 @@ export default function ReportsPage() {
       for (const [m, f] of Object.entries(p.monthly_fee || {})) {
         if (f) feeByMonth[p.client_code][`${p.year}-${m}`] = Number(String(f).replace(/[^0-9]/g, ''))
       }
+    }
+
+    // 決算報酬（decision fee）が登録されている顧客: 今年度分の決算月・金額を取得
+    // 決算報酬がある法人は、決算・訪問・来所の配分方法を「決算65%／訪問来所35%」の専用ルールに置き換える
+    interface SettlementInfo { fiscalMonth: number; fee: number; nextY: number; nextM: number }
+    const settlementInfo: Record<string, SettlementInfo> = {}
+    for (const p of (progress || [])) {
+      if (p.year !== year || !p.fiscal_month) continue
+      const raw = (p.monthly_fee_settlement || {})[String(p.fiscal_month)]
+      const fee = raw ? Number(String(raw).replace(/[^0-9]/g, '')) : 0
+      if (fee <= 0) continue
+      const nextY = p.fiscal_month === 12 ? p.year + 1 : p.year
+      const nextM = p.fiscal_month === 12 ? 1 : p.fiscal_month + 1
+      settlementInfo[p.client_code] = { fiscalMonth: p.fiscal_month, fee, nextY, nextM }
     }
     // 処理月（subject: 'YYYY-MM'）から報酬を取得。見つからない場合はレポート月の報酬にフォールバック。
     // 年1回払いなど報酬が未登録の月は0円として扱う（他の月の金額を借用しない）
@@ -236,6 +252,25 @@ export default function ReportsPage() {
       if (!claimedMonths[d.client_code]) claimedMonths[d.client_code] = {}
       if (!claimedMonths[d.client_code][tt]) claimedMonths[d.client_code][tt] = new Set()
       for (const key of monthsInRange(d.subject, d.details)) claimedMonths[d.client_code][tt].add(key)
+    }
+
+    // 決算報酬（Pot B）の二重配分防止: 過去のレポートで既に「決算」区分、または
+    // 「決算月・翌月の訪問／来所」が計上済みかどうかを顧客ごとに判定する
+    // （実績が先に発生した月が優先してそのまま独占する仕様）
+    const settlementClaimed: Record<string, boolean> = {}
+    const settlementVisitClaimed: Record<string, boolean> = {}
+    for (const d of details) {
+      if (!d.client_code) continue
+      const st = settlementInfo[d.client_code]
+      if (!st || !priorReportIds.has(d.report_id)) continue
+      const rdate = allReportDate[d.report_id]
+      if (!rdate) continue
+      const [ry, rm] = rdate.split('-').map(Number)
+      if (d.task_type === '決算') settlementClaimed[d.client_code] = true
+      if ((d.task_type === '訪問' || d.task_type === '来所') &&
+          ((ry === year && rm === st.fiscalMonth) || (ry === st.nextY && rm === st.nextM))) {
+        settlementVisitClaimed[d.client_code] = true
+      }
     }
 
     // 処理期間が含む各月の「登録済み」報酬の合計（未登録月は0円・他月からの借用なし）。
@@ -302,9 +337,39 @@ export default function ReportsPage() {
     // 報酬配分を計算。処理期間（subject〜details）が含む各月の「登録済み」報酬を合算して評価するため、
     // 複数月分をまとめて処理した実績はその分だけ正しく多く評価され、未登録月は0円のまま（他月からの借用なし）
     for (const row of Object.values(clientMap)) {
-      if (row.monthly_fee === 0) continue
+      let rowEntries = entries.filter(e => e.client_code === row.client_code)
 
-      const rowEntries = entries.filter(e => e.client_code === row.client_code)
+      // 決算報酬（Pot B）: 決算報酬が登録されている法人は、決算・訪問来所の配分方法を
+      // 「決算65%（決算区分の担当者で均等割）／訪問来所35%（決算月・翌月の担当者で均等割）」に完全に置き換える。
+      // 月額報酬（Pot A）とは別の原資として配分し、いずれも実績が先に発生した月が独占する（二重配分防止）
+      const st = settlementInfo[row.client_code]
+      if (st) {
+        const isFmMonth = Number(monthStr) === st.fiscalMonth
+        const isFmNextMonth = year === st.nextY && Number(monthStr) === st.nextM
+
+        if (!settlementClaimed[row.client_code]) {
+          const settlementUsers = Array.from(new Set(rowEntries.filter(e => e.task_type === '決算').map(e => e.user_name)))
+          if (settlementUsers.length > 0) {
+            const share = (st.fee * 0.65) / settlementUsers.length
+            for (const u of settlementUsers) row.staff_alloc[u] = (row.staff_alloc[u] || 0) + share
+          }
+        }
+        if ((isFmMonth || isFmNextMonth) && !settlementVisitClaimed[row.client_code]) {
+          const visitUsers = Array.from(new Set(rowEntries.filter(e => e.task_type === '訪問' || e.task_type === '来所').map(e => e.user_name)))
+          if (visitUsers.length > 0) {
+            const share = (st.fee * 0.35) / visitUsers.length
+            for (const u of visitUsers) row.staff_alloc[u] = (row.staff_alloc[u] || 0) + share
+          }
+        }
+        // 決算区分は常にPot Bへ、訪問・来所は決算月・翌月のみPot Bへ移すため、通常配分（Pot A）の対象から除外
+        rowEntries = rowEntries.filter(e => {
+          if (e.task_type === '決算') return false
+          if ((isFmMonth || isFmNextMonth) && (e.task_type === '訪問' || e.task_type === '来所')) return false
+          return true
+        })
+      }
+
+      if (row.monthly_fee === 0) continue
 
       // task_typeごとにグループ化。fee = 処理期間の各月の登録済み報酬の合計（範囲指定なしは当月報酬のみ）
       const byTask: Record<string, { user: string; mins: number; fee: number }[]> = {}
