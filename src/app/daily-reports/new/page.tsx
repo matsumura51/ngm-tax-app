@@ -28,7 +28,9 @@ function MonthPartInput({ value, onChange, className }: { value: string; onChang
   }, [value])
 
   function emit(ny: string, nm: string) {
-    if (ny.length === 4 && nm.length >= 1) onChange(`${ny}-${nm.padStart(2, '0')}`)
+    const nmNum = parseInt(nm, 10)
+    // 「0」1文字だけなど月として無効な値（0または13以上）は確定しない
+    if (ny.length === 4 && nm.length >= 1 && nmNum >= 1 && nmNum <= 12) onChange(`${ny}-${nm.padStart(2, '0')}`)
     else if (!ny && !nm) onChange('')
   }
 
@@ -47,7 +49,8 @@ function MonthPartInput({ value, onChange, className }: { value: string; onChang
         onChange={e => {
           const v = e.target.value.replace(/\D/g, '').slice(0, 2)
           setLm(v)
-          if (v.length >= 1) emit(ly, v)
+          // 2桁揃った時だけ即確定。1桁目だけでは確定しない（"0"だけで「00」になるのを防ぐ）
+          if (v.length === 2) emit(ly, v)
         }}
         onBlur={() => { if (lm.length >= 1) emit(ly, lm) }}
         className={`${seg} w-8 ${className || 'border-gray-200'}`} />
