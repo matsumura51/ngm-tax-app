@@ -442,7 +442,8 @@ export default function ReportsPage() {
           }
         } else {
           // 実際に動きがあった区分の間でrate比に応じて70%を「使い切る」よう配分する（超過時は縮小、不足時は拡大）。
-          // 記帳・来所・チェックが無く訪問だけの場合等、70%分が宙に浮かず全額配分されるようにする
+          // 記帳・来所・チェックが無く訪問だけの場合等、70%分が宙に浮かず全額配分されるようにする。
+          // 区分ごとの配分額は、その区分を計上した担当者で人数均等割する（記帳も含め時間比ではない）
           const normFactor70 = pool70 / totalRaw70
           for (const [taskType, rawPool] of Object.entries(rawPools70)) {
             const info = decisionOnlyTaskInfo[taskType][row.client_code]
