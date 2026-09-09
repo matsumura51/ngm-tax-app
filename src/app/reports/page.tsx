@@ -307,6 +307,21 @@ export default function ReportsPage() {
       (code, ry, rm) => inMonthWindow(yearendInfo[code].feeYear - 1, 12, 4, ry, rm)
     )
 
+    // 月額報酬が無く決算報酬のみの法人かどうか
+    const hasNoMonthlyFee = (code: string): boolean => !Object.values(feeByMonth[code] || {}).some(f => f > 0)
+
+    // 決算報酬のみの法人向け: 決算報酬の70%を「記帳・訪問・来所・チェック」に通常のTASK_ALLOCレートで配分する。
+    // 決算65%と同じ仕組み（決算月から半年以内・複数月にまたがってもOK・各担当者は最初に計上した月で受け取る）を
+    // 記帳・訪問・来所・チェックそれぞれに適用する
+    const decisionOnlyTaskInfo: Record<string, Record<string, { totalStaff: number; earliestKeyByUser: Record<string, string> }>> = {}
+    for (const tt of ['記帳', '訪問', '来所', 'チェック']) {
+      decisionOnlyTaskInfo[tt] = earliestStaffByClient(
+        tt,
+        code => !!settlementInfo[code] && hasNoMonthlyFee(code),
+        (code, ry, rm) => inMonthWindow(settlementInfo[code].fiscalYear, settlementInfo[code].fiscalMonth, 7, ry, rm)
+      )
+    }
+
     // ある実績（訪問・来所）の対象期間（subject〜details。無指定ならfallbackKeyの月）が
     // 決算月または翌月に該当するかどうか。レポートを開いている月ではなく実績自体の対象期間で判定する
     const inFiscalOrNextMonth = (st: SettlementInfo, subject: string | null, detailsField: string | null, fallbackKey: string): boolean => {
@@ -388,14 +403,48 @@ export default function ReportsPage() {
       let rowEntries = entries.filter(e => e.client_code === row.client_code)
       let potBCTotal = 0  // 決算報酬・年末調整報酬のうち今月実際に配分した額（表示用「月次報酬」に含める）
 
-      // 決算報酬（Pot B）: 決算報酬が登録されている法人は、決算・訪問来所の配分方法を
-      // 「決算65%（決算区分の担当者で均等割）／訪問来所35%（決算月・翌月の担当者で均等割）」に完全に置き換える。
-      // 月額報酬（Pot A）とは別の原資として配分し、いずれも実績が先に発生した月が独占する（二重配分防止）
+      // 決算報酬（Pot B）: 決算報酬が登録されている法人は、決算・訪問来所の配分方法を月額報酬（Pot A）とは
+      // 別の原資として配分する。いずれも実績が先に発生した月が独占する（二重配分防止）
       const st = settlementInfo[row.client_code]
-      if (st) {
-        // 決算65%: 作成・チェックとも「決算」区分で計上されるため月をまたいでも良い。
-        // 決算区分を計上した全担当者（複数月にまたがってもOK）で均等割し、各担当者は自分が最初に
-        // 計上した月のレポートでのみ受け取る（同一人物への二重配分を防止）
+      if (st && hasNoMonthlyFee(row.client_code)) {
+        // 月額報酬が無く決算報酬のみの法人: 決算報酬を「決算30%（決算区分の担当者で均等割）」と
+        // 「70%（記帳・訪問・来所・チェックを通常のTASK_ALLOCレートで配分）」に分割する
+        const thisMonthKey = `${year}-${Number(monthStr)}`
+        const decisionInfo = settlementDecisionInfo[row.client_code]
+        if (decisionInfo && decisionInfo.totalStaff > 0) {
+          const share = (st.fee * 0.30) / decisionInfo.totalStaff
+          for (const [user, key] of Object.entries(decisionInfo.earliestKeyByUser)) {
+            if (key === thisMonthKey) {
+              row.staff_alloc[user] = (row.staff_alloc[user] || 0) + share
+              potBCTotal += share
+            }
+          }
+        }
+        const pool70 = st.fee * 0.70
+        const rawPools70: Record<string, number> = {}
+        for (const [taskType, alloc] of Object.entries(TASK_ALLOC)) {
+          if (taskType === '決算') continue
+          const info = decisionOnlyTaskInfo[taskType]?.[row.client_code]
+          if (!info || info.totalStaff === 0) continue
+          rawPools70[taskType] = alloc.rate * pool70
+        }
+        const totalRaw70 = Object.values(rawPools70).reduce((s, v) => s + v, 0)
+        const normFactor70 = totalRaw70 > pool70 ? pool70 / totalRaw70 : 1
+        for (const [taskType, rawPool] of Object.entries(rawPools70)) {
+          const info = decisionOnlyTaskInfo[taskType][row.client_code]
+          const poolAmt = rawPool * normFactor70
+          const share = poolAmt / info.totalStaff
+          for (const [user, key] of Object.entries(info.earliestKeyByUser)) {
+            if (key === thisMonthKey) {
+              row.staff_alloc[user] = (row.staff_alloc[user] || 0) + share
+              potBCTotal += share
+            }
+          }
+        }
+        // 決算報酬のみのルールで全て配分済みのため、Pot A（月額報酬ベースの通常配分）の対象からは除外
+        rowEntries = []
+      } else if (st) {
+        // 月額報酬もある法人向け: 決算65%（決算区分の担当者で均等割）／訪問来所35%（決算月・翌月の担当者で均等割）
         const decisionInfo = settlementDecisionInfo[row.client_code]
         if (decisionInfo && decisionInfo.totalStaff > 0) {
           const share = (st.fee * 0.65) / decisionInfo.totalStaff
