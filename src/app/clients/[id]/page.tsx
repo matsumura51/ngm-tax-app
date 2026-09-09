@@ -44,6 +44,11 @@ const checkStatusStyle: Record<string, string> = {
   '訂正済': 'bg-green-100 text-green-700',
   '確認中': 'bg-yellow-100 text-yellow-700',
 }
+const checkTypeStyle: Record<string, string> = {
+  '指摘':   'bg-red-50 text-red-700 border border-red-200',
+  'クレーム': 'bg-orange-50 text-orange-700 border border-orange-200',
+  '処理方法': 'bg-blue-50 text-blue-700 border border-blue-200',
+}
 const questionStatusStyle: Record<string, string> = {
   '未回答': 'bg-orange-100 text-orange-700',
   '回答済': 'bg-blue-100 text-blue-700',
@@ -224,16 +229,17 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       const rows = clientChecks.filter(c => inRange(c.check_date)).map(c => ({
         '指摘日': c.check_date,
         '顧客名': c.client_name,
+        '種別': c.type || '',
         '区分': c.category || '',
         '確認者': c.checker || '',
         '指摘内容': c.content,
-        '状況': c.status,
+        '状況': c.type === '処理方法' ? '' : c.status,
         '訂正日': c.corrected_date || '',
         '訂正メモ': c.correction_note || '',
       }))
       if (rows.length === 0) { alert('該当するデータがありません'); return }
       const ws = XLSX.utils.json_to_sheet(rows)
-      ws['!cols'] = [10, 20, 8, 10, 40, 8, 10, 30].map(w => ({ wch: w }))
+      ws['!cols'] = [10, 20, 8, 8, 10, 40, 8, 10, 30].map(w => ({ wch: w }))
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, '指摘事項')
       XLSX.writeFile(wb, `${client!.name}_指摘事項${periodLabel}_${today}.xlsx`)
@@ -1010,6 +1016,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               <thead className="bg-gray-50 text-xs text-gray-500 border-b border-gray-100">
                 <tr>
                   <th className="px-4 py-3 text-left w-28">指摘日</th>
+                  <th className="px-4 py-3 text-left w-20">種別</th>
                   <th className="px-4 py-3 text-left w-20">区分</th>
                   <th className="px-4 py-3 text-left w-20">確認者</th>
                   <th className="px-4 py-3 text-left">指摘内容</th>
@@ -1021,15 +1028,24 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                 {clientChecks.map(c => (
                   <tr key={c.id} className="hover:bg-gray-50 transition">
                     <td className="px-4 py-3 text-gray-600">{c.check_date}</td>
+                    <td className="px-4 py-3">
+                      {c.type && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${checkTypeStyle[c.type] || 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+                          {c.type}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-gray-600">{c.category}</td>
                     <td className="px-4 py-3 text-gray-600">{c.checker}</td>
                     <td className="px-4 py-3 text-gray-700 max-w-xs">
                       <Link href={`/client-checks/${c.id}`} className="hover:text-blue-600 line-clamp-2">{c.content}</Link>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${checkStatusStyle[c.status] || 'bg-gray-100 text-gray-600'}`}>
-                        {c.status}
-                      </span>
+                      {c.type !== '処理方法' && (
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${checkStatusStyle[c.status] || 'bg-gray-100 text-gray-600'}`}>
+                          {c.status}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{c.corrected_date || ''}</td>
                   </tr>
