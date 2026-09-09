@@ -321,18 +321,27 @@ export default function ReportsPage() {
       (code, ry, rm) => inMonthWindow(yearendInfo[code].feeYear - 1, 12, 4, ry, rm)
     )
 
-    // 訪問来所35%の二重配分防止: 過去のレポートで既に「決算月・翌月の訪問／来所」が
+    // ある実績（訪問・来所）の対象期間（subject〜details。無指定ならfallbackKeyの月）が
+    // 決算月または翌月に該当するかどうか。レポートを開いている月ではなく実績自体の対象期間で判定する
+    const inFiscalOrNextMonth = (st: SettlementInfo, subject: string | null, detailsField: string | null, fallbackKey: string): boolean => {
+      const months = subject ? monthsInRange(subject, detailsField) : [fallbackKey]
+      return months.some(key => {
+        const [ky, km] = key.split('-').map(Number)
+        return (ky === st.fiscalYear && km === st.fiscalMonth) || (ky === st.nextY && km === st.nextM)
+      })
+    }
+
+    // 訪問来所35%の二重配分防止: 過去のレポートで既に「決算月・翌月が対象期間の訪問／来所」が
     // 計上済みかどうかを顧客ごとに判定する（実績が先に発生した月が優先してそのまま独占する仕様）
     const settlementVisitClaimed: Record<string, boolean> = {}
     for (const d of details) {
-      if (!d.client_code) continue
+      if (!d.client_code || (d.task_type !== '訪問' && d.task_type !== '来所')) continue
       const st = settlementInfo[d.client_code]
       if (!st || !priorReportIds.has(d.report_id)) continue
       const rdate = allReportDate[d.report_id]
       if (!rdate) continue
       const [ry, rm] = rdate.split('-').map(Number)
-      if ((d.task_type === '訪問' || d.task_type === '来所') &&
-          ((ry === year && rm === st.fiscalMonth) || (ry === st.nextY && rm === st.nextM))) {
+      if (inFiscalOrNextMonth(st, d.subject, d.details, `${ry}-${rm}`)) {
         settlementVisitClaimed[d.client_code] = true
       }
     }
@@ -408,9 +417,6 @@ export default function ReportsPage() {
       // 月額報酬（Pot A）とは別の原資として配分し、いずれも実績が先に発生した月が独占する（二重配分防止）
       const st = settlementInfo[row.client_code]
       if (st) {
-        const isFmMonth = Number(monthStr) === st.fiscalMonth
-        const isFmNextMonth = year === st.nextY && Number(monthStr) === st.nextM
-
         // 決算65%: 作成・チェックとも「決算」区分で計上されるため月をまたいでも良い。
         // 決算区分を計上した全担当者（複数月にまたがってもOK）で均等割し、各担当者は自分が最初に
         // 計上した月のレポートでのみ受け取る（同一人物への二重配分を防止）
@@ -423,20 +429,23 @@ export default function ReportsPage() {
           }
         }
         // 訪問・来所は「決算区分の実績が実際にある」場合のみ決算報酬側に振り替える。
-        // 決算の実績が無いうちは、決算月・翌月であってもただの通常訪問とみなし月額報酬から配分する
+        // 対象期間（subject〜details）が決算月・翌月に該当する実績のみが対象（レポートを開いている月ではない。
+        // 例：9月のレポートに計上されていても、対象期間が7月分なら決算月7月分として扱う）
         const hasDecisionActivity = !!decisionInfo && decisionInfo.totalStaff > 0
-        const divertVisit = hasDecisionActivity && (isFmMonth || isFmNextMonth)
-        if (divertVisit && !settlementVisitClaimed[row.client_code]) {
-          const visitUsers = Array.from(new Set(rowEntries.filter(e => e.task_type === '訪問' || e.task_type === '来所').map(e => e.user_name)))
-          if (visitUsers.length > 0) {
-            const share = (st.fee * 0.35) / visitUsers.length
-            for (const u of visitUsers) row.staff_alloc[u] = (row.staff_alloc[u] || 0) + share
-          }
+        const thisReportKey = `${year}-${Number(monthStr)}`
+        const visitEntriesToDivert = hasDecisionActivity
+          ? rowEntries.filter(e => (e.task_type === '訪問' || e.task_type === '来所') && inFiscalOrNextMonth(st, e.subject, e.details, thisReportKey))
+          : []
+        if (visitEntriesToDivert.length > 0 && !settlementVisitClaimed[row.client_code]) {
+          const visitUsers = Array.from(new Set(visitEntriesToDivert.map(e => e.user_name)))
+          const share = (st.fee * 0.35) / visitUsers.length
+          for (const u of visitUsers) row.staff_alloc[u] = (row.staff_alloc[u] || 0) + share
         }
-        // 決算区分は常にPot Bへ、訪問・来所は決算実績がある決算月・翌月のみPot Bへ移すため、通常配分（Pot A）の対象から除外
+        // 決算区分は常にPot Bへ、訪問・来所は決算報酬側に振り替えた分のみPot Bへ移すため、通常配分（Pot A）の対象から除外
+        const divertSet = new Set(visitEntriesToDivert)
         rowEntries = rowEntries.filter(e => {
           if (e.task_type === '決算') return false
-          if (divertVisit && (e.task_type === '訪問' || e.task_type === '来所')) return false
+          if (divertSet.has(e)) return false
           return true
         })
       }
