@@ -428,7 +428,8 @@ export default function ReportsPage() {
           if (!info || info.totalStaff === 0) continue
           rawPools70[taskType] = alloc.rate * pool70
         }
-        if (Object.keys(rawPools70).length === 0) {
+        const totalRaw70 = Object.values(rawPools70).reduce((s, v) => s + v, 0)
+        if (totalRaw70 === 0) {
           // 記帳・訪問・来所・チェックが決算サイクル中に一件も無い場合、70%分も決算区分の担当者に配分する（報酬全額を配分）
           if (decisionInfo && decisionInfo.totalStaff > 0) {
             const share70 = pool70 / decisionInfo.totalStaff
@@ -440,8 +441,9 @@ export default function ReportsPage() {
             }
           }
         } else {
-          const totalRaw70 = Object.values(rawPools70).reduce((s, v) => s + v, 0)
-          const normFactor70 = totalRaw70 > pool70 ? pool70 / totalRaw70 : 1
+          // 実際に動きがあった区分の間でrate比に応じて70%を「使い切る」よう配分する（超過時は縮小、不足時は拡大）。
+          // 記帳・来所・チェックが無く訪問だけの場合等、70%分が宙に浮かず全額配分されるようにする
+          const normFactor70 = pool70 / totalRaw70
           for (const [taskType, rawPool] of Object.entries(rawPools70)) {
             const info = decisionOnlyTaskInfo[taskType][row.client_code]
             const poolAmt = rawPool * normFactor70
