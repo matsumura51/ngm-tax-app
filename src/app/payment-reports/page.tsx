@@ -67,7 +67,8 @@ export default function PaymentReportsPage() {
     setLoading(false)
   }
 
-  const filtered = summaries.filter(s => !filter || s.client_name.includes(filter))
+  const normFilter = filter.normalize('NFKC')
+  const filtered = summaries.filter(s => !normFilter || s.client_name.normalize('NFKC').includes(normFilter))
   const grandTotal = filtered.reduce((s, r) => s + r.total, 0)
 
   return (

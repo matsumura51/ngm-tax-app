@@ -185,7 +185,8 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
     const text = e.target.value
     setRow(i, 'client_name', text)
     if (text.length >= 1) {
-      const matches = clients.filter(c => c.name.includes(text)).slice(0, 8)
+      const q = text.normalize('NFKC')
+      const matches = clients.filter(c => c.name.normalize('NFKC').includes(q)).slice(0, 8)
       if (matches.length > 0) {
         const rect = e.target.getBoundingClientRect()
         setSuggestions({ rowIndex: i, matches, top: rect.bottom + 2, left: rect.left })

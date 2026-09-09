@@ -129,7 +129,8 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
       title: autoTitle ? makeAutoTitle(text, f.color) : f.title,
     }))
     if (text.length >= 1) {
-      const matches = clients.filter(c => c.name.includes(text)).slice(0, 8)
+      const q = text.normalize('NFKC')
+      const matches = clients.filter(c => c.name.normalize('NFKC').includes(q)).slice(0, 8)
       if (matches.length > 0) {
         const rect = e.target.getBoundingClientRect()
         setSuggestions({ matches, top: rect.bottom + 2, left: rect.left })

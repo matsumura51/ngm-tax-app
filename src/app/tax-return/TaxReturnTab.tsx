@@ -146,13 +146,14 @@ export default function TaxReturnTab({ year }: Props) {
   const divisionOptions = Array.from(new Set(allUsers.map(u => u.division).filter(Boolean))).sort() as string[]
   const staffInDivision = filterDivision ? allUsers.filter(u => u.division === filterDivision).map(u => u.name) : null
 
+  const normFilterName = filterName.normalize('NFKC')
   const filtered = records.filter(r => {
     if (filterStatus !== '全て' && filterStatus === '完了系') {
       if (!DONE_STATUSES.includes(r.status)) return false
     } else if (filterStatus !== '全て' && filterStatus !== '完了系') {
       if (r.status !== filterStatus) return false
     }
-    if (filterName && !r.client_name.includes(filterName) && !(r.client_code || '').includes(filterName)) return false
+    if (normFilterName && !r.client_name.normalize('NFKC').includes(normFilterName) && !(r.client_code || '').normalize('NFKC').includes(normFilterName)) return false
     if (filterDivision && staffInDivision && !staffInDivision.includes(r.staff_name || '')) return false
     if (filterStaff && !(r.staff_name || '').includes(filterStaff)) return false
     return true

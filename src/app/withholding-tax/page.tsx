@@ -145,9 +145,10 @@ export default function WithholdingTaxPage() {
     setLoading(false)
   }
 
-  const filteredSummaries = summaries.filter(s => !filter || s.client_name.includes(filter))
+  const normFilter = filter.normalize('NFKC')
+  const filteredSummaries = summaries.filter(s => !normFilter || s.client_name.normalize('NFKC').includes(normFilter))
   const filteredFees = taxFees
-    .filter(r => !filter || r.client_name.includes(filter))
+    .filter(r => !normFilter || r.client_name.normalize('NFKC').includes(normFilter))
     .sort((a, b) => b.total - a.total)
   const grandGross = filteredSummaries.reduce((s, r) => s + r.total_gross, 0)
   const grandTax = filteredSummaries.reduce((s, r) => s + r.total_tax, 0)

@@ -89,7 +89,8 @@ export default function EvernoteImportPage() {
     setClientQuery(q)
     setSelectedClient(null)
     if (q.length >= 1) {
-      setSuggestions(clients.filter(c => c.name.includes(q) || c.code.includes(q)).slice(0, 10))
+      const nq = q.normalize('NFKC')
+      setSuggestions(clients.filter(c => c.name.normalize('NFKC').includes(nq) || c.code.normalize('NFKC').includes(nq)).slice(0, 10))
       setShowSug(true)
     } else {
       setSuggestions([])
