@@ -198,7 +198,17 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
     }
   }
 
+  function hasRowContent(d: DailyReportDetail): boolean {
+    return !!(d.task_type || d.client_code || d.client_name || d.report_content || d.start_time || d.end_time)
+  }
+
   async function save() {
+    // 業務区分必須チェック
+    const missingTaskType = details.filter(d => hasRowContent(d) && !d.task_type)
+    if (missingTaskType.length > 0) {
+      alert('業務区分が未選択の行があります。業務区分を選択してください。')
+      return
+    }
     // 処理期間・年度必須チェック
     const missing = details.filter(d =>
       d.task_type && REQUIRED_PERIOD_TASKS.includes(d.task_type) && !d.subject
@@ -226,7 +236,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
 
     await supabase.from('daily_report_details').delete().eq('report_id', id)
     const rows = details
-      .filter(d => d.task_type || d.client_code || d.client_name || d.report_content || d.start_time || d.end_time)
+      .filter(hasRowContent)
       .map((d, i) => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { id: _id, ...rest } = d
@@ -402,7 +412,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
                   <td className="px-1 py-1"><input type="time" className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.end_time || ''} onChange={e => setRow(i, 'end_time', e.target.value)} /></td>
                   <td className="px-1 py-1"><input className="w-full border border-gray-100 rounded px-1 py-1 text-xs bg-gray-50 text-gray-600 text-center" value={d.work_time || ''} readOnly tabIndex={-1} placeholder="自動" /></td>
                   <td className="px-1 py-1">
-                    <select className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.task_type || ''} onChange={e => setRow(i, 'task_type', e.target.value)}>
+                    <select className={`w-full border rounded px-1 py-1 text-xs ${!d.task_type && hasRowContent(d) ? 'border-red-400 bg-red-50' : 'border-gray-200'}`} value={d.task_type || ''} onChange={e => setRow(i, 'task_type', e.target.value)}>
                       <option value="">選択</option>
                       {TASK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
