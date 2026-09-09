@@ -49,10 +49,10 @@ function MonthPartInput({ value, onChange, className }: { value: string; onChang
         onChange={e => {
           const v = e.target.value.replace(/\D/g, '').slice(0, 2)
           setLm(v)
-          // 2桁揃った時だけ即確定。1桁目だけでは確定しない（"0"だけで「00」になるのを防ぐ）
+          // 2桁揃うまでは確定しない（1桁目だけで確定すると「1」が「01」になり10〜12月が入力できない）
           if (v.length === 2) emit(ly, v)
         }}
-        onBlur={() => { if (lm.length >= 1) emit(ly, lm) }}
+        onBlur={() => { if (lm.length === 2) emit(ly, lm) }}
         className={`${seg} w-8 ${className || 'border-gray-200'}`} />
     </div>
   )
