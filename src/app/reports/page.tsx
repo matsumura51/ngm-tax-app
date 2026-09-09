@@ -460,10 +460,12 @@ export default function ReportsPage() {
         }
 
         // この顧客の実績が参照する全月（当月＋処理期間で遡及した月）の登録済み報酬合計を配分原資とする。
+        // 社会保険・所内相談等、報酬配分の対象外区分（TASK_ALLOCに無い区分）は無関係な月を巻き込まないよう対象外にする。
         // 区分ごとに既に他月で計上済み（claimedMonths）の月は除外し、翌月にまたがっても二重計上しない
         const referencedMonths = new Set<string>()
         for (const e of rowEntries) {
           const tt = e.task_type || 'その他'
+          if (!TASK_ALLOC[tt]) continue
           const claimed = claimedMonths[row.client_code]?.[tt]
           for (const key of monthsInRange(e.subject, e.details)) {
             if (!claimed?.has(key)) referencedMonths.add(key)
