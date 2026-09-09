@@ -428,16 +428,29 @@ export default function ReportsPage() {
           if (!info || info.totalStaff === 0) continue
           rawPools70[taskType] = alloc.rate * pool70
         }
-        const totalRaw70 = Object.values(rawPools70).reduce((s, v) => s + v, 0)
-        const normFactor70 = totalRaw70 > pool70 ? pool70 / totalRaw70 : 1
-        for (const [taskType, rawPool] of Object.entries(rawPools70)) {
-          const info = decisionOnlyTaskInfo[taskType][row.client_code]
-          const poolAmt = rawPool * normFactor70
-          const share = poolAmt / info.totalStaff
-          for (const [user, key] of Object.entries(info.earliestKeyByUser)) {
-            if (key === thisMonthKey) {
-              row.staff_alloc[user] = (row.staff_alloc[user] || 0) + share
-              potBCTotal += share
+        if (Object.keys(rawPools70).length === 0) {
+          // 記帳・訪問・来所・チェックが決算サイクル中に一件も無い場合、70%分も決算区分の担当者に配分する（報酬全額を配分）
+          if (decisionInfo && decisionInfo.totalStaff > 0) {
+            const share70 = pool70 / decisionInfo.totalStaff
+            for (const [user, key] of Object.entries(decisionInfo.earliestKeyByUser)) {
+              if (key === thisMonthKey) {
+                row.staff_alloc[user] = (row.staff_alloc[user] || 0) + share70
+                potBCTotal += share70
+              }
+            }
+          }
+        } else {
+          const totalRaw70 = Object.values(rawPools70).reduce((s, v) => s + v, 0)
+          const normFactor70 = totalRaw70 > pool70 ? pool70 / totalRaw70 : 1
+          for (const [taskType, rawPool] of Object.entries(rawPools70)) {
+            const info = decisionOnlyTaskInfo[taskType][row.client_code]
+            const poolAmt = rawPool * normFactor70
+            const share = poolAmt / info.totalStaff
+            for (const [user, key] of Object.entries(info.earliestKeyByUser)) {
+              if (key === thisMonthKey) {
+                row.staff_alloc[user] = (row.staff_alloc[user] || 0) + share
+                potBCTotal += share
+              }
             }
           }
         }
