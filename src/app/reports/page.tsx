@@ -422,17 +422,21 @@ export default function ReportsPage() {
             if (key === thisMonthKey) row.staff_alloc[user] = (row.staff_alloc[user] || 0) + share
           }
         }
-        if ((isFmMonth || isFmNextMonth) && !settlementVisitClaimed[row.client_code]) {
+        // 訪問・来所は「決算区分の実績が実際にある」場合のみ決算報酬側に振り替える。
+        // 決算の実績が無いうちは、決算月・翌月であってもただの通常訪問とみなし月額報酬から配分する
+        const hasDecisionActivity = !!decisionInfo && decisionInfo.totalStaff > 0
+        const divertVisit = hasDecisionActivity && (isFmMonth || isFmNextMonth)
+        if (divertVisit && !settlementVisitClaimed[row.client_code]) {
           const visitUsers = Array.from(new Set(rowEntries.filter(e => e.task_type === '訪問' || e.task_type === '来所').map(e => e.user_name)))
           if (visitUsers.length > 0) {
             const share = (st.fee * 0.35) / visitUsers.length
             for (const u of visitUsers) row.staff_alloc[u] = (row.staff_alloc[u] || 0) + share
           }
         }
-        // 決算区分は常にPot Bへ、訪問・来所は決算月・翌月のみPot Bへ移すため、通常配分（Pot A）の対象から除外
+        // 決算区分は常にPot Bへ、訪問・来所は決算実績がある決算月・翌月のみPot Bへ移すため、通常配分（Pot A）の対象から除外
         rowEntries = rowEntries.filter(e => {
           if (e.task_type === '決算') return false
-          if ((isFmMonth || isFmNextMonth) && (e.task_type === '訪問' || e.task_type === '来所')) return false
+          if (divertVisit && (e.task_type === '訪問' || e.task_type === '来所')) return false
           return true
         })
       }
