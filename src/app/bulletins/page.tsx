@@ -31,7 +31,7 @@ export default function BulletinsPage() {
   const [currentUserName, setCurrentUserName] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [showForm, setShowForm] = useState(false)
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0]
   const [form, setForm] = useState({ title: '', content: '', post_date: today })
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)

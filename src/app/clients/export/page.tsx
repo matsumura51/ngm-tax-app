@@ -80,7 +80,7 @@ export default function ClientExportPage() {
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, '顧客カルテ')
 
-      const date = new Date().toISOString().slice(0, 10)
+      const date = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
       XLSX.writeFile(wb, `顧客カルテ_${date}.xlsx`)
     } catch (e) {
       alert('エクスポートに失敗しました: ' + String(e))

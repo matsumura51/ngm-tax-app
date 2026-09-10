@@ -53,7 +53,7 @@ function parseEnex(xml: string): ParsedNote[] {
     const created = note.querySelector('created')?.textContent || ''
     const contentRaw = note.querySelector('content')?.textContent || ''
     const tags = Array.from(note.querySelectorAll('tag')).map(t => t.textContent || '').filter(Boolean)
-    let date = new Date().toISOString().split('T')[0]
+    let date = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0]
     if (created && created.length >= 8) date = `${created.slice(0,4)}-${created.slice(4,6)}-${created.slice(6,8)}`
     const rawContent = extractText(contentRaw) || title
     const { client_name, questioner, content } = extractFields(rawContent)

@@ -78,7 +78,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   const [showChecklist, setShowChecklist] = useState(false)
   const [logDetailReportId, setLogDetailReportId] = useState<string | null>(null)
   const [addLogOpen, setAddLogOpen] = useState(false)
-  const [addLogForm, setAddLogForm] = useState({ date: new Date().toISOString().split('T')[0], user_name: '', task_type: '記帳', start_time: '', end_time: '', work_time: '', report_content: '' })
+  const [addLogForm, setAddLogForm] = useState({ date: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0], user_name: '', task_type: '記帳', start_time: '', end_time: '', work_time: '', report_content: '' })
   const [addLogSaving, setAddLogSaving] = useState(false)
   const [logUsers, setLogUsers] = useState<{ id: string; name: string }[]>([])
 
@@ -198,7 +198,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     if (error) { alert('保存エラー: ' + error.message); setAddLogSaving(false); return }
     setAddLogSaving(false)
     setAddLogOpen(false)
-    setAddLogForm({ date: new Date().toISOString().split('T')[0], user_name: '', task_type: '記帳', start_time: '', end_time: '', work_time: '', report_content: '' })
+    setAddLogForm({ date: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0], user_name: '', task_type: '記帳', start_time: '', end_time: '', work_time: '', report_content: '' })
     await loadWorkLogs()
   }
 
@@ -215,7 +215,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   }
 
   function doExport() {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
     const inRange = (date: string) => {
       if (exportFrom && date < exportFrom) return false
       if (exportTo && date > exportTo) return false

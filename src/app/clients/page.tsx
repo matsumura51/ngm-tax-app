@@ -81,7 +81,7 @@ export default function ClientsPage() {
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, '顧客カルテ')
-    const date = new Date().toISOString().slice(0, 10)
+    const date = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
     XLSX.writeFile(wb, `顧客カルテ_絞り込み_${date}.xlsx`)
   }
 

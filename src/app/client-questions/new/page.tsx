@@ -22,13 +22,14 @@ function ClientQuestionNewForm() {
   const [suggestions, setSuggestions] = useState<{ matches: { id: string; code: string; name: string }[]; top: number; left: number } | null>(null)
   const [items, setItems] = useState<QItem[]>([{ text: '', answered: false, answer: '' }])
   const now = new Date()
+  const todayJST = new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().split('T')[0]
   const [workYear, setWorkYear] = useState(String(now.getFullYear()))
   const [workMonth, setWorkMonth] = useState(String(now.getMonth() + 1))
   const [form, setForm] = useState({
     client_id: searchParams.get('client_id') || '',
     client_code: searchParams.get('client_code') || '',
     client_name: searchParams.get('client_name') || '',
-    question_date: now.toISOString().split('T')[0],
+    question_date: todayJST,
     questioner: '',
     category: '月次',
   })

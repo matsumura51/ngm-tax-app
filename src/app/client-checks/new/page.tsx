@@ -22,7 +22,7 @@ function ClientCheckNewForm() {
     client_id: searchParams.get('client_id') || '',
     client_code: searchParams.get('client_code') || '',
     client_name: searchParams.get('client_name') || '',
-    check_date: new Date().toISOString().split('T')[0],
+    check_date: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0],
     checker: '',
     category: '月次',
     type: '指摘',

@@ -107,7 +107,7 @@ export default function DailyReportNewPage() {
   const [saving, setSaving] = useState(false)
   const [userName, setUserName] = useState('')
   const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0],
     total_hours: '',
   })
   const [details, setDetails] = useState([emptyDetail()])

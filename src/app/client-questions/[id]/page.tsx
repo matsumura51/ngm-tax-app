@@ -144,7 +144,7 @@ export default function ClientQuestionDetailPage({ params }: { params: Promise<{
       category: form.category || null,
       content: JSON.stringify(items),
       status: computedStatus,
-      answered_date: allAnswered ? (form.answered_date || new Date().toISOString().split('T')[0]) : null,
+      answered_date: allAnswered ? (form.answered_date || new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0]) : null,
       answer: null,
     }).eq('id', id)
     if (error) { alert('エラー: ' + error.message); setSaving(false); return }
@@ -186,7 +186,7 @@ export default function ClientQuestionDetailPage({ params }: { params: Promise<{
           await supabase.from('client_questions').update({
             content: JSON.stringify(updated),
             status: nowAllAnswered ? '回答済' : '未回答',
-            answered_date: nowAllAnswered ? new Date().toISOString().split('T')[0] : null,
+            answered_date: nowAllAnswered ? new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0] : null,
           }).eq('id', record.id)
         }
       }
