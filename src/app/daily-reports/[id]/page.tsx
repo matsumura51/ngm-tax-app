@@ -305,7 +305,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
   if (!report) return <div className="p-6 text-gray-400">読み込み中...</div>
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="p-6 max-w-7xl">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/daily-reports" className="text-gray-400 hover:text-gray-600">
           <ChevronLeft size={20} />
@@ -391,7 +391,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[1100px] text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
                 <th className="px-2 py-2 text-left w-20">開始</th>
@@ -401,7 +401,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
                 <th className="px-2 py-2 text-left w-36">処理期間</th>
                 <th className="px-2 py-2 text-left w-16">顧客コード</th>
                 <th className="px-2 py-2 text-left w-36">顧客名</th>
-                <th className="px-2 py-2 text-left">作業内容</th>
+                <th className="px-2 py-2 text-left min-w-[320px]">作業内容</th>
                 <th className="px-2 py-2 w-20"></th>
               </tr>
             </thead>
