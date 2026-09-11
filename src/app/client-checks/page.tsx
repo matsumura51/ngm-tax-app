@@ -37,24 +37,39 @@ export default function ClientChecksPage() {
   async function load(params?: { clientName?: string; status?: string; category?: string; type?: string; dateFrom?: string; dateTo?: string }) {
     setLoading(true)
     const supabase = createClient()
-    let q = supabase.from('client_checks').select('*')
-      .order('created_at', { ascending: false })
-      .order('check_date', { ascending: false })
-      .limit(3000)
     const cn = (params?.clientName ?? clientName).normalize('NFKC')
     const st = params?.status ?? status
     const ca = params?.category ?? category
     const tp = params?.type ?? type
     const df = params?.dateFrom ?? dateFrom
     const dt = params?.dateTo ?? dateTo
-    if (cn) q = q.ilike('client_name', `%${cn}%`)
-    if (st) q = q.eq('status', st)
-    if (ca) q = q.eq('category', ca)
-    if (tp) q = q.eq('type', tp)
-    if (df) q = q.gte('check_date', df)
-    if (dt) q = q.lte('check_date', dt)
-    const { data } = await q
-    setChecks(data || [])
+
+    function buildQuery() {
+      let q = supabase.from('client_checks').select('*')
+        .order('created_at', { ascending: false })
+        .order('check_date', { ascending: false })
+      if (cn) q = q.ilike('client_name', `%${cn}%`)
+      if (st) q = q.eq('status', st)
+      if (ca) q = q.eq('category', ca)
+      if (tp) q = q.eq('type', tp)
+      if (df) q = q.gte('check_date', df)
+      if (dt) q = q.lte('check_date', dt)
+      return q
+    }
+
+    // Supabase/PostgRESTは1リクエストあたり最大1000件までしか返さないため、range()で分割取得して連結する
+    const pageSize = 1000
+    const maxTotal = 10000
+    let all: ClientCheck[] = []
+    let offset = 0
+    while (offset < maxTotal) {
+      const { data, error } = await buildQuery().range(offset, offset + pageSize - 1)
+      if (error || !data) break
+      all = all.concat(data)
+      if (data.length < pageSize) break
+      offset += pageSize
+    }
+    setChecks(all)
     setLoading(false)
   }
 
