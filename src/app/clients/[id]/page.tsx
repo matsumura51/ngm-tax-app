@@ -204,7 +204,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
   async function loadChecks() {
     const supabase = createClient()
-    const { data } = await supabase.from('client_checks').select('*').eq('client_id', id).order('check_date', { ascending: false }).limit(50)
+    const { data } = await supabase.from('client_checks').select('*').eq('client_id', id).order('created_at', { ascending: false }).limit(50)
     setClientChecks(data || [])
   }
 

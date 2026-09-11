@@ -37,7 +37,7 @@ export default function ClientChecksPage() {
   async function load(params?: { clientName?: string; status?: string; category?: string; type?: string; dateFrom?: string; dateTo?: string }) {
     setLoading(true)
     const supabase = createClient()
-    let q = supabase.from('client_checks').select('*').order('check_date', { ascending: false }).limit(200)
+    let q = supabase.from('client_checks').select('*').order('created_at', { ascending: false }).limit(200)
     const cn = (params?.clientName ?? clientName).normalize('NFKC')
     const st = params?.status ?? status
     const ca = params?.category ?? category
