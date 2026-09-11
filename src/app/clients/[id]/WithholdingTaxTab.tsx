@@ -124,22 +124,26 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
     }
 
     // 月次進捗から税理士報酬を読み込み（年度ずれ対応：当年・前年の中で報酬がある方）
-    let feeData: Record<string, string | number | null> | null = null
+    // 月額報酬に加え、決算報酬・年末調整報酬も該当月に合算する
+    let feeData: { fee: Record<string, string | number | null>; settlement: Record<string, string | number | null>; yearend: Record<string, string | number | null> } | null = null
     for (const y of [year, year - 1]) {
-      let fq = supabase.from('monthly_progress').select('monthly_fee').eq('year', y)
+      let fq = supabase.from('monthly_progress').select('monthly_fee, monthly_fee_settlement, monthly_fee_yearend').eq('year', y)
       if (clientCode) fq = fq.eq('client_code', clientCode)
       else fq = fq.eq('client_id', clientId)
       const { data: prog } = await fq.maybeSingle()
-      if (prog?.monthly_fee) {
-        const total = MONTHS.reduce((s, m) => s + parseFee((prog.monthly_fee as Record<string, string | null>)?.[String(m)]), 0)
-        if (total > 0) { feeData = prog.monthly_fee as Record<string, string | null>; break }
+      if (prog) {
+        const fee = (prog.monthly_fee as Record<string, string | null>) || {}
+        const settlement = (prog.monthly_fee_settlement as Record<string, string | null>) || {}
+        const yearend = (prog.monthly_fee_yearend as Record<string, string | null>) || {}
+        const total = MONTHS.reduce((s, m) => s + parseFee(fee[String(m)]) + parseFee(settlement[String(m)]) + parseFee(yearend[String(m)]), 0)
+        if (total > 0) { feeData = { fee, settlement, yearend }; break }
       }
     }
     if (feeData) {
       const monthly: Record<string, number> = {}
       let total = 0
       for (const m of MONTHS) {
-        const n = parseFee(feeData[String(m)])
+        const n = parseFee(feeData.fee[String(m)]) + parseFee(feeData.settlement[String(m)]) + parseFee(feeData.yearend[String(m)])
         monthly[String(m)] = n
         total += n
       }
