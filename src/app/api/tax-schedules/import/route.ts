@@ -104,13 +104,83 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  await supabase.from('tax_schedules').delete().eq('year', year).eq('month', month)
   if (records.length === 0) {
     const debugRows = rows.slice(0, 3).map(r => r.slice(0, 4))
     return NextResponse.json({ error: 'インポートできる行が0件でした', debugRows, dataStart, totalRows: rows.length }, { status: 400 })
   }
-  const { error } = await supabase.from('tax_schedules').insert(records)
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  return NextResponse.json({ success: true, year, month, deadline, count: records.length })
+  // 既存データとマージする（顧客名・税目・回数・金額が一致する行は更新、それ以外は新規追加）
+  // ダッシュボード上で入力済みの確認状況・納付日等はシートの値で上書きしない（既存値を優先）
+  type ExistingRow = {
+    id: string
+    payment_method: string | null
+    send_date: string | null
+    payment_date: string | null
+    confirmation: string | null
+    contact_date: string | null
+  }
+  const { data: existingRows } = await supabase
+    .from('tax_schedules')
+    .select('id, client_name, tax_type, amount, installment, payment_method, send_date, payment_date, confirmation, contact_date')
+    .eq('year', year).eq('month', month)
+  const existing = existingRows || []
+
+  function keyOf(r: { client_name: string; tax_type: string | null; installment: string | null; amount: string | null }) {
+    return [r.client_name, r.tax_type, r.installment, r.amount].join('|')
+  }
+  const existingByKey = new Map<string, ExistingRow[]>()
+  for (const row of existing) {
+    const k = keyOf(row)
+    if (!existingByKey.has(k)) existingByKey.set(k, [])
+    existingByKey.get(k)!.push(row)
+  }
+
+  const matchedIds = new Set<string>()
+  const toInsert: typeof records = []
+  const toUpdate: { id: string; patch: Record<string, unknown> }[] = []
+
+  for (const rec of records) {
+    const candidates = existingByKey.get(keyOf(rec)) || []
+    const match = candidates.find(c => !matchedIds.has(c.id))
+    if (match) {
+      matchedIds.add(match.id)
+      toUpdate.push({
+        id: match.id,
+        patch: {
+          client_id: rec.client_id,
+          matched_client_code: rec.matched_client_code,
+          deadline: rec.deadline,
+          payment_method: match.payment_method ?? rec.payment_method,
+          send_date: match.send_date ?? rec.send_date,
+          payment_date: match.payment_date ?? rec.payment_date,
+          confirmation: match.confirmation ?? rec.confirmation,
+        },
+      })
+    } else {
+      toInsert.push(rec)
+    }
+  }
+
+  // シートから消えた既存行のうち、確認状況等の入力が一切無いものだけ削除（入力済みのものは保持）
+  const staleIds = existing
+    .filter(r => !matchedIds.has(r.id))
+    .filter(r => !r.payment_method && !r.send_date && !r.payment_date && !r.confirmation && !r.contact_date)
+    .map(r => r.id)
+  if (staleIds.length > 0) {
+    await supabase.from('tax_schedules').delete().in('id', staleIds)
+  }
+
+  for (const u of toUpdate) {
+    const { error } = await supabase.from('tax_schedules').update(u.patch).eq('id', u.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  }
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from('tax_schedules').insert(toInsert)
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  }
+
+  return NextResponse.json({
+    success: true, year, month, deadline,
+    count: records.length, inserted: toInsert.length, updated: toUpdate.length,
+  })
 }

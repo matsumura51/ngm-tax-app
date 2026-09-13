@@ -325,7 +325,7 @@ function MonthlyContent() {
         return
       }
       await loadTaxSchedules(json.year)
-      alert(`${json.year}年${json.month}月分 ${json.count}件を読み込みました`)
+      alert(`${json.year}年${json.month}月分 ${json.count}件を読み込みました（新規${json.inserted}件・更新${json.updated}件、入力済みの確認状況等は保持されます）`)
     } catch (e) {
       alert('エラー: ' + String(e))
     } finally {
