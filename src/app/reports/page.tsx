@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 
 // 業務区分ごとの配分率と分割方法
 const TASK_ALLOC: Record<string, { rate: number; splitBy: 'time' | 'person' }> = {
-  '記帳':  { rate: 0.35, splitBy: 'time' },
+  '記帳':  { rate: 0.35, splitBy: 'person' },
   '決算':  { rate: 0.35, splitBy: 'person' },
   '訪問':  { rate: 0.35, splitBy: 'person' },
   '来所':  { rate: 0.35, splitBy: 'person' },
