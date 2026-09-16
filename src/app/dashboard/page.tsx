@@ -81,6 +81,7 @@ interface ReturnItem { client_code: string | null; client_name: string; staff_na
 interface TaxSchedItem {
   id: string
   client_name: string
+  matched_client_code: string | null
   tax_type: string | null
   amount: string | null
   installment: string | null
@@ -90,6 +91,7 @@ interface TaxSchedItem {
   payment_date: string | null
   contact_date: string | null
   confirmation: string | null
+  staff?: string | null
 }
 
 interface DashBulletin {
@@ -483,11 +485,22 @@ export default function DashboardPage() {
     const supabase = createClient()
     const { data } = await supabase
       .from('tax_schedules')
-      .select('id, client_name, tax_type, amount, installment, deadline, payment_method, send_date, payment_date, contact_date, confirmation')
+      .select('id, client_name, matched_client_code, tax_type, amount, installment, deadline, payment_method, send_date, payment_date, contact_date, confirmation')
       .eq('year', y)
       .eq('month', m)
       .order('client_name')
-    setTaxSchedules(data || [])
+    const items: TaxSchedItem[] = data || []
+
+    // 担当者はclientsテーブルのprimary_staffから引く（tax_schedules自体は担当者を持たない）
+    const codes = Array.from(new Set(items.map(s => s.matched_client_code).filter((c): c is string => !!c)))
+    if (codes.length > 0) {
+      const { data: staffClients } = await supabase.from('clients').select('code, primary_staff').in('code', codes)
+      const staffByCode: Record<string, string | null> = {}
+      for (const c of staffClients || []) staffByCode[c.code] = c.primary_staff
+      for (const item of items) item.staff = item.matched_client_code ? staffByCode[item.matched_client_code] || null : null
+    }
+
+    setTaxSchedules(items)
     setTaxSchedLoading(false)
   }
 
@@ -1359,6 +1372,7 @@ export default function DashboardPage() {
               <thead className="bg-gray-50 text-xs text-gray-500">
                 <tr>
                   <th className="text-left px-4 py-2 font-medium">顧客名</th>
+                  <th className="text-left px-4 py-2 font-medium">担当者</th>
                   <th className="text-left px-4 py-2 font-medium">税目</th>
                   <th className="text-right px-4 py-2 font-medium">金額</th>
                   <th className="text-center px-4 py-2 font-medium">期限</th>
@@ -1373,6 +1387,7 @@ export default function DashboardPage() {
                 {taxSchedules.map(s => (
                   <tr key={s.id} className={`hover:bg-gray-50 ${s.confirmation === '済' ? 'opacity-60' : ''}`}>
                     <td className="px-4 py-2 font-medium text-gray-800">{s.client_name}</td>
+                    <td className="px-4 py-2 text-gray-600 text-xs">{s.staff || '—'}</td>
                     <td className="px-4 py-2 text-gray-600">{s.tax_type || ''}</td>
                     <td className="px-4 py-2 text-right tabular-nums text-gray-800">{s.amount || ''}</td>
                     <td className="px-4 py-2 text-center text-gray-600 text-xs">{s.deadline || ''}</td>
