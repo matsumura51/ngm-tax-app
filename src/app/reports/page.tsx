@@ -472,27 +472,24 @@ export default function ReportsPage() {
             }
           }
         }
-        // 訪問・来所は「決算区分の実績が実際にある」場合のみ決算報酬側に振り替える。
+        // 訪問・来所は「決算区分の実績が実際にある」場合、決算報酬35%を"追加で"決算月・翌月の担当者に配分する。
+        // 月額報酬（Pot A）側の訪問・来所配分とは完全に別枠（月額報酬側は除外しない＝二重に受け取れる）。
         // 対象期間（subject〜details）が決算月・翌月に該当する実績のみが対象（レポートを開いている月ではない。
         // 例：9月のレポートに計上されていても、対象期間が7月分なら決算月7月分として扱う）
         const hasDecisionActivity = !!decisionInfo && decisionInfo.totalStaff > 0
         const thisReportKey = `${year}-${Number(monthStr)}`
-        const visitEntriesToDivert = hasDecisionActivity
+        const settlementVisitEntries = hasDecisionActivity
           ? rowEntries.filter(e => (e.task_type === '訪問' || e.task_type === '来所') && inFiscalOrNextMonth(st, e.subject, e.details, thisReportKey))
           : []
-        if (visitEntriesToDivert.length > 0 && !settlementVisitClaimed[row.client_code]) {
-          const visitUsers = Array.from(new Set(visitEntriesToDivert.map(e => e.user_name)))
+        if (settlementVisitEntries.length > 0 && !settlementVisitClaimed[row.client_code]) {
+          const visitUsers = Array.from(new Set(settlementVisitEntries.map(e => e.user_name)))
           const share = (st.fee * 0.35) / visitUsers.length
           for (const u of visitUsers) row.staff_alloc[u] = (row.staff_alloc[u] || 0) + share
           potBCTotal += share * visitUsers.length
         }
-        // 決算区分は常にPot Bへ、訪問・来所は決算報酬側に振り替えた分のみPot Bへ移すため、通常配分（Pot A）の対象から除外
-        const divertSet = new Set(visitEntriesToDivert)
-        rowEntries = rowEntries.filter(e => {
-          if (e.task_type === '決算') return false
-          if (divertSet.has(e)) return false
-          return true
-        })
+        // 決算区分のみ、常にPot B（決算報酬）側で配分するため通常配分（Pot A）の対象から除外。
+        // 訪問・来所は月額報酬（Pot A）側でも通常通り配分するため除外しない。
+        rowEntries = rowEntries.filter(e => e.task_type !== '決算')
       }
 
       // 年末調整報酬: 登録がある法人は全額を「年末調整」区分の担当者に配分する。
