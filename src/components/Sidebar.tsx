@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { confirmLeaveIfDirty } from '@/lib/unsavedGuard'
 import { LayoutDashboard, FileText, Calendar, ClipboardList, LogOut, Users, UserCog, AlertCircle, HelpCircle, BarChart2, Receipt, Landmark, ListChecks, BookOpen, X, MessageSquare } from 'lucide-react'
 
 const nav = [
@@ -32,12 +33,14 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const router = useRouter()
 
   async function handleLogout() {
+    if (!confirmLeaveIfDirty()) return
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
   }
 
-  function handleNav() {
+  function handleNav(e: React.MouseEvent) {
+    if (!confirmLeaveIfDirty()) { e.preventDefault(); return }
     onClose?.()
   }
 

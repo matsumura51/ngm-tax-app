@@ -7,6 +7,7 @@ import { DailyReportDetail } from '@/lib/types'
 import { ChevronLeft, Plus, Trash2, ChevronDown, ChevronUp, Calendar, ArrowUpDown } from 'lucide-react'
 import Link from 'next/link'
 import { Schedule } from '@/lib/types'
+import { setUnsavedChanges, confirmLeaveIfDirty, registerBeforeUnloadGuard } from '@/lib/unsavedGuard'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const TASK_TYPES = ['記帳', 'チェック', '決算', '来所', '訪問', '所内相談', '電話・メール', '給与計算', '環境整備', '朝礼', '確定申告', '年末調整', '相続税', '建設業', '医療法人', '社会保険', '税務調査', 'その他']
@@ -129,6 +130,13 @@ export default function DailyReportNewPage() {
     }
     loadUser()
   }, [])
+
+  // 入力中の内容がある場合、離脱時に確認ダイアログを出す
+  useEffect(() => registerBeforeUnloadGuard(), [])
+  useEffect(() => {
+    setUnsavedChanges(details.some(hasRowContent) || !!form.total_hours)
+  }, [details, form])
+  useEffect(() => () => setUnsavedChanges(false), [])
 
   useEffect(() => {
     async function loadSchedules() {
@@ -300,13 +308,14 @@ export default function DailyReportNewPage() {
       await supabase.from('daily_report_details').insert(detailRows)
     }
 
+    setUnsavedChanges(false)
     router.push('/daily-reports')
   }
 
   return (
     <div className="p-6 max-w-7xl">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/daily-reports" className="text-gray-400 hover:text-gray-600">
+        <Link href="/daily-reports" onClick={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="text-gray-400 hover:text-gray-600">
           <ChevronLeft size={20} />
         </Link>
         <h1 className="text-2xl font-bold text-gray-800">日報 新規作成</h1>
@@ -475,7 +484,7 @@ export default function DailyReportNewPage() {
       </div>
 
       <div className="flex justify-end gap-3">
-        <Link href="/daily-reports" className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+        <Link href="/daily-reports" onClick={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
           キャンセル
         </Link>
         <button onClick={save} disabled={saving} className="px-6 py-2 text-sm font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50">
