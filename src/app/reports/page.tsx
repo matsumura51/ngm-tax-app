@@ -3,6 +3,26 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 
+// Supabase/PostgRESTは1リクエストあたり最大1000件までしか返さないため、
+// range()で分割取得して連結する（daily_report_detailsが1000件を超えると
+// 実績が欠落し配分計算がおかしくなるため必須）
+async function fetchAllRows<T>(
+  queryBuilder: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }> }
+): Promise<T[]> {
+  const pageSize = 1000
+  let all: T[] = []
+  let offset = 0
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { data, error } = await queryBuilder().range(offset, offset + pageSize - 1)
+    if (error || !data) break
+    all = all.concat(data)
+    if (data.length < pageSize) break
+    offset += pageSize
+  }
+  return all
+}
+
 // 業務区分ごとの配分率と分割方法
 const TASK_ALLOC: Record<string, { rate: number; splitBy: 'time' | 'person' }> = {
   '記帳':  { rate: 0.35, splitBy: 'person' },
@@ -122,11 +142,15 @@ export default function ReportsPage() {
 
     // 顧客カルテの業務ログと同じアプローチ:
     // client_codeがあり且つwork_timeが入力済みの明細を先に取得 → 日報で日付・担当者を確認
-    const { data: details } = await supabase
+    const details = await fetchAllRows<{
+      report_id: string; task_type: string | null; work_time: string | null
+      client_code: string | null; client_name: string | null; report_content: string | null
+      subject: string | null; details: string | null
+    }>(() => supabase
       .from('daily_report_details')
       .select('report_id, task_type, work_time, client_code, client_name, report_content, subject, details')
       .not('client_code', 'is', null)
-      .not('work_time', 'is', null)
+      .not('work_time', 'is', null))
 
     if (!details || details.length === 0) {
       setClientRows([]); setStaffRows([]); setLoading(false); return
@@ -159,11 +183,14 @@ export default function ReportsPage() {
 
     // 担当者別業務時間: 当月日報の全明細（client_codeなし含む）を集計
     const monthReportIds = Object.keys(reportMap)
-    const { data: allStaffDetails } = await supabase
+    const allStaffDetails = await fetchAllRows<{
+      report_id: string; work_time: string | null; task_type: string | null
+      client_name: string | null; report_content: string | null
+    }>(() => supabase
       .from('daily_report_details')
       .select('report_id, work_time, task_type, client_name, report_content')
       .in('report_id', monthReportIds)
-      .not('work_time', 'is', null)
+      .not('work_time', 'is', null))
 
     const staffTotalMinutes: Record<string, number> = {}
     const staffEntriesMap: Record<string, StaffEntry[]> = {}
