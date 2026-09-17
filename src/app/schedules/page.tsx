@@ -73,7 +73,7 @@ function timeToMinutes(dt: string) {
   return d.getHours() * 60 + d.getMinutes()
 }
 function minutesToPct(min: number) {
-  return Math.max(0, Math.min(100, ((min - 480) / 660) * 100)) // 8:00~19:00 = 660min
+  return Math.max(0, Math.min(100, ((min - 480) / 720) * 100)) // 8:00~20:00（HOURS 8~19の12列分）= 720min
 }
 
 interface UserInfo { id: string; name: string; division: string | null }
