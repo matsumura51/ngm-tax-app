@@ -157,6 +157,8 @@ export default function DailyReportNewPage() {
   function colorToTaskType(color: string | null): string {
     switch (color) {
       case '外出': return '訪問'
+      case '直行': return '訪問'
+      case '直帰': return '訪問'
       case '来客（顧問先）': return '来所'
       case '来客（業者）': return '来所'
       case '所内ミーティング': return '所内相談'

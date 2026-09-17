@@ -20,6 +20,8 @@ const FACILITY_COLOR: Record<string, string> = {
 const COLOR_OPTIONS = [
   { value: '出勤', label: '出勤', color: 'bg-teal-500' },
   { value: '外出', label: '外出', color: 'bg-orange-400' },
+  { value: '直行', label: '直行', color: 'bg-red-400' },
+  { value: '直帰', label: '直帰', color: 'bg-amber-700' },
   { value: '来客（顧問先）', label: '来客（顧問先）', color: 'bg-blue-500' },
   { value: '来客（業者）', label: '来客（業者）', color: 'bg-cyan-500' },
   { value: '所内行事', label: '所内行事', color: 'bg-purple-500' },
