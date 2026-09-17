@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Schedule } from '@/lib/types'
 import { ChevronLeft, Trash2 } from 'lucide-react'
 import Link from 'next/link'
+import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
@@ -59,6 +60,7 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
   const [selectedCompanions, setSelectedCompanions] = useState<string[]>([])
   const [breakMinutes, setBreakMinutes] = useState('')
   const [currentUserId, setCurrentUserId] = useState('')
+  const initialSnapshot = useRef<string | null>(null)
 
   function toggleFacility(f: string) {
     setSelectedFacilities(prev =>
@@ -93,10 +95,10 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
       const clientName = s.client_name || ''
       const title = s.title || ''
       setAutoTitle(title === makeAutoTitle(clientName, color))
-      setSelectedFacilities(s.facility ? s.facility.split(',').map((f: string) => f.trim()) : [])
-      setSelectedCompanions(s.companions ? s.companions.split(',').map((c: string) => c.trim()) : [])
-      setBreakMinutes(s.break_minutes != null ? String(s.break_minutes) : '')
-      setForm({
+      const facilities = s.facility ? s.facility.split(',').map((f: string) => f.trim()) : []
+      const companions = s.companions ? s.companions.split(',').map((c: string) => c.trim()) : []
+      const breakMin = s.break_minutes != null ? String(s.break_minutes) : ''
+      const loadedForm = {
         title,
         date: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`,
         start_time: start.toTimeString().slice(0, 5),
@@ -107,9 +109,19 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
         client_name: clientName,
         client_code: s.client_code || '',
         memo: s.memo || '',
-      })
+      }
+      setSelectedFacilities(facilities)
+      setSelectedCompanions(companions)
+      setBreakMinutes(breakMin)
+      setForm(loadedForm)
+      initialSnapshot.current = JSON.stringify({ form: loadedForm, facilities, companions, breakMin })
     }
   }
+
+  useUnsavedGuard(
+    initialSnapshot.current !== null &&
+    JSON.stringify({ form, facilities: selectedFacilities, companions: selectedCompanions, breakMin: breakMinutes }) !== initialSnapshot.current
+  )
 
   function onColorChange(color: string) {
     setForm(f => ({
@@ -205,6 +217,10 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
       break_minutes: breakMinutes ? parseInt(breakMinutes, 10) : null,
     }).eq('id', id)
     if (error) alert('エラー: ' + error.message)
+    else {
+      initialSnapshot.current = JSON.stringify({ form, facilities: selectedFacilities, companions: selectedCompanions, breakMin: breakMinutes })
+      setUnsavedChanges(false)
+    }
     setSaving(false)
   }
 
@@ -212,6 +228,7 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
     if (!confirm('削除しますか？')) return
     const supabase = createClient()
     await supabase.from('schedules').delete().eq('id', id)
+    setUnsavedChanges(false)
     router.push('/schedules')
   }
 
@@ -221,7 +238,7 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
     <div className="p-6 max-w-2xl">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Link href="/schedules" className="text-gray-400 hover:text-gray-600">
+          <Link href="/schedules" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="text-gray-400 hover:text-gray-600">
             <ChevronLeft size={20} />
           </Link>
           <h1 className="text-2xl font-bold text-gray-800">スケジュール詳細</h1>
@@ -380,7 +397,7 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
-          <Link href="/schedules" className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+          <Link href="/schedules" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
             戻る
           </Link>
           <button onClick={save} disabled={saving}

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { ClientCheck, ClientCheckAttachment } from '@/lib/types'
 import { ChevronLeft, Trash2, Paperclip, Download, X, Printer } from 'lucide-react'
 import Link from 'next/link'
+import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
 
 const ic = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const CATEGORIES = ['月次', '決算', '確定申告', '年末調整', '給与計算', 'その他']
@@ -36,6 +37,7 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
   const [attachments, setAttachments] = useState<ClientCheckAttachment[]>([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const initialSnapshot = useRef<string | null>(null)
 
   useEffect(() => { load() }, [id])
 
@@ -46,10 +48,12 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
       supabase.from('clients').select('id, code, name').order('code'),
       supabase.from('client_check_attachments').select('*').eq('check_id', id).order('created_at'),
     ])
-    if (c) { setCheck(c); setForm(c) }
+    if (c) { setCheck(c); setForm(c); initialSnapshot.current = JSON.stringify(c) }
     setClients(cl || [])
     setAttachments(att || [])
   }
+
+  useUnsavedGuard(initialSnapshot.current !== null && JSON.stringify(form) !== initialSnapshot.current)
 
   function onClientNameChange(e: React.ChangeEvent<HTMLInputElement>) {
     const text = e.target.value
@@ -101,6 +105,7 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
     if (!confirm('削除しますか？')) return
     const supabase = createClient()
     await supabase.from('client_checks').delete().eq('id', id)
+    setUnsavedChanges(false)
     router.push('/client-checks')
   }
 
@@ -212,7 +217,7 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
     <div className="p-6 max-w-2xl">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Link href="/client-checks" className="text-gray-400 hover:text-gray-600"><ChevronLeft size={20} /></Link>
+          <Link href="/client-checks" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="text-gray-400 hover:text-gray-600"><ChevronLeft size={20} /></Link>
           <h1 className="text-2xl font-bold text-gray-800">指摘事項</h1>
           {form.status && (
             <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusStyle[form.status] || 'bg-gray-100 text-gray-600'}`}>
@@ -349,7 +354,7 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
         </div>
 
         <div className="flex justify-end gap-3 pt-2">
-          <Link href="/client-checks" className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">一覧に戻る</Link>
+          <Link href="/client-checks" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">一覧に戻る</Link>
           <button onClick={save} disabled={saving}
             className="px-6 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50">
             {saving ? '保存中...' : '保存'}

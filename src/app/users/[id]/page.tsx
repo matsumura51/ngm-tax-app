@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { User } from '@/lib/types'
 import { ChevronLeft } from 'lucide-react'
 import Link from 'next/link'
+import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const DIVISION_OPTIONS = ['管理部', '事業部1', '事業部2', '事業部3']
@@ -18,8 +19,11 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const initialSnapshot = useRef<string | null>(null)
 
   useEffect(() => { checkAdminAndLoad() }, [id])
+
+  useUnsavedGuard(initialSnapshot.current !== null && JSON.stringify(form) !== initialSnapshot.current)
 
   async function checkAdminAndLoad() {
     const supabase = createClient()
@@ -40,7 +44,9 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
     const { data } = await supabase.from('users').select('*').eq('id', id).single()
     if (data) {
       setUser(data)
-      setForm({ name: data.name || '', code: data.code || '', department: data.department || '', role: data.role || 'staff', hire_date: data.hire_date || '', leave_date: data.leave_date || '', division: data.division || '' })
+      const loadedForm = { name: data.name || '', code: data.code || '', department: data.department || '', role: data.role || 'staff', hire_date: data.hire_date || '', leave_date: data.leave_date || '', division: data.division || '' }
+      setForm(loadedForm)
+      initialSnapshot.current = JSON.stringify(loadedForm)
     }
   }
 
@@ -57,7 +63,11 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
       division: form.division || null,
     }).eq('id', id)
     if (error) alert('エラー: ' + error.message)
-    else { setSaved(true); setTimeout(() => setSaved(false), 2000) }
+    else {
+      setSaved(true); setTimeout(() => setSaved(false), 2000)
+      initialSnapshot.current = JSON.stringify(form)
+      setUnsavedChanges(false)
+    }
     setSaving(false)
   }
 
@@ -66,7 +76,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="p-6 max-w-xl">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/users" className="text-gray-400 hover:text-gray-600">
+        <Link href="/users" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="text-gray-400 hover:text-gray-600">
           <ChevronLeft size={20} />
         </Link>
         <h1 className="text-2xl font-bold text-gray-800">ユーザー編集</h1>
@@ -116,7 +126,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
-          <Link href="/users" className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+          <Link href="/users" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
             戻る
           </Link>
           <button onClick={save} disabled={saving} className="px-6 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">

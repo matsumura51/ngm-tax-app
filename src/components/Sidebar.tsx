@@ -39,7 +39,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
     router.push('/login')
   }
 
-  function handleNav(e: React.MouseEvent) {
+  function handleNavigate(e: { preventDefault: () => void }) {
     if (!confirmLeaveIfDirty()) { e.preventDefault(); return }
     onClose?.()
   }
@@ -66,7 +66,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
             <Link
               key={href}
               href={href}
-              onClick={handleNav}
+              onNavigate={handleNavigate}
               className={`flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-sm transition ${
                 active ? 'bg-blue-600 font-semibold' : 'hover:bg-blue-700 text-blue-100'
               }`}

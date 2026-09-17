@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect } from 'react'
+
 // 入力中のフォームを離れる際の確認ガード。
 // フォーム側は setUnsavedChanges(true/false) で状態を更新し、
 // ナビゲーション側（サイドバー等）は confirmLeaveIfDirty() で確認ダイアログを出す。
@@ -31,4 +33,12 @@ export function registerBeforeUnloadGuard(): () => void {
   }
   window.addEventListener('beforeunload', handler)
   return () => window.removeEventListener('beforeunload', handler)
+}
+
+// フォームページで dirty (入力中かどうか) を渡すだけで使える共通フック。
+// タブを閉じる・リロード時の警告登録、ページ離脱時のフラグリセットも合わせて行う。
+export function useUnsavedGuard(dirty: boolean) {
+  useEffect(() => registerBeforeUnloadGuard(), [])
+  useEffect(() => { setUnsavedChanges(dirty) }, [dirty])
+  useEffect(() => () => setUnsavedChanges(false), [])
 }

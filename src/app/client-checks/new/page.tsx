@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ChevronLeft } from 'lucide-react'
 import Link from 'next/link'
+import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
 
 const ic = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const CATEGORIES = ['月次', '決算', '確定申告', '年末調整', '給与計算', 'その他']
@@ -47,6 +48,8 @@ function ClientCheckNewForm() {
     }
     init()
   }, [])
+
+  useUnsavedGuard(!!(form.content.trim() || form.correction_note.trim()))
 
   function onClientNameChange(e: React.ChangeEvent<HTMLInputElement>) {
     const text = e.target.value
@@ -92,13 +95,14 @@ function ClientCheckNewForm() {
       correction_note: form.correction_note || null,
     })
     if (error) { alert('エラー: ' + error.message); setSaving(false); return }
+    setUnsavedChanges(false)
     router.push('/client-checks')
   }
 
   return (
     <div className="p-6 max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/client-checks" className="text-gray-400 hover:text-gray-600"><ChevronLeft size={20} /></Link>
+        <Link href="/client-checks" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="text-gray-400 hover:text-gray-600"><ChevronLeft size={20} /></Link>
         <h1 className="text-2xl font-bold text-gray-800">指摘・クレーム・処理方法 新規追加</h1>
       </div>
 
@@ -188,7 +192,7 @@ function ClientCheckNewForm() {
         )}
 
         <div className="flex justify-end gap-3 pt-2">
-          <Link href="/client-checks" className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">キャンセル</Link>
+          <Link href="/client-checks" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">キャンセル</Link>
           <button onClick={save} disabled={saving}
             className="px-6 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50">
             {saving ? '保存中...' : '保存'}

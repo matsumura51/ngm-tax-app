@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { ClientQuestion, ClientQuestionAttachment } from '@/lib/types'
 import { ChevronLeft, Trash2, Paperclip, Download, X, Plus, Printer } from 'lucide-react'
 import Link from 'next/link'
+import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
 
 const ic = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const CATEGORIES = ['月次', '決算', '確定申告', '年末調整', '給与計算', 'その他']
@@ -63,6 +64,7 @@ export default function ClientQuestionDetailPage({ params }: { params: Promise<{
   const [attachments, setAttachments] = useState<ClientQuestionAttachment[]>([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const initialSnapshot = useRef<string | null>(null)
 
   useEffect(() => { load() }, [id])
 
@@ -76,14 +78,21 @@ export default function ClientQuestionDetailPage({ params }: { params: Promise<{
     if (q) {
       setQuestion(q)
       setForm(q)
-      setItems(parseItems(q.content))
+      const parsedItems = parseItems(q.content)
+      setItems(parsedItems)
       const wm = parseWorkMonth(q.work_date)
       setWorkYear(wm.year)
       setWorkMonth(wm.month)
+      initialSnapshot.current = JSON.stringify({ form: q, items: parsedItems, workYear: wm.year, workMonth: wm.month })
     }
     setClients(cl || [])
     setAttachments(att || [])
   }
+
+  useUnsavedGuard(
+    initialSnapshot.current !== null &&
+    JSON.stringify({ form, items, workYear, workMonth }) !== initialSnapshot.current
+  )
 
   function onClientNameChange(e: React.ChangeEvent<HTMLInputElement>) {
     const text = e.target.value
@@ -295,6 +304,7 @@ ${itemRows}
     if (!confirm('削除しますか？')) return
     const supabase = createClient()
     await supabase.from('client_questions').delete().eq('id', id)
+    setUnsavedChanges(false)
     router.push('/client-questions')
   }
 
@@ -335,7 +345,7 @@ ${itemRows}
     <div className="p-6 max-w-2xl">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Link href="/client-questions" className="text-gray-400 hover:text-gray-600"><ChevronLeft size={20} /></Link>
+          <Link href="/client-questions" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="text-gray-400 hover:text-gray-600"><ChevronLeft size={20} /></Link>
           <h1 className="text-2xl font-bold text-gray-800">質問事項</h1>
           <span className={`text-xs px-2 py-1 rounded-full font-medium ${allAnswered ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
             {allAnswered ? '回答済' : `未回答 ${unansweredItems.length}件`}
@@ -509,7 +519,7 @@ ${itemRows}
         </div>
 
         <div className="flex justify-end gap-3 pt-2">
-          <Link href="/client-questions" className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">一覧に戻る</Link>
+          <Link href="/client-questions" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">一覧に戻る</Link>
           <button onClick={save} disabled={saving}
             className="px-6 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-50">
             {saving ? '保存中...' : '保存'}

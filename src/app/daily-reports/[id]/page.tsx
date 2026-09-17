@@ -321,7 +321,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
   return (
     <div className="p-6 max-w-7xl">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/daily-reports" onClick={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="text-gray-400 hover:text-gray-600">
+        <Link href="/daily-reports" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="text-gray-400 hover:text-gray-600">
           <ChevronLeft size={20} />
         </Link>
         <h1 className="text-2xl font-bold text-gray-800">日報</h1>
@@ -480,7 +480,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
       </div>
 
       <div className="flex justify-end gap-3">
-        <Link href="/daily-reports" onClick={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+        <Link href="/daily-reports" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
           戻る
         </Link>
         <button onClick={save} disabled={saving} className="px-6 py-2 text-sm font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50">

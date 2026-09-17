@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { ChevronLeft } from 'lucide-react'
 import Link from 'next/link'
 import { Suspense } from 'react'
+import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
@@ -109,6 +110,11 @@ function ScheduleNewForm() {
     client_code: '',
     memo: '',
   })
+
+  useUnsavedGuard(
+    !!(form.title || form.client_name || form.memo || breakMinutes ||
+      selectedFacilities.length > 0 || selectedCompanions.length > 0 || recurrence !== 'none')
+  )
 
   function toggleFacility(f: string) {
     setSelectedFacilities(prev =>
@@ -248,13 +254,14 @@ function ScheduleNewForm() {
       const { error } = await supabase.from('schedules').insert(records)
       if (error) { alert('エラー: ' + error.message); setSaving(false); return }
     }
+    setUnsavedChanges(false)
     router.push('/schedules')
   }
 
   return (
     <div className="p-6 max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/schedules" className="text-gray-400 hover:text-gray-600">
+        <Link href="/schedules" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="text-gray-400 hover:text-gray-600">
           <ChevronLeft size={20} />
         </Link>
         <h1 className="text-2xl font-bold text-gray-800">スケジュール 新規追加</h1>
@@ -453,7 +460,7 @@ function ScheduleNewForm() {
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
-          <Link href="/schedules" className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+          <Link href="/schedules" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
             キャンセル
           </Link>
           <button onClick={save} disabled={saving}

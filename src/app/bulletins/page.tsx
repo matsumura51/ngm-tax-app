@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Plus, ChevronDown, ChevronUp, CheckCircle, Clock, Users } from 'lucide-react'
+import { setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
 
 interface Bulletin {
   id: string
@@ -39,6 +40,8 @@ export default function BulletinsPage() {
   const [editSaving, setEditSaving] = useState(false)
 
   useEffect(() => { load() }, [])
+
+  useUnsavedGuard((showForm && !!(form.title.trim() || form.content.trim())) || editingId !== null)
 
   async function load() {
     setLoading(true)
@@ -109,6 +112,7 @@ export default function BulletinsPage() {
     setForm({ title: '', content: '', post_date: today })
     setShowForm(false)
     setSaving(false)
+    setUnsavedChanges(false)
     await load()
   }
 

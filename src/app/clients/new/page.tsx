@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { ChevronLeft, Plus, Trash2 } from 'lucide-react'
 import { Director, ClientDocument } from '@/lib/types'
+import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
 
 const WITHHOLDING_TAX_OPTIONS = ['納特', '毎月', '不要']
 const CONTRACT_STATUS_OPTIONS = ['契約中', '契約終了', '見込み', '休止']
@@ -52,6 +53,10 @@ export default function ClientNewPage() {
   const [form, setForm] = useState<FormState>(INIT)
   const [directors, setDirectors] = useState<Director[]>([])
   const [documents, setDocuments] = useState<ClientDocument[]>([])
+
+  useUnsavedGuard(
+    Object.values(form).some(v => v !== '') || directors.length > 0 || documents.length > 0
+  )
 
   function set(field: keyof FormState, value: string) {
     setForm(f => ({ ...f, [field]: value }))
@@ -108,6 +113,7 @@ export default function ClientNewPage() {
       setSaving(false)
       return
     }
+    setUnsavedChanges(false)
     router.push(`/clients/${data.id}`)
   }
 
@@ -116,7 +122,7 @@ export default function ClientNewPage() {
   return (
     <div className="p-6 max-w-4xl">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/clients" className="text-gray-400 hover:text-gray-600"><ChevronLeft size={20} /></Link>
+        <Link href="/clients" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="text-gray-400 hover:text-gray-600"><ChevronLeft size={20} /></Link>
         <h1 className="text-2xl font-bold text-gray-800">顧客カルテ 新規作成</h1>
       </div>
 
@@ -394,7 +400,7 @@ export default function ClientNewPage() {
       </div>
 
       <div className="mt-6 flex justify-end gap-3 pb-10">
-        <Link href="/clients" className="px-5 py-2.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+        <Link href="/clients" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-5 py-2.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
           キャンセル
         </Link>
         <button onClick={save} disabled={saving} className="px-8 py-2.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">
