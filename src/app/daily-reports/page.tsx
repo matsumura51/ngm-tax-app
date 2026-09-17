@@ -44,8 +44,18 @@ export default function DailyReportsPage() {
 
     if (reps.length > 0) {
       const ids = reps.map(r => r.id)
-      const { data: detailData } = await supabase
-        .from('daily_report_details').select('*').in('report_id', ids).order('sort_order')
+      // PostgRESTの1000件上限を超える可能性があるため分割取得する
+      let detailData: DailyReportDetail[] = []
+      let offset = 0
+      while (true) {
+        const { data, error } = await supabase
+          .from('daily_report_details').select('*').in('report_id', ids).order('sort_order')
+          .range(offset, offset + 999)
+        if (error || !data) break
+        detailData = detailData.concat(data)
+        if (data.length < 1000) break
+        offset += 1000
+      }
       const map: Record<string, DailyReportDetail[]> = {}
       for (const d of (detailData || [])) {
         if (!map[d.report_id]) map[d.report_id] = []
