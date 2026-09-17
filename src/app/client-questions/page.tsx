@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { ClientQuestion } from '@/lib/types'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 import { Plus, Search, X, Upload, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -31,19 +32,22 @@ export default function ClientQuestionsPage() {
     setLoading(true)
     setSelectedIds(new Set())
     const supabase = createClient()
-    let q = supabase.from('client_questions').select('*').order('question_date', { ascending: false }).limit(200)
     const cn = (params?.clientName ?? clientName).normalize('NFKC')
     const st = params?.status ?? status
     const ca = params?.category ?? category
     const df = params?.dateFrom ?? dateFrom
     const dt = params?.dateTo ?? dateTo
-    if (cn) q = q.ilike('client_name', `%${cn}%`)
-    if (st) q = q.eq('status', st)
-    if (ca) q = q.eq('category', ca)
-    if (df) q = q.gte('question_date', df)
-    if (dt) q = q.lte('question_date', dt)
-    const { data } = await q
-    setQuestions(data || [])
+    function buildQuery() {
+      let q = supabase.from('client_questions').select('*').order('question_date', { ascending: false })
+      if (cn) q = q.ilike('client_name', `%${cn}%`)
+      if (st) q = q.eq('status', st)
+      if (ca) q = q.eq('category', ca)
+      if (df) q = q.gte('question_date', df)
+      if (dt) q = q.lte('question_date', dt)
+      return q
+    }
+    const data = await fetchAllRows<ClientQuestion>(buildQuery)
+    setQuestions(data)
     setLoading(false)
   }
 

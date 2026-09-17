@@ -7,6 +7,7 @@ import { Client } from '@/lib/types'
 import { Plus, Search, ChevronRight, Upload, Download, FileDown, Trash2, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { CLIENT_COLUMNS } from '@/lib/clientColumns'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 function formatValue(key: string, value: unknown): string {
   if (value === null || value === undefined) return ''
@@ -47,12 +48,12 @@ export default function ClientsPage() {
   async function load() {
     setLoading(true)
     const supabase = createClient()
-    const [{ data: clientsData }, { data: usersData }, authResult] = await Promise.all([
-      supabase.from('clients').select('*').order('code'),
+    const [clientsData, { data: usersData }, authResult] = await Promise.all([
+      fetchAllRows<Client>(() => supabase.from('clients').select('*').order('code')),
       supabase.from('users').select('name, division').order('name'),
       supabase.auth.getUser(),
     ])
-    setClients(clientsData || [])
+    setClients(clientsData)
     setAllUsers(usersData || [])
     // 初回ロード時のみログイン中の担当者でデフォルトフィルター（sessionStorageに保存済みの場合はスキップ）
     if (isFirstLoad.current) {

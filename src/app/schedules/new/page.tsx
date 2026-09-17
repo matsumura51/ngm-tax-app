@@ -7,6 +7,7 @@ import { ChevronLeft } from 'lucide-react'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
@@ -133,7 +134,8 @@ function ScheduleNewForm() {
         const { data } = await supabase.from('users').select('name').eq('id', user.id).single()
         setUserName(data?.name || user.email?.split('@')[0] || '')
       }
-      const { data: clientsData } = await supabase.from('clients').select('id, code, name').order('code')
+      const clientsData = await fetchAllRows<{ id: string; code: string; name: string }>(() =>
+        supabase.from('clients').select('id, code, name').order('code'))
       setClients(clientsData || [])
       const { data: usersData } = await supabase.from('users').select('id, name').order('name')
       setAllUsers(usersData || [])

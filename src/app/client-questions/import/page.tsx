@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 import { ChevronLeft, Upload, CheckCircle, Wand2, Search } from 'lucide-react'
 import Link from 'next/link'
 
@@ -81,7 +82,8 @@ export default function EvernoteImportPage() {
   const [globalQuestioner, setGlobalQuestioner] = useState('')
 
   useEffect(() => {
-    createClient().from('clients').select('id, code, name').order('code').then(({ data }) => setClients(data || []))
+    fetchAllRows<{ id: string; code: string; name: string }>(() =>
+      createClient().from('clients').select('id, code, name').order('code')).then(setClients)
   }, [])
 
   function onClientQuery(e: React.ChangeEvent<HTMLInputElement>) {

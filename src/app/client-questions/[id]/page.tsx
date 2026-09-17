@@ -7,6 +7,7 @@ import { ClientQuestion, ClientQuestionAttachment } from '@/lib/types'
 import { ChevronLeft, Trash2, Paperclip, Download, X, Plus, Printer } from 'lucide-react'
 import Link from 'next/link'
 import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 const ic = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const CATEGORIES = ['月次', '決算', '確定申告', '年末調整', '給与計算', 'その他']
@@ -70,9 +71,9 @@ export default function ClientQuestionDetailPage({ params }: { params: Promise<{
 
   async function load() {
     const supabase = createClient()
-    const [{ data: q }, { data: cl }, { data: att }] = await Promise.all([
+    const [{ data: q }, cl, { data: att }] = await Promise.all([
       supabase.from('client_questions').select('*').eq('id', id).single(),
-      supabase.from('clients').select('id, code, name').order('code'),
+      fetchAllRows<{ id: string; code: string; name: string }>(() => supabase.from('clients').select('id, code, name').order('code')),
       supabase.from('client_question_attachments').select('*').eq('question_id', id).order('created_at'),
     ])
     if (q) {
@@ -85,7 +86,7 @@ export default function ClientQuestionDetailPage({ params }: { params: Promise<{
       setWorkMonth(wm.month)
       initialSnapshot.current = JSON.stringify({ form: q, items: parsedItems, workYear: wm.year, workMonth: wm.month })
     }
-    setClients(cl || [])
+    setClients(cl)
     setAttachments(att || [])
   }
 

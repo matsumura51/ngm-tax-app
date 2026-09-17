@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { DailyReport, DailyReportDetail } from '@/lib/types'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 import { Plus, ChevronDown, ChevronRight, Search, X } from 'lucide-react'
 
 export default function DailyReportsPage() {
@@ -33,29 +34,21 @@ export default function DailyReportsPage() {
     const dt = params?.dateTo ?? dateTo
     const sn = params?.staffName ?? staffName
 
-    let q = supabase.from('daily_reports').select('*').order('date', { ascending: false }).limit(200)
-    if (df) q = q.gte('date', df)
-    if (dt) q = q.lte('date', dt)
-    if (sn) q = q.eq('user_name', sn)
+    function buildQuery() {
+      let q = supabase.from('daily_reports').select('*').order('date', { ascending: false })
+      if (df) q = q.gte('date', df)
+      if (dt) q = q.lte('date', dt)
+      if (sn) q = q.eq('user_name', sn)
+      return q
+    }
 
-    const { data: reportData } = await q
-    const reps = reportData || []
+    const reps = await fetchAllRows<DailyReport>(buildQuery)
     setReports(reps)
 
     if (reps.length > 0) {
       const ids = reps.map(r => r.id)
-      // PostgRESTの1000件上限を超える可能性があるため分割取得する
-      let detailData: DailyReportDetail[] = []
-      let offset = 0
-      while (true) {
-        const { data, error } = await supabase
-          .from('daily_report_details').select('*').in('report_id', ids).order('sort_order')
-          .range(offset, offset + 999)
-        if (error || !data) break
-        detailData = detailData.concat(data)
-        if (data.length < 1000) break
-        offset += 1000
-      }
+      const detailData = await fetchAllRows<DailyReportDetail>(() =>
+        supabase.from('daily_report_details').select('*').in('report_id', ids).order('sort_order'))
       const map: Record<string, DailyReportDetail[]> = {}
       for (const d of (detailData || [])) {
         if (!map[d.report_id]) map[d.report_id] = []

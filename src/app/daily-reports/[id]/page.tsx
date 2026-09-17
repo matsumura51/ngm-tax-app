@@ -8,6 +8,7 @@ import { ChevronLeft, Trash2, Plus, ChevronDown, ChevronUp, Calendar, ArrowUpDow
 import Link from 'next/link'
 import { Schedule } from '@/lib/types'
 import { setUnsavedChanges, confirmLeaveIfDirty, registerBeforeUnloadGuard } from '@/lib/unsavedGuard'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const TASK_TYPES = ['記帳', 'チェック', '決算', '来所', '訪問', '所内相談', '電話・メール', '給与計算', '環境整備', '朝礼', '確定申告', '年末調整', '相続税', '建設業', '医療法人', '社会保険', '税務調査', 'その他']
@@ -102,10 +103,10 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
 
   async function load() {
     const supabase = createClient()
-    const [{ data: r }, { data: d }, { data: clientsData }] = await Promise.all([
+    const [{ data: r }, { data: d }, clientsData] = await Promise.all([
       supabase.from('daily_reports').select('*').eq('id', id).single(),
       supabase.from('daily_report_details').select('*').eq('report_id', id).order('sort_order'),
-      supabase.from('clients').select('code, name').order('code'),
+      fetchAllRows<{ code: string; name: string }>(() => supabase.from('clients').select('code, name').order('code')),
     ])
     if (r) { setReport(r); setForm(r) }
     setDetails(d || [])

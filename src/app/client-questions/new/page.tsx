@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { ChevronLeft, Plus, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 const ic = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const CATEGORIES = ['月次', '決算', '確定申告', '年末調整', '給与計算', 'その他']
@@ -44,7 +45,8 @@ function ClientQuestionNewForm() {
         const name = data?.name || user.email?.split('@')[0] || ''
         setForm(f => ({ ...f, questioner: name }))
       }
-      const { data: cl } = await supabase.from('clients').select('id, code, name').order('code')
+      const cl = await fetchAllRows<{ id: string; code: string; name: string }>(() =>
+        supabase.from('clients').select('id, code, name').order('code'))
       setClients(cl || [])
     }
     init()

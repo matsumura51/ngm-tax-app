@@ -2,26 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-
-// Supabase/PostgRESTは1リクエストあたり最大1000件までしか返さないため、
-// range()で分割取得して連結する（daily_report_detailsが1000件を超えると
-// 実績が欠落し配分計算がおかしくなるため必須）
-async function fetchAllRows<T>(
-  queryBuilder: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }> }
-): Promise<T[]> {
-  const pageSize = 1000
-  let all: T[] = []
-  let offset = 0
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const { data, error } = await queryBuilder().range(offset, offset + pageSize - 1)
-    if (error || !data) break
-    all = all.concat(data)
-    if (data.length < pageSize) break
-    offset += pageSize
-  }
-  return all
-}
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 // 業務区分ごとの配分率と分割方法
 const TASK_ALLOC: Record<string, { rate: number; splitBy: 'time' | 'person' }> = {

@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     .select('check_date, checker, category, type, content, status, corrected_date, correction_note')
     .eq('client_id', client_id)
     .order('check_date', { ascending: false })
-    .limit(200)
+    .limit(500)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!checks || checks.length === 0) {

@@ -7,6 +7,7 @@ import { Schedule } from '@/lib/types'
 import { ChevronLeft, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
@@ -81,12 +82,12 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (user) setCurrentUserId(user.id)
-    const [{ data: s }, { data: clientsData }, { data: usersData }] = await Promise.all([
+    const [{ data: s }, clientsData, { data: usersData }] = await Promise.all([
       supabase.from('schedules').select('*').eq('id', id).single(),
-      supabase.from('clients').select('id, code, name').order('code'),
+      fetchAllRows<{ id: string; code: string; name: string }>(() => supabase.from('clients').select('id, code, name').order('code')),
       supabase.from('users').select('id, name').order('name'),
     ])
-    setClients(clientsData || [])
+    setClients(clientsData)
     setAllUsers(usersData || [])
     if (s) {
       setSchedule(s)

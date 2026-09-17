@@ -117,7 +117,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
   async function loadSchedules() {
     const supabase = createClient()
-    const { data } = await supabase.from('schedules').select('*').eq('client_id', id).order('start_datetime').limit(30)
+    const { data } = await supabase.from('schedules').select('*').eq('client_id', id).order('start_datetime').limit(100)
     setSchedules(data || [])
   }
 
@@ -127,7 +127,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       .from('daily_report_details')
       .select('id, report_id, start_time, end_time, work_time, task_type, report_content')
       .eq('client_code', client!.code)
-      .limit(200)
+      .limit(500)
     if (!details || details.length === 0) { setWorkLogs([]); return }
     const reportIds = [...new Set(details.map(d => d.report_id))]
     const { data: reports } = await supabase
@@ -207,13 +207,13 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     const { data } = await supabase.from('client_checks').select('*').eq('client_id', id)
       .order('created_at', { ascending: false })
       .order('check_date', { ascending: false })
-      .limit(200)
+      .limit(500)
     setClientChecks(data || [])
   }
 
   async function loadQuestions() {
     const supabase = createClient()
-    const { data } = await supabase.from('client_questions').select('*').eq('client_id', id).order('question_date', { ascending: false }).limit(50)
+    const { data } = await supabase.from('client_questions').select('*').eq('client_id', id).order('question_date', { ascending: false }).limit(150)
     setClientQuestions(data || [])
   }
 

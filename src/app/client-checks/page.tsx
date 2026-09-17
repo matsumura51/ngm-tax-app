@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { ClientCheck } from '@/lib/types'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 import { Plus, Search, X, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -57,18 +58,7 @@ export default function ClientChecksPage() {
       return q
     }
 
-    // Supabase/PostgRESTは1リクエストあたり最大1000件までしか返さないため、range()で分割取得して連結する
-    const pageSize = 1000
-    const maxTotal = 10000
-    let all: ClientCheck[] = []
-    let offset = 0
-    while (offset < maxTotal) {
-      const { data, error } = await buildQuery().range(offset, offset + pageSize - 1)
-      if (error || !data) break
-      all = all.concat(data)
-      if (data.length < pageSize) break
-      offset += pageSize
-    }
+    const all = await fetchAllRows<ClientCheck>(buildQuery)
     setChecks(all)
     setLoading(false)
   }
