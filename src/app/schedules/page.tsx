@@ -18,8 +18,6 @@ type ViewMode = '月間' | '週間' | '日間'
 const COLOR_MAP: Record<string, { bg: string; text: string }> = {
   '出勤':         { bg: '#26a69a', text: '#fff' },
   '外出':         { bg: '#e57373', text: '#fff' },
-  '直行':         { bg: '#ff7043', text: '#fff' },
-  '直帰':         { bg: '#8d6e63', text: '#fff' },
   '来客（顧問先）': { bg: '#64b5f6', text: '#fff' },
   '来客（業者）':  { bg: '#4fc3f7', text: '#fff' },
   '所内行事':     { bg: '#ba68c8', text: '#fff' },
@@ -36,6 +34,15 @@ const COLOR_MAP: Record<string, { bg: string; text: string }> = {
 function colorStyle(color: string | null): React.CSSProperties {
   const c = COLOR_MAP[color || '白'] ?? { bg: '#e57373', text: '#fff' }
   return { backgroundColor: c.bg, color: c.text }
+}
+function DirectBadges({ s }: { s: Schedule }) {
+  if (!s.direct_start && !s.direct_end) return null
+  return (
+    <>
+      {s.direct_start && <span className="ml-1 px-1 rounded bg-black/25 text-[9px] font-bold whitespace-nowrap">直行</span>}
+      {s.direct_end && <span className="ml-1 px-1 rounded bg-black/25 text-[9px] font-bold whitespace-nowrap">直帰</span>}
+    </>
+  )
 }
 const FACILITY_COLOR: Record<string, string> = {
   'アクア': 'bg-teal-100 text-teal-700',
@@ -270,6 +277,7 @@ function SchedulesContent() {
                               <div className="opacity-90 text-xs font-bold whitespace-nowrap">
                                 {formatTime(s.start_datetime)}{s.end_datetime ? ` - ${formatTime(s.end_datetime)}` : ''}
                                 {s.break_minutes ? <span className="ml-1 opacity-70">休{s.break_minutes}分</span> : null}
+                                <DirectBadges s={s} />
                               </div>
                               {s.user_name && (
                                 <div className="truncate text-[9px] opacity-70">
@@ -354,6 +362,7 @@ function SchedulesContent() {
                               <div className="opacity-90 text-xs font-bold whitespace-nowrap">
                                 {formatTime(s.start_datetime)}{s.end_datetime ? ` - ${formatTime(s.end_datetime)}` : ''}
                                 {breakMin ? <span className="ml-1 opacity-70">休{breakMin}分</span> : null}
+                                <DirectBadges s={s} />
                               </div>
                               {s.user_name && (
                                 <div className="truncate text-[9px] opacity-70">
@@ -477,12 +486,13 @@ function SchedulesContent() {
                   const breakLabel = s.break_minutes ? ` 休${s.break_minutes}分` : ''
                   return (
                     <Link key={s.id} href={`/schedules/${s.id}`}
-                      title={`${formatTime(s.start_datetime)}-${s.end_datetime ? formatTime(s.end_datetime) : ''}${breakLabel} ${s.client_name ? s.client_name + '：' : ''}${s.title}`}
+                      title={`${formatTime(s.start_datetime)}-${s.end_datetime ? formatTime(s.end_datetime) : ''}${breakLabel}${s.direct_start ? ' 直行' : ''}${s.direct_end ? ' 直帰' : ''} ${s.client_name ? s.client_name + '：' : ''}${s.title}`}
                       className="absolute top-1 bottom-1 rounded text-xs overflow-hidden px-1.5 py-1 leading-snug hover:opacity-80 transition"
                       style={{ left: `${left}%`, width: `${width}%`, ...colorStyle(s.color) }}>
                       <div className="opacity-80 text-[10px] font-medium whitespace-nowrap">
                         {formatTime(s.start_datetime)}{s.end_datetime ? `-${formatTime(s.end_datetime)}` : ''}
                         {s.break_minutes ? <span className="ml-1 opacity-70">休{s.break_minutes}分</span> : null}
+                        <DirectBadges s={s} />
                       </div>
                       <div className="truncate text-[9px] opacity-70">
                         {isCompanionEvent && <span className="opacity-70 font-normal">同行: </span>}

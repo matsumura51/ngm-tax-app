@@ -20,8 +20,6 @@ const FACILITY_COLOR: Record<string, string> = {
 const COLOR_OPTIONS = [
   { value: '出勤', label: '出勤', color: 'bg-teal-500' },
   { value: '外出', label: '外出', color: 'bg-orange-400' },
-  { value: '直行', label: '直行', color: 'bg-red-400' },
-  { value: '直帰', label: '直帰', color: 'bg-amber-700' },
   { value: '来客（顧問先）', label: '来客（顧問先）', color: 'bg-blue-500' },
   { value: '来客（業者）', label: '来客（業者）', color: 'bg-cyan-500' },
   { value: '所内行事', label: '所内行事', color: 'bg-purple-500' },
@@ -74,7 +72,8 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
     title: string; date: string; start_time: string; end_time: string
     color: string; type: string
     client_id: string; client_name: string; client_code: string; memo: string
-  }>({ title: '', date: '', start_time: '', end_time: '', color: '白', type: 'スケジュール', client_id: '', client_name: '', client_code: '', memo: '' })
+    direct_start: boolean; direct_end: boolean
+  }>({ title: '', date: '', start_time: '', end_time: '', color: '白', type: 'スケジュール', client_id: '', client_name: '', client_code: '', memo: '', direct_start: false, direct_end: false })
 
   useEffect(() => { load() }, [id])
 
@@ -111,6 +110,8 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
         client_name: clientName,
         client_code: s.client_code || '',
         memo: s.memo || '',
+        direct_start: !!s.direct_start,
+        direct_end: !!s.direct_end,
       }
       setSelectedFacilities(facilities)
       setSelectedCompanions(companions)
@@ -217,6 +218,8 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
       facility: selectedFacilities.length > 0 ? selectedFacilities.join(',') : null,
       companions: selectedCompanions.length > 0 ? selectedCompanions.join(',') : null,
       break_minutes: breakMinutes ? parseInt(breakMinutes, 10) : null,
+      direct_start: form.direct_start,
+      direct_end: form.direct_end,
     }).eq('id', id)
     if (error) alert('エラー: ' + error.message)
     else {
@@ -252,6 +255,25 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
 
       <div className="bg-white rounded-xl shadow p-6">
         <div className="space-y-4">
+
+          {/* 直行・直帰 */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">直行・直帰</label>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setForm(f => ({ ...f, direct_start: !f.direct_start }))}
+                className={`px-4 py-2 rounded-lg text-sm font-medium border transition ${
+                  form.direct_start ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                }`}>
+                直行
+              </button>
+              <button type="button" onClick={() => setForm(f => ({ ...f, direct_end: !f.direct_end }))}
+                className={`px-4 py-2 rounded-lg text-sm font-medium border transition ${
+                  form.direct_end ? 'bg-amber-700 text-white border-amber-700' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                }`}>
+                直帰
+              </button>
+            </div>
+          </div>
 
           {/* 日付・時刻 */}
           <div className="grid grid-cols-3 gap-3">

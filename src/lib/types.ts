@@ -188,6 +188,8 @@ export interface Schedule {
   facility: string | null
   companions: string | null
   break_minutes: number | null
+  direct_start: boolean | null
+  direct_end: boolean | null
   created_at: string
 }
 
