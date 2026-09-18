@@ -96,14 +96,26 @@ ${methodSection}
 出力は日本語でお願いします。社名や担当者名は「A社」「担当者A」のままで構いません。
 `
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
-    const result = await model.generateContent(prompt)
-    const text = result.response.text()
-    return NextResponse.json({ checklist: text, count: checks.length, mistakeCount: mistakes.length, methodCount: methods.length })
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ error: 'Gemini APIエラー: ' + msg }, { status: 500 })
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
+
+  // 503（高負荷による一時的なエラー）は数秒待って自動リトライする。
+  // 公式のエラーメッセージ通り一時的な現象であることが多いため。
+  const maxAttempts = 3
+  let lastErr: unknown = null
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const result = await model.generateContent(prompt)
+      const text = result.response.text()
+      return NextResponse.json({ checklist: text, count: checks.length, mistakeCount: mistakes.length, methodCount: methods.length })
+    } catch (e: unknown) {
+      lastErr = e
+      const msg = e instanceof Error ? e.message : String(e)
+      const isRetryable = msg.includes('503') || msg.includes('overloaded') || msg.includes('high demand')
+      if (!isRetryable || attempt === maxAttempts) break
+      await new Promise(r => setTimeout(r, attempt * 2000))
+    }
   }
+  const msg = lastErr instanceof Error ? lastErr.message : String(lastErr)
+  return NextResponse.json({ error: 'Gemini APIエラー: ' + msg }, { status: 500 })
 }
