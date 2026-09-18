@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { callGeminiWithRetry, GeminiOverloadedError } from '@/lib/geminiRetry'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -99,29 +100,17 @@ ${methodSection}
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
 
-  // 503（高負荷による一時的なエラー）は数秒待って自動リトライする。
-  // 公式のエラーメッセージ通り一時的な現象であることが多いため。
-  const maxAttempts = 3
-  let lastErr: unknown = null
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const result = await model.generateContent(prompt)
-      const text = result.response.text()
-      return NextResponse.json({ checklist: text, count: checks.length, mistakeCount: mistakes.length, methodCount: methods.length })
-    } catch (e: unknown) {
-      lastErr = e
-      const msg = e instanceof Error ? e.message : String(e)
-      const isRetryable = msg.includes('503') || msg.includes('overloaded') || msg.includes('high demand')
-      if (!isRetryable) break
-      if (attempt === maxAttempts) {
-        return NextResponse.json(
-          { error: 'Geminiが一時的に高負荷になっているため、暫く経ってから再度生成して下さい' },
-          { status: 503 }
-        )
-      }
-      await new Promise(r => setTimeout(r, attempt * 2000))
+  try {
+    const text = await callGeminiWithRetry(p => model.generateContent(p), prompt)
+    return NextResponse.json({ checklist: text, count: checks.length, mistakeCount: mistakes.length, methodCount: methods.length })
+  } catch (e: unknown) {
+    if (e instanceof GeminiOverloadedError) {
+      return NextResponse.json(
+        { error: 'Geminiが一時的に高負荷／利用上限に達しているため、暫く経ってから再度生成して下さい' },
+        { status: 503 }
+      )
     }
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: 'Gemini APIエラー: ' + msg }, { status: 500 })
   }
-  const msg = lastErr instanceof Error ? lastErr.message : String(lastErr)
-  return NextResponse.json({ error: 'Gemini APIエラー: ' + msg }, { status: 500 })
 }
