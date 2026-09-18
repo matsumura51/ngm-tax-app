@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { ClientCheck } from '@/lib/types'
 import { fetchAllRows } from '@/lib/fetchAllRows'
-import { Plus, Search, X, Trash2 } from 'lucide-react'
+import { Plus, Search, X, Trash2, Printer } from 'lucide-react'
 import Link from 'next/link'
 
 const CATEGORIES = ['月次', '決算', '確定申告', '年末調整', '給与計算', 'その他']
@@ -33,7 +33,28 @@ export default function ClientChecksPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
+  const [showTopMistakes, setShowTopMistakes] = useState(false)
+  const [topMistakesLoading, setTopMistakesLoading] = useState(false)
+  const [topMistakesError, setTopMistakesError] = useState<string | null>(null)
+  const [topMistakesText, setTopMistakesText] = useState<string | null>(null)
+
   useEffect(() => { load() }, [])
+
+  async function generateTopMistakes() {
+    setTopMistakesLoading(true)
+    setTopMistakesError(null)
+    setShowTopMistakes(true)
+    try {
+      const res = await fetch('/api/checklist/top-mistakes', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) { setTopMistakesError(data.error || 'エラーが発生しました'); return }
+      setTopMistakesText(data.checklist)
+    } catch {
+      setTopMistakesError('通信エラーが発生しました')
+    } finally {
+      setTopMistakesLoading(false)
+    }
+  }
 
   async function load(params?: { clientName?: string; status?: string; category?: string; type?: string; dateFrom?: string; dateTo?: string }) {
     setLoading(true)
@@ -81,11 +102,58 @@ export default function ClientChecksPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">指摘・クレーム・処理方法</h1>
-        <Link href="/client-checks/new"
-          className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-          <Plus size={16} /> 新規追加
-        </Link>
+        <div className="flex items-center gap-2">
+          <button onClick={generateTopMistakes}
+            className="flex items-center gap-1 text-sm border border-indigo-300 text-indigo-600 px-3 py-2 rounded-lg hover:bg-indigo-50 font-medium">
+            ✨ 全社TOP10をAI分析
+          </button>
+          <Link href="/client-checks/new"
+            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+            <Plus size={16} /> 新規追加
+          </Link>
+        </div>
       </div>
+
+      {showTopMistakes && (
+        <div className="bg-white rounded-xl shadow overflow-hidden mb-4">
+          <div className="flex items-center justify-between px-5 py-3 border-b bg-indigo-50">
+            <span className="font-bold text-indigo-700 text-sm flex items-center gap-2">
+              ✨ 全社 間違えやすい項目TOP10（Gemini生成）
+            </span>
+            <div className="flex items-center gap-2">
+              {topMistakesText && (
+                <button
+                  onClick={() => {
+                    const w = window.open('', '_blank')
+                    if (!w) return
+                    w.document.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>全社 間違えやすい項目TOP10</title><style>body{font-family:'Hiragino Kaku Gothic Pro',Meiryo,sans-serif;padding:32px;max-width:800px;margin:0 auto;font-size:14px;line-height:1.8;color:#222}h1{font-size:18px;border-bottom:2px solid #4f46e5;padding-bottom:8px;margin-bottom:24px}pre{white-space:pre-wrap;font-family:inherit}p.note{font-size:11px;color:#999;margin-top:32px;border-top:1px solid #eee;padding-top:12px}@media print{button{display:none}}</style></head><body><h1>全社　間違えやすい項目TOP10</h1><pre>${topMistakesText}</pre><p class="note">※ 生成日：${new Date().toLocaleDateString('ja-JP')}　Gemini AIにより生成（顧客名・担当者名は含めずに送信）</p><script>window.onload=()=>window.print()<\/script></body></html>`)
+                    w.document.close()
+                  }}
+                  className="flex items-center gap-1 text-xs border border-indigo-300 text-indigo-600 px-2.5 py-1 rounded hover:bg-indigo-50">
+                  <Printer size={12} /> 印刷
+                </button>
+              )}
+              <button onClick={() => setShowTopMistakes(false)}
+                className="text-xs text-gray-400 hover:text-gray-600">✕ 閉じる</button>
+            </div>
+          </div>
+          <div className="p-5">
+            {topMistakesLoading ? (
+              <div className="flex items-center gap-2 text-sm text-gray-400 py-4">
+                <span className="animate-spin inline-block w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full"></span>
+                Geminiが全顧客の指摘事項を分析中です...
+              </div>
+            ) : topMistakesError ? (
+              <div className="text-sm text-red-600 py-2">{topMistakesError}</div>
+            ) : topMistakesText ? (
+              <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{topMistakesText}</div>
+            ) : null}
+            <p className="text-xs text-gray-400 mt-4 pt-3 border-t border-gray-100">
+              ※ 全顧客の「指摘」区分の記録を対象に分析しています（顧客名・担当者名は送信していません）
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow p-4 mb-4">
         {/* 種別フィルター（ボタン） */}
