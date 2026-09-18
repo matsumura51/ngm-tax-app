@@ -34,21 +34,44 @@ export default function ClientChecksPage() {
   const [dateTo, setDateTo] = useState('')
 
   const [showTopMistakes, setShowTopMistakes] = useState(false)
+  const [topMistakesLoaded, setTopMistakesLoaded] = useState(false)
   const [topMistakesLoading, setTopMistakesLoading] = useState(false)
   const [topMistakesError, setTopMistakesError] = useState<string | null>(null)
   const [topMistakesText, setTopMistakesText] = useState<string | null>(null)
+  const [topMistakesGeneratedAt, setTopMistakesGeneratedAt] = useState<string | null>(null)
 
   useEffect(() => { load() }, [])
 
+  // タブを開いたときは前回の結果を表示するだけで、Geminiには問い合わせない
+  function openTopMistakesTab() {
+    setShowTopMistakes(true)
+    if (topMistakesLoaded) return
+    setTopMistakesLoading(true)
+    setTopMistakesError(null)
+    fetch('/api/checklist/top-mistakes')
+      .then(res => res.json())
+      .then(data => {
+        if (data.report) {
+          setTopMistakesText(data.report.checklist)
+          setTopMistakesGeneratedAt(data.report.generated_at)
+        }
+        setTopMistakesLoaded(true)
+      })
+      .catch(() => setTopMistakesError('通信エラーが発生しました'))
+      .finally(() => setTopMistakesLoading(false))
+  }
+
+  // 「再分析する」を押したときだけGeminiに問い合わせて結果を保存する
   async function generateTopMistakes() {
     setTopMistakesLoading(true)
     setTopMistakesError(null)
-    setShowTopMistakes(true)
     try {
       const res = await fetch('/api/checklist/top-mistakes', { method: 'POST' })
       const data = await res.json()
       if (!res.ok) { setTopMistakesError(data.error || 'エラーが発生しました'); return }
       setTopMistakesText(data.checklist)
+      setTopMistakesGeneratedAt(data.generated_at)
+      setTopMistakesLoaded(true)
     } catch {
       setTopMistakesError('通信エラーが発生しました')
     } finally {
@@ -103,8 +126,10 @@ export default function ClientChecksPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">指摘・クレーム・処理方法</h1>
         <div className="flex items-center gap-2">
-          <button onClick={generateTopMistakes}
-            className="flex items-center gap-1 text-sm border border-indigo-300 text-indigo-600 px-3 py-2 rounded-lg hover:bg-indigo-50 font-medium">
+          <button onClick={() => showTopMistakes ? setShowTopMistakes(false) : openTopMistakesTab()}
+            className={`flex items-center gap-1 text-sm border px-3 py-2 rounded-lg font-medium transition ${
+              showTopMistakes ? 'bg-indigo-600 text-white border-indigo-600' : 'border-indigo-300 text-indigo-600 hover:bg-indigo-50'
+            }`}>
             ✨ 全社TOP10をAI分析
           </button>
           <Link href="/client-checks/new"
@@ -119,14 +144,24 @@ export default function ClientChecksPage() {
           <div className="flex items-center justify-between px-5 py-3 border-b bg-indigo-50">
             <span className="font-bold text-indigo-700 text-sm flex items-center gap-2">
               ✨ 全社 間違えやすい項目TOP10（Gemini生成）
+              {topMistakesGeneratedAt && (
+                <span className="text-xs font-normal text-indigo-400">
+                  （最終生成日: {new Date(topMistakesGeneratedAt).toLocaleString('ja-JP')}）
+                </span>
+              )}
             </span>
             <div className="flex items-center gap-2">
+              <button onClick={generateTopMistakes} disabled={topMistakesLoading}
+                className="flex items-center gap-1 text-xs border border-indigo-300 text-indigo-600 px-2.5 py-1 rounded hover:bg-indigo-50 disabled:opacity-50">
+                🔄 再分析する
+              </button>
               {topMistakesText && (
                 <button
                   onClick={() => {
                     const w = window.open('', '_blank')
                     if (!w) return
-                    w.document.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>全社 間違えやすい項目TOP10</title><style>body{font-family:'Hiragino Kaku Gothic Pro',Meiryo,sans-serif;padding:32px;max-width:800px;margin:0 auto;font-size:14px;line-height:1.8;color:#222}h1{font-size:18px;border-bottom:2px solid #4f46e5;padding-bottom:8px;margin-bottom:24px}pre{white-space:pre-wrap;font-family:inherit}p.note{font-size:11px;color:#999;margin-top:32px;border-top:1px solid #eee;padding-top:12px}@media print{button{display:none}}</style></head><body><h1>全社　間違えやすい項目TOP10</h1><pre>${topMistakesText}</pre><p class="note">※ 生成日：${new Date().toLocaleDateString('ja-JP')}　Gemini AIにより生成（顧客名・担当者名は含めずに送信）</p><script>window.onload=()=>window.print()<\/script></body></html>`)
+                    const genDateStr = topMistakesGeneratedAt ? new Date(topMistakesGeneratedAt).toLocaleString('ja-JP') : new Date().toLocaleDateString('ja-JP')
+                    w.document.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>全社 間違えやすい項目TOP10</title><style>body{font-family:'Hiragino Kaku Gothic Pro',Meiryo,sans-serif;padding:32px;max-width:800px;margin:0 auto;font-size:14px;line-height:1.8;color:#222}h1{font-size:18px;border-bottom:2px solid #4f46e5;padding-bottom:8px;margin-bottom:24px}pre{white-space:pre-wrap;font-family:inherit}p.note{font-size:11px;color:#999;margin-top:32px;border-top:1px solid #eee;padding-top:12px}@media print{button{display:none}}</style></head><body><h1>全社　間違えやすい項目TOP10</h1><pre>${topMistakesText}</pre><p class="note">※ 生成日：${genDateStr}　Gemini AIにより生成（顧客名・担当者名は含めずに送信）</p><script>window.onload=()=>window.print()<\/script></body></html>`)
                     w.document.close()
                   }}
                   className="flex items-center gap-1 text-xs border border-indigo-300 text-indigo-600 px-2.5 py-1 rounded hover:bg-indigo-50">
@@ -147,7 +182,11 @@ export default function ClientChecksPage() {
               <div className="text-sm text-red-600 py-2">{topMistakesError}</div>
             ) : topMistakesText ? (
               <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{topMistakesText}</div>
-            ) : null}
+            ) : (
+              <div className="text-sm text-gray-400 py-4">
+                まだ生成されていません。「🔄 再分析する」を押すとGeminiが分析します。
+              </div>
+            )}
             <p className="text-xs text-gray-400 mt-4 pt-3 border-t border-gray-100">
               ※ 全顧客の「指摘」区分の記録を対象に分析しています（顧客名・担当者名は送信していません）
             </p>

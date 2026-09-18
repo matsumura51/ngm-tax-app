@@ -8,6 +8,17 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+// 前回生成した結果を返す（Geminiは呼ばない）
+export async function GET() {
+  const { data, error } = await supabase
+    .from('top_mistakes_report')
+    .select('checklist, count, generated_at')
+    .eq('id', 'global')
+    .maybeSingle()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ report: data || null })
+}
+
 export async function POST() {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'GEMINI_API_KEY が設定されていません' }, { status: 500 })
@@ -59,7 +70,11 @@ ${listText}
     try {
       const result = await model.generateContent(prompt)
       const text = result.response.text()
-      return NextResponse.json({ checklist: text, count: rows.length })
+      const generated_at = new Date().toISOString()
+      await supabase.from('top_mistakes_report').upsert({
+        id: 'global', checklist: text, count: rows.length, generated_at,
+      })
+      return NextResponse.json({ checklist: text, count: rows.length, generated_at })
     } catch (e: unknown) {
       lastErr = e
       const msg = e instanceof Error ? e.message : String(e)
