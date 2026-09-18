@@ -112,7 +112,13 @@ ${methodSection}
       lastErr = e
       const msg = e instanceof Error ? e.message : String(e)
       const isRetryable = msg.includes('503') || msg.includes('overloaded') || msg.includes('high demand')
-      if (!isRetryable || attempt === maxAttempts) break
+      if (!isRetryable) break
+      if (attempt === maxAttempts) {
+        return NextResponse.json(
+          { error: 'Geminiが一時的に高負荷になっているため、暫く経ってから再度生成して下さい' },
+          { status: 503 }
+        )
+      }
       await new Promise(r => setTimeout(r, attempt * 2000))
     }
   }
