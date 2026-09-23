@@ -126,6 +126,9 @@ export interface MonthlyProgress {
   settle_filed: string | null
   settle_payment_method: string | null
   settle_payment: string | null
+  direct_debit_national: string | null
+  direct_debit_local: string | null
+  direct_debit_account: string | null
   director_change: string | null
   // 決算業務
   settle_return_docs: string | null          // '1' = チェック済み

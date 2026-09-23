@@ -119,6 +119,7 @@ function fmtFee(s: string | null | undefined): string {
 const inp = 'w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500'
 
 const SETTLE_PAYMENT_METHODS = ['ダイレクト納付', '納付書', '振替納税', '予納', 'その他']
+const DIRECT_DEBIT_STATUS = ['未登録', '申請中', '登録済み']
 
 const SETTLE_FIELDS: { key: string; label: string; placeholder?: string; type?: string; options?: string[] }[] = [
   { key: 'settle_consumption_judged', label: '消費税判定',           placeholder: '例: 課税／免税' },
@@ -128,6 +129,9 @@ const SETTLE_FIELDS: { key: string; label: string; placeholder?: string; type?: 
   { key: 'settle_filed',              label: '電子申告',              type: 'date' },
   { key: 'settle_payment_method',     label: '納付方法',              type: 'select', options: SETTLE_PAYMENT_METHODS },
   { key: 'settle_payment',            label: '納付日',                type: 'date' },
+  { key: 'direct_debit_national',     label: '国税ダイレクト納付',     type: 'select', options: DIRECT_DEBIT_STATUS },
+  { key: 'direct_debit_local',        label: '地方税ダイレクト納付',   type: 'select', options: DIRECT_DEBIT_STATUS },
+  { key: 'direct_debit_account',      label: '登録口座',              placeholder: '例: ○○銀行○○支店 普通1234567' },
   { key: 'settle_return_docs',        label: '返却書類',               type: 'checkbox' },
   { key: 'director_change',           label: '役員変更',              placeholder: '例: なし' },
 ]
@@ -1049,6 +1053,8 @@ function MonthlyContent() {
                 <th className={thH1}>連絡</th>
                 <th className={thH1}>電子申告</th>
                 <th className={`${thH1} border-l border-purple-600`}>納付方法/<br/>納付日</th>
+                <th className={thH1}>ダイレクト納付登録<br/>（国税/地方税）</th>
+                <th className={thH1}>登録口座</th>
                 <th className={thH1}>返却書類</th>
                 <th className={`${thH1} border-l border-purple-600`}>役員変更</th>
                 <th className={`${thH1} border-l border-purple-600`}>法人税<br/>確定額</th>
@@ -1059,7 +1065,7 @@ function MonthlyContent() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={14} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
+                <tr><td colSpan={16} className="text-center py-8 text-gray-400">読み込み中...</td></tr>
               ) : filtered.map((c, ri) => {
                 const p = prog(c.code)
                 const even = ri % 2 === 0
@@ -1079,6 +1085,10 @@ function MonthlyContent() {
                     <td className={`${td} border-l border-gray-100 text-left whitespace-pre-line`}>
                       {p?.settle_payment_method || ''}{p?.settle_payment_method && p?.settle_payment ? '　' : ''}{fmtDate(p?.settle_payment)}
                     </td>
+                    <td className={`${td} text-left whitespace-nowrap`}>
+                      {p?.direct_debit_national || '—'} / {p?.direct_debit_local || '—'}
+                    </td>
+                    <td className={`${td} text-left`}>{p?.direct_debit_account || ''}</td>
                     <td className={`${td} text-center`}>{p?.settle_return_docs === '1' ? '✓' : ''}</td>
                     <td className={`${td} border-l border-gray-100`}>{p?.director_change || ''}</td>
                     <td className={`${td} border-l border-gray-100 tabular-nums text-right`}>{fmtAmount(p?.settle_corp_tax_amount)}</td>
