@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { ClientQuestion } from '@/lib/types'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { useSessionState } from '@/lib/useSessionState'
 import { Plus, Search, X, Upload, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -18,11 +19,11 @@ const statusStyle: Record<string, string> = {
 export default function ClientQuestionsPage() {
   const [questions, setQuestions] = useState<ClientQuestion[]>([])
   const [loading, setLoading] = useState(true)
-  const [clientName, setClientName] = useState('')
-  const [status, setStatus] = useState('')
-  const [category, setCategory] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [clientName, setClientName] = useSessionState('clientQuestions_clientName', '')
+  const [status, setStatus] = useSessionState('clientQuestions_status', '')
+  const [category, setCategory] = useSessionState('clientQuestions_category', '')
+  const [dateFrom, setDateFrom] = useSessionState('clientQuestions_dateFrom', '')
+  const [dateTo, setDateTo] = useSessionState('clientQuestions_dateTo', '')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
 

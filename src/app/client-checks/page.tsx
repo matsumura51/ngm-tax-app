@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { ClientCheck } from '@/lib/types'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { useSessionState } from '@/lib/useSessionState'
 import { Plus, Search, X, Trash2, Printer } from 'lucide-react'
 import Link from 'next/link'
 
@@ -26,12 +27,12 @@ const typeStyle: Record<string, string> = {
 export default function ClientChecksPage() {
   const [checks, setChecks] = useState<ClientCheck[]>([])
   const [loading, setLoading] = useState(true)
-  const [clientName, setClientName] = useState('')
-  const [status, setStatus] = useState('')
-  const [category, setCategory] = useState('')
-  const [type, setType] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [clientName, setClientName] = useSessionState('clientChecks_clientName', '')
+  const [status, setStatus] = useSessionState('clientChecks_status', '')
+  const [category, setCategory] = useSessionState('clientChecks_category', '')
+  const [type, setType] = useSessionState('clientChecks_type', '')
+  const [dateFrom, setDateFrom] = useSessionState('clientChecks_dateFrom', '')
+  const [dateTo, setDateTo] = useSessionState('clientChecks_dateTo', '')
 
   const [showTopMistakes, setShowTopMistakes] = useState(false)
   const [topMistakesLoaded, setTopMistakesLoaded] = useState(false)

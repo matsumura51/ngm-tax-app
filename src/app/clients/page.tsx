@@ -8,6 +8,7 @@ import { Plus, Search, ChevronRight, Upload, Download, FileDown, Trash2, X } fro
 import * as XLSX from 'xlsx'
 import { CLIENT_COLUMNS } from '@/lib/clientColumns'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { useSessionState } from '@/lib/useSessionState'
 
 function formatValue(key: string, value: unknown): string {
   if (value === null || value === undefined) return ''
@@ -26,14 +27,10 @@ const FISCAL_MONTHS = [
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [allUsers, setAllUsers] = useState<{ name: string; division: string | null }[]>([])
-  const [search, setSearch] = useState('')
-  const [staffFilter, setStaffFilter] = useState(() => {
-    try { return sessionStorage.getItem('clients_staffFilter') ?? '' } catch { return '' }
-  })
-  const [filterDivision, setFilterDivision] = useState(() => {
-    try { return sessionStorage.getItem('clients_filterDivision') ?? '' } catch { return '' }
-  })
-  const [fiscalFilter, setFiscalFilter] = useState('')
+  const [search, setSearch] = useSessionState('clients_search', '')
+  const [staffFilter, setStaffFilter] = useSessionState('clients_staffFilter', '')
+  const [filterDivision, setFilterDivision] = useSessionState('clients_filterDivision', '')
+  const [fiscalFilter, setFiscalFilter] = useSessionState('clients_fiscalFilter', '')
   const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -42,8 +39,6 @@ export default function ClientsPage() {
   const isFirstLoad = useRef(true)
 
   useEffect(() => { load() }, [])
-  useEffect(() => { try { sessionStorage.setItem('clients_staffFilter', staffFilter) } catch {} }, [staffFilter])
-  useEffect(() => { try { sessionStorage.setItem('clients_filterDivision', filterDivision) } catch {} }, [filterDivision])
 
   async function load() {
     setLoading(true)

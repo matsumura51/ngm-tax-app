@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { useSessionState } from '@/lib/useSessionState'
 import { Search, Landmark } from 'lucide-react'
 
 interface Summary {
@@ -35,12 +36,16 @@ function parseFee(s: string | number | null | undefined): number {
 
 export default function WithholdingTaxPage() {
   const router = useRouter()
-  const [year, setYear] = useState(new Date().getFullYear())
-  const [tab, setTab] = useState<'社労士等' | '税理士報酬'>('社労士等')
+  const [yearStr, setYearStr] = useSessionState('withholdingTax_year', String(new Date().getFullYear()))
+  const year = Number(yearStr) || new Date().getFullYear()
+  const setYear = (y: number) => setYearStr(String(y))
+  const [tab, setTab] = useSessionState('withholdingTax_tab', '社労士等') as [
+    '社労士等' | '税理士報酬', (v: '社労士等' | '税理士報酬') => void
+  ]
   const [summaries, setSummaries] = useState<Summary[]>([])
   const [taxFees, setTaxFees] = useState<TaxFeeRow[]>([])
   const [loading, setLoading] = useState(false)
-  const [filter, setFilter] = useState('')
+  const [filter, setFilter] = useSessionState('withholdingTax_filter', '')
 
   useEffect(() => {
     if (tab === '社労士等') loadWithholding()

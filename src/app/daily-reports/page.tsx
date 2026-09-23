@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { DailyReport, DailyReportDetail } from '@/lib/types'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { useSessionState } from '@/lib/useSessionState'
 import { Plus, ChevronDown, ChevronRight, Search, X } from 'lucide-react'
 
 export default function DailyReportsPage() {
@@ -14,9 +15,9 @@ export default function DailyReportsPage() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
   // 検索条件
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-  const [staffName, setStaffName] = useState('')
+  const [dateFrom, setDateFrom] = useSessionState('dailyReports_dateFrom', '')
+  const [dateTo, setDateTo] = useSessionState('dailyReports_dateTo', '')
+  const [staffName, setStaffName] = useSessionState('dailyReports_staffName', '')
   const [staffOptions, setStaffOptions] = useState<string[]>([])
 
   useEffect(() => {

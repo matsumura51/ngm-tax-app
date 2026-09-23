@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { useSessionState } from '@/lib/useSessionState'
 import { FileText, Search } from 'lucide-react'
 
 interface PaymentSummary {
@@ -15,10 +16,12 @@ interface PaymentSummary {
 }
 
 export default function PaymentReportsPage() {
-  const [year, setYear] = useState(new Date().getFullYear())
+  const [yearStr, setYearStr] = useSessionState('paymentReports_year', String(new Date().getFullYear()))
+  const year = Number(yearStr) || new Date().getFullYear()
+  const setYear = (y: number) => setYearStr(String(y))
   const [summaries, setSummaries] = useState<PaymentSummary[]>([])
   const [loading, setLoading] = useState(false)
-  const [filter, setFilter] = useState('')
+  const [filter, setFilter] = useSessionState('paymentReports_filter', '')
 
   useEffect(() => { load() }, [year])
 
