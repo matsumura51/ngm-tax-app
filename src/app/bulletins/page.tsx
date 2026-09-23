@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Plus, ChevronDown, ChevronUp, CheckCircle, Clock, Users } from 'lucide-react'
+import { Plus, ChevronDown, ChevronUp, CheckCircle, Clock, Users, Paperclip, Download, X } from 'lucide-react'
 import { setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
 
 interface Bulletin {
@@ -12,6 +12,23 @@ interface Bulletin {
   created_by: string | null
   created_at: string
   post_date: string | null
+}
+
+interface BulletinAttachment {
+  id: string
+  bulletin_id: string
+  file_name: string
+  file_path: string
+  file_size: number | null
+}
+
+const ATTACHMENT_ACCEPT = '.xlsx,.xls,.docx,.doc,.pdf'
+
+function formatSize(bytes: number | null) {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
 }
 
 interface BulletinRead {
@@ -39,9 +56,15 @@ export default function BulletinsPage() {
   const [editForm, setEditForm] = useState({ title: '', content: '', post_date: today })
   const [editSaving, setEditSaving] = useState(false)
 
+  const [attachmentsByBulletin, setAttachmentsByBulletin] = useState<Record<string, BulletinAttachment[]>>({})
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [uploading, setUploading] = useState(false)
+  const newFileInputRef = useRef<HTMLInputElement>(null)
+  const editFileInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => { load() }, [])
 
-  useUnsavedGuard((showForm && !!(form.title.trim() || form.content.trim())) || editingId !== null)
+  useUnsavedGuard((showForm && !!(form.title.trim() || form.content.trim() || pendingFiles.length > 0)) || editingId !== null)
 
   async function load() {
     setLoading(true)
@@ -53,10 +76,11 @@ export default function BulletinsPage() {
       setCurrentUserName(u?.name || '')
     }
 
-    const [{ data: bData }, { data: rData }, { data: uData }] = await Promise.all([
+    const [{ data: bData }, { data: rData }, { data: uData }, { data: aData }] = await Promise.all([
       supabase.from('bulletins').select('*').order('created_at', { ascending: false }),
       supabase.from('bulletin_reads').select('*'),
       supabase.from('users').select('id, name').is('leave_date', null),
+      supabase.from('bulletin_attachments').select('*').order('created_at'),
     ])
     setBulletins(bData || [])
     setReads(rData || [])
@@ -64,7 +88,52 @@ export default function BulletinsPage() {
     setActiveUsers((uData || []).filter((u: { id: string; name: string }) =>
       !EXCLUDE_NAMES.some(ex => (u.name || '').includes(ex))
     ))
+    const attMap: Record<string, BulletinAttachment[]> = {}
+    for (const a of (aData || [])) {
+      if (!attMap[a.bulletin_id]) attMap[a.bulletin_id] = []
+      attMap[a.bulletin_id].push(a)
+    }
+    setAttachmentsByBulletin(attMap)
     setLoading(false)
+  }
+
+  function attachmentsFor(bulletinId: string): BulletinAttachment[] {
+    return attachmentsByBulletin[bulletinId] || []
+  }
+
+  async function uploadAttachment(bulletinId: string, file: File) {
+    const supabase = createClient()
+    const safeName = encodeURIComponent(file.name).replace(/%/g, '_')
+    const path = `bulletins/${bulletinId}/${Date.now()}_${safeName}`
+    const { error: upErr } = await supabase.storage.from('attachments').upload(path, file)
+    if (upErr) { alert('アップロードエラー: ' + upErr.message); return }
+    await supabase.from('bulletin_attachments').insert({
+      bulletin_id: bulletinId, file_name: file.name, file_path: path, file_size: file.size,
+    })
+  }
+
+  // 既存の投稿を編集中に選んだファイルは即座にアップロードする
+  async function addFilesToExisting(bulletinId: string, files: FileList | null) {
+    if (!files || files.length === 0) return
+    setUploading(true)
+    for (const file of Array.from(files)) await uploadAttachment(bulletinId, file)
+    setUploading(false)
+    await load()
+  }
+
+  async function deleteAttachment(att: BulletinAttachment) {
+    if (!confirm(`「${att.file_name}」を削除しますか？`)) return
+    const supabase = createClient()
+    await supabase.storage.from('attachments').remove([att.file_path])
+    await supabase.from('bulletin_attachments').delete().eq('id', att.id)
+    await load()
+  }
+
+  async function downloadAttachment(att: BulletinAttachment) {
+    const supabase = createClient()
+    const { data, error } = await supabase.storage.from('attachments').createSignedUrl(att.file_path, 60)
+    if (error || !data) { alert('ダウンロードエラー'); return }
+    window.open(data.signedUrl, '_blank')
   }
 
   function readsFor(bulletinId: string) {
@@ -103,13 +172,16 @@ export default function BulletinsPage() {
     if (!form.title.trim()) return
     setSaving(true)
     const supabase = createClient()
-    await supabase.from('bulletins').insert({
+    const { data: newBulletin, error } = await supabase.from('bulletins').insert({
       title: form.title.trim(),
       content: form.content.trim() || null,
       created_by: currentUserName || currentUserId,
       post_date: form.post_date || null,
-    })
+    }).select('id').single()
+    if (error || !newBulletin) { alert('投稿エラー: ' + error?.message); setSaving(false); return }
+    for (const file of pendingFiles) await uploadAttachment(newBulletin.id, file)
     setForm({ title: '', content: '', post_date: today })
+    setPendingFiles([])
     setShowForm(false)
     setSaving(false)
     setUnsavedChanges(false)
@@ -142,6 +214,8 @@ export default function BulletinsPage() {
   async function deleteBulletin(id: string) {
     if (!confirm('この掲示板を削除しますか？')) return
     const supabase = createClient()
+    const atts = attachmentsFor(id)
+    if (atts.length > 0) await supabase.storage.from('attachments').remove(atts.map(a => a.file_path))
     await supabase.from('bulletins').delete().eq('id', id)
     await load()
   }
@@ -191,8 +265,34 @@ export default function BulletinsPage() {
                 onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
                 placeholder="掲示板の内容を入力" />
             </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
+                  <Paperclip size={12} /> 添付ファイル
+                </label>
+                <button type="button" onClick={() => newFileInputRef.current?.click()}
+                  className="text-xs px-2 py-1 bg-white hover:bg-gray-50 text-gray-600 border border-gray-300 rounded-lg">
+                  + ファイルを選択
+                </button>
+                <input ref={newFileInputRef} type="file" accept={ATTACHMENT_ACCEPT} multiple className="hidden"
+                  onChange={e => { setPendingFiles(fs => [...fs, ...Array.from(e.target.files || [])]); e.target.value = '' }} />
+              </div>
+              {pendingFiles.length > 0 && (
+                <ul className="space-y-1">
+                  {pendingFiles.map((f, i) => (
+                    <li key={i} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs">
+                      <Paperclip size={12} className="text-gray-400 shrink-0" />
+                      <span className="flex-1 truncate text-gray-700">{f.name}</span>
+                      <span className="text-gray-400 shrink-0">{formatSize(f.size)}</span>
+                      <button type="button" onClick={() => setPendingFiles(fs => fs.filter((_, idx) => idx !== i))}
+                        className="text-gray-300 hover:text-red-400 shrink-0"><X size={12} /></button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => { setShowForm(false); setForm({ title: '', content: '', post_date: today }) }}
+              <button onClick={() => { setShowForm(false); setForm({ title: '', content: '', post_date: today }); setPendingFiles([]) }}
                 className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
                 キャンセル
               </button>
@@ -239,6 +339,32 @@ export default function BulletinsPage() {
                           <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
                             rows={5} value={editForm.content} onChange={e => setEditForm(f => ({ ...f, content: e.target.value }))} />
                         </div>
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
+                              <Paperclip size={12} /> 添付ファイル
+                            </label>
+                            <button type="button" disabled={uploading} onClick={() => editFileInputRef.current?.click()}
+                              className="text-xs px-2 py-1 bg-white hover:bg-gray-50 text-gray-600 border border-gray-300 rounded-lg disabled:opacity-50">
+                              {uploading ? 'アップロード中...' : '+ ファイルを選択'}
+                            </button>
+                            <input ref={editFileInputRef} type="file" accept={ATTACHMENT_ACCEPT} multiple className="hidden"
+                              onChange={e => { addFilesToExisting(b.id, e.target.files); e.target.value = '' }} />
+                          </div>
+                          {attachmentsFor(b.id).length > 0 && (
+                            <ul className="space-y-1">
+                              {attachmentsFor(b.id).map(att => (
+                                <li key={att.id} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs">
+                                  <Paperclip size={12} className="text-gray-400 shrink-0" />
+                                  <span className="flex-1 truncate text-gray-700">{att.file_name}</span>
+                                  <span className="text-gray-400 shrink-0">{formatSize(att.file_size)}</span>
+                                  <button type="button" onClick={() => deleteAttachment(att)}
+                                    className="text-gray-300 hover:text-red-400 shrink-0"><X size={12} /></button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
                         <div className="flex justify-end gap-2">
                           <button onClick={cancelEdit} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
                             キャンセル
@@ -269,6 +395,18 @@ export default function BulletinsPage() {
                             </div>
                             {b.content && (
                               <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{b.content}</p>
+                            )}
+                            {attachmentsFor(b.id).length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {attachmentsFor(b.id).map(att => (
+                                  <button key={att.id} onClick={() => downloadAttachment(att)}
+                                    className="flex items-center gap-1 text-xs bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 px-2 py-1 rounded-lg">
+                                    <Paperclip size={11} className="text-gray-400" />
+                                    {att.file_name}
+                                    <Download size={11} className="text-gray-400" />
+                                  </button>
+                                ))}
+                              </div>
                             )}
                           </div>
                           {!myRead && (
@@ -374,6 +512,32 @@ export default function BulletinsPage() {
                           <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
                             rows={5} value={editForm.content} onChange={e => setEditForm(f => ({ ...f, content: e.target.value }))} />
                         </div>
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
+                              <Paperclip size={12} /> 添付ファイル
+                            </label>
+                            <button type="button" disabled={uploading} onClick={() => editFileInputRef.current?.click()}
+                              className="text-xs px-2 py-1 bg-white hover:bg-gray-50 text-gray-600 border border-gray-300 rounded-lg disabled:opacity-50">
+                              {uploading ? 'アップロード中...' : '+ ファイルを選択'}
+                            </button>
+                            <input ref={editFileInputRef} type="file" accept={ATTACHMENT_ACCEPT} multiple className="hidden"
+                              onChange={e => { addFilesToExisting(b.id, e.target.files); e.target.value = '' }} />
+                          </div>
+                          {attachmentsFor(b.id).length > 0 && (
+                            <ul className="space-y-1">
+                              {attachmentsFor(b.id).map(att => (
+                                <li key={att.id} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs">
+                                  <Paperclip size={12} className="text-gray-400 shrink-0" />
+                                  <span className="flex-1 truncate text-gray-700">{att.file_name}</span>
+                                  <span className="text-gray-400 shrink-0">{formatSize(att.file_size)}</span>
+                                  <button type="button" onClick={() => deleteAttachment(att)}
+                                    className="text-gray-300 hover:text-red-400 shrink-0"><X size={12} /></button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
                         <div className="flex justify-end gap-2">
                           <button onClick={cancelEdit} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
                             キャンセル
@@ -402,6 +566,18 @@ export default function BulletinsPage() {
                             </div>
                             {b.content && (
                               <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">{b.content}</p>
+                            )}
+                            {attachmentsFor(b.id).length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {attachmentsFor(b.id).map(att => (
+                                  <button key={att.id} onClick={() => downloadAttachment(att)}
+                                    className="flex items-center gap-1 text-xs bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 px-2 py-1 rounded-lg">
+                                    <Paperclip size={11} className="text-gray-400" />
+                                    {att.file_name}
+                                    <Download size={11} className="text-gray-400" />
+                                  </button>
+                                ))}
+                              </div>
                             )}
                           </div>
                         </div>
