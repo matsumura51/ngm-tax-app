@@ -96,6 +96,7 @@ function ScheduleNewForm() {
   const [breakMinutes, setBreakMinutes] = useState('')
   const [recurrence, setRecurrence] = useState<RecurrenceType>('none')
   const [recurrenceEnd, setRecurrenceEnd] = useState('')
+  const [extraDates, setExtraDates] = useState<string[]>([])
 
   const _now = new Date()
   const paramDate = searchParams.get('date') || `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`
@@ -116,7 +117,7 @@ function ScheduleNewForm() {
 
   useUnsavedGuard(
     !!(form.title || form.client_name || form.memo || breakMinutes || form.direct_start || form.direct_end ||
-      selectedFacilities.length > 0 || selectedCompanions.length > 0 || recurrence !== 'none')
+      selectedFacilities.length > 0 || selectedCompanions.length > 0 || recurrence !== 'none' || extraDates.length > 0)
   )
 
   function toggleFacility(f: string) {
@@ -241,15 +242,23 @@ function ScheduleNewForm() {
       direct_end: form.direct_end,
     }
 
-    if (recurrence === 'none' || !recurrenceEnd || recurrenceEnd < form.date) {
+    const validExtraDates = Array.from(new Set(extraDates.filter(Boolean).filter(d => d !== form.date)))
+
+    let dates: string[]
+    if (recurrence !== 'none' && recurrenceEnd && recurrenceEnd >= form.date) {
+      dates = generateDates(form.date, recurrenceEnd, recurrence)
+    } else {
+      dates = [form.date, ...validExtraDates]
+    }
+
+    if (dates.length === 1) {
       const { error } = await supabase.from('schedules').insert({
         ...base,
-        start_datetime: toLocalISOString(form.date, form.start_time),
-        end_datetime: toLocalISOString(form.date, form.end_time),
+        start_datetime: toLocalISOString(dates[0], form.start_time),
+        end_datetime: toLocalISOString(dates[0], form.end_time),
       })
       if (error) { alert('エラー: ' + error.message); setSaving(false); return }
     } else {
-      const dates = generateDates(form.date, recurrenceEnd, recurrence)
       const recurringId = Math.floor(Math.random() * 2147483647)
       const records = dates.map(d => ({
         ...base,
@@ -346,6 +355,35 @@ function ScheduleNewForm() {
               </div>
             )}
           </div>
+
+          {/* 複数日付を個別に指定（不定期な日付をまとめて登録したい場合） */}
+          {recurrence === 'none' && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-medium text-gray-500">他の日付も追加登録</label>
+                <button type="button"
+                  onClick={() => setExtraDates(d => [...d, form.date])}
+                  className="flex items-center gap-1 text-xs px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg">
+                  ＋ 日付を追加
+                </button>
+              </div>
+              {extraDates.length > 0 && (
+                <div className="space-y-2">
+                  {extraDates.map((d, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input type="date" className={inputClass} value={d}
+                        onChange={e => setExtraDates(ds => ds.map((v, idx) => idx === i ? e.target.value : v))} />
+                      <button type="button" onClick={() => setExtraDates(ds => ds.filter((_, idx) => idx !== i))}
+                        className="text-gray-300 hover:text-red-400 text-xs shrink-0">✕</button>
+                    </div>
+                  ))}
+                  <p className="text-xs text-gray-400">
+                    上の「日付」欄と合わせて、同じ内容の予定を{1 + extraDates.filter(Boolean).length}件登録します
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 種別（色） */}
           <div>

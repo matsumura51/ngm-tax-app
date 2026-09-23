@@ -18,6 +18,7 @@ export default function DailyReportsPage() {
   const [dateFrom, setDateFrom] = useSessionState('dailyReports_dateFrom', '')
   const [dateTo, setDateTo] = useSessionState('dailyReports_dateTo', '')
   const [staffName, setStaffName] = useSessionState('dailyReports_staffName', '')
+  const [clientName, setClientName] = useSessionState('dailyReports_clientName', '')
   const [staffOptions, setStaffOptions] = useState<string[]>([])
 
   useEffect(() => {
@@ -28,18 +29,31 @@ export default function DailyReportsPage() {
     load()
   }, [])
 
-  async function load(params?: { dateFrom?: string; dateTo?: string; staffName?: string }) {
+  async function load(params?: { dateFrom?: string; dateTo?: string; staffName?: string; clientName?: string }) {
     setLoading(true)
     const supabase = createClient()
     const df = params?.dateFrom ?? dateFrom
     const dt = params?.dateTo ?? dateTo
     const sn = params?.staffName ?? staffName
+    const cn = (params?.clientName ?? clientName).normalize('NFKC')
+
+    // 顧客名で絞り込む場合は、まずdaily_report_detailsから該当する日報IDを集める
+    let clientMatchedReportIds: string[] | null = null
+    if (cn) {
+      const matches = await fetchAllRows<{ report_id: string }>(() =>
+        supabase.from('daily_report_details').select('report_id').ilike('client_name', `%${cn}%`))
+      clientMatchedReportIds = Array.from(new Set(matches.map(m => m.report_id)))
+      if (clientMatchedReportIds.length === 0) {
+        setReports([]); setDetailsMap({}); setLoading(false); return
+      }
+    }
 
     function buildQuery() {
       let q = supabase.from('daily_reports').select('*').order('date', { ascending: false })
       if (df) q = q.gte('date', df)
       if (dt) q = q.lte('date', dt)
       if (sn) q = q.eq('user_name', sn)
+      if (clientMatchedReportIds) q = q.in('id', clientMatchedReportIds)
       return q
     }
 
@@ -65,8 +79,8 @@ export default function DailyReportsPage() {
   function search() { load() }
 
   function clear() {
-    setDateFrom(''); setDateTo(''); setStaffName('')
-    load({ dateFrom: '', dateTo: '', staffName: '' })
+    setDateFrom(''); setDateTo(''); setStaffName(''); setClientName('')
+    load({ dateFrom: '', dateTo: '', staffName: '', clientName: '' })
   }
 
   function buildTaskSummary(details: DailyReportDetail[]): string {
@@ -128,6 +142,12 @@ export default function DailyReportsPage() {
               <option value="">全員</option>
               {staffOptions.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">顧客名</label>
+            <input className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="顧客名（部分一致）" value={clientName} onChange={e => setClientName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && search()} />
           </div>
           <div className="flex gap-2">
             <button onClick={search}
