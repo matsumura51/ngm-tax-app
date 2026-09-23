@@ -118,13 +118,16 @@ function fmtFee(s: string | null | undefined): string {
 
 const inp = 'w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500'
 
-const SETTLE_FIELDS: { key: string; label: string; placeholder?: string; type?: string }[] = [
+const SETTLE_PAYMENT_METHODS = ['ダイレクト納付', '納付書', '振替納税', '予納', 'その他']
+
+const SETTLE_FIELDS: { key: string; label: string; placeholder?: string; type?: string; options?: string[] }[] = [
   { key: 'settle_consumption_judged', label: '消費税判定',           placeholder: '例: 課税／免税' },
   { key: 'settle_materials',          label: '資料収集',              type: 'date' },
   { key: 'settle_return_prepared',    label: '申告書作成',            type: 'date' },
   { key: 'settle_contact',            label: '連絡',                  type: 'date' },
   { key: 'settle_filed',              label: '電子申告',              type: 'date' },
-  { key: 'settle_payment',            label: 'ダイレクト納付/納付書',  type: 'date' },
+  { key: 'settle_payment_method',     label: '納付方法',              type: 'select', options: SETTLE_PAYMENT_METHODS },
+  { key: 'settle_payment',            label: '納付日',                type: 'date' },
   { key: 'settle_return_docs',        label: '返却書類',               type: 'checkbox' },
   { key: 'director_change',           label: '役員変更',              placeholder: '例: なし' },
 ]
@@ -1045,7 +1048,7 @@ function MonthlyContent() {
                 <th className={thH1}>申告書作成</th>
                 <th className={thH1}>連絡</th>
                 <th className={thH1}>電子申告</th>
-                <th className={`${thH1} border-l border-purple-600`}>ダイレクト納付/<br/>納付書</th>
+                <th className={`${thH1} border-l border-purple-600`}>納付方法/<br/>納付日</th>
                 <th className={thH1}>返却書類</th>
                 <th className={`${thH1} border-l border-purple-600`}>役員変更</th>
                 <th className={`${thH1} border-l border-purple-600`}>法人税<br/>確定額</th>
@@ -1073,7 +1076,9 @@ function MonthlyContent() {
                     <td className={td}>{fmtDate(p?.settle_return_prepared)}</td>
                     <td className={td}>{fmtDate(p?.settle_contact)}</td>
                     <td className={td}>{fmtDate(p?.settle_filed)}</td>
-                    <td className={`${td} border-l border-gray-100 text-left whitespace-pre-line`}>{fmtDate(p?.settle_payment)}</td>
+                    <td className={`${td} border-l border-gray-100 text-left whitespace-pre-line`}>
+                      {p?.settle_payment_method || ''}{p?.settle_payment_method && p?.settle_payment ? '　' : ''}{fmtDate(p?.settle_payment)}
+                    </td>
                     <td className={`${td} text-center`}>{p?.settle_return_docs === '1' ? '✓' : ''}</td>
                     <td className={`${td} border-l border-gray-100`}>{p?.director_change || ''}</td>
                     <td className={`${td} border-l border-gray-100 tabular-nums text-right`}>{fmtAmount(p?.settle_corp_tax_amount)}</td>
@@ -1220,10 +1225,19 @@ function MonthlyContent() {
               <button onClick={() => setSettleModal(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
             </div>
             <div className="space-y-3">
-              {SETTLE_FIELDS.map(({ key, label, placeholder, type }) => (
+              {SETTLE_FIELDS.map(({ key, label, placeholder, type, options }) => (
                 <div key={key} className="flex items-center gap-3">
                   <label className="text-xs font-medium text-gray-500 w-36 shrink-0">{label}</label>
-                  {type === 'checkbox' ? (
+                  {type === 'select' ? (
+                    <select
+                      value={settleForm[key] || ''}
+                      onChange={e => setSettleForm(f => ({ ...f, [key]: e.target.value }))}
+                      className={inp}
+                    >
+                      <option value="">-</option>
+                      {(options || []).map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : type === 'checkbox' ? (
                     <label className="flex items-center gap-2 cursor-pointer select-none">
                       <input
                         type="checkbox"

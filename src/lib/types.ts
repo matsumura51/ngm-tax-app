@@ -124,6 +124,7 @@ export interface MonthlyProgress {
   settle_return_prepared: string | null
   settle_contact: string | null
   settle_filed: string | null
+  settle_payment_method: string | null
   settle_payment: string | null
   director_change: string | null
   // 決算業務
