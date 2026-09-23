@@ -110,6 +110,8 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
   const [saving, setSaving] = useState(false)
   const [focusedCell, setFocusedCell] = useState<string | null>(null)
   const [shikikinByPayee, setShikikinByPayee] = useState<Record<string, string>>({})
+  const [notes, setNotes] = useState('')
+  const [notesSaving, setNotesSaving] = useState(false)
 
   useEffect(() => { load() }, [year, clientId])
   useEffect(() => { loadShikikinCache() }, [clientId])
@@ -117,15 +119,35 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
   async function load() {
     setLoading(true)
     const supabase = createClient()
-    let q = supabase.from('payment_reports').select('id').eq('year', year)
+    let q = supabase.from('payment_reports').select('id, notes').eq('year', year)
     if (clientCode) q = q.eq('client_code', clientCode)
     else q = q.eq('client_id', clientId)
     const { data: rep } = await q.maybeSingle()
-    if (!rep) { setReportId(null); setItems([]); setLoading(false); return }
+    if (!rep) { setReportId(null); setItems([]); setNotes(''); setLoading(false); return }
     setReportId(rep.id)
+    setNotes(rep.notes || '')
     const { data } = await supabase.from('payment_report_items').select('*').eq('report_id', rep.id).order('sort_order')
     setItems(data || [])
     setLoading(false)
+  }
+
+  async function saveNotes() {
+    setNotesSaving(true)
+    const supabase = createClient()
+    let repId = reportId
+    if (!repId) {
+      const { data: newRep, error } = await supabase
+        .from('payment_reports')
+        .insert({ client_id: clientId, client_code: clientCode, client_name: clientName, year, notes })
+        .select('id').single()
+      if (error || !newRep) { alert('エラー: ' + error?.message); setNotesSaving(false); return }
+      repId = newRep.id
+      setReportId(repId)
+    } else {
+      const { error } = await supabase.from('payment_reports').update({ notes }).eq('id', repId)
+      if (error) { alert('保存エラー: ' + error.message); setNotesSaving(false); return }
+    }
+    setNotesSaving(false)
   }
 
   async function loadShikikinCache() {
@@ -412,6 +434,21 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
           </table>
         </div>
       )}
+
+      {/* 備考 */}
+      <div className="p-4 border-t border-gray-100">
+        <label className="block text-xs font-medium text-gray-500 mb-1">
+          備考{notesSaving && <span className="ml-2 text-gray-400">保存中...</span>}
+        </label>
+        <textarea
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-blue-400"
+          rows={3}
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          onBlur={saveNotes}
+          placeholder={`令和${reiwa}年分の支払調書に関するメモ`}
+        />
+      </div>
 
       {/* 追加・編集モーダル */}
       {modalOpen && (

@@ -37,6 +37,7 @@ function parseFee(s: string | number | null | undefined): number {
 type MonthData = { date: string; gross: string; tax: string }
 type FormData = {
   payee_name: string
+  payee_address: string
   payee_type: string
   exempt: boolean
   taxIncluded: boolean  // 支払金額が税込かどうか
@@ -46,6 +47,7 @@ type FormData = {
 function emptyForm(): FormData {
   return {
     payee_name: '',
+    payee_address: '',
     payee_type: '社労士',
     exempt: false,
     taxIncluded: false,
@@ -57,6 +59,7 @@ function itemToForm(item: WithholdingRecordItem): FormData {
   const md = item.monthly_data as Record<string, unknown>
   const exempt = !!(md._exempt)
   const taxIncluded = !!(md._taxIncluded)
+  const payeeAddress = typeof md._address === 'string' ? md._address : ''
   const monthly: Record<string, MonthData> = {}
   for (const m of MONTHS) {
     const d = item.monthly_data?.[String(m)]
@@ -68,11 +71,17 @@ function itemToForm(item: WithholdingRecordItem): FormData {
   }
   return {
     payee_name: item.payee_name || '',
+    payee_address: payeeAddress,
     payee_type: item.payee_type || '社労士',
     exempt,
     taxIncluded,
     monthly,
   }
+}
+
+function itemAddress(item: WithholdingRecordItem): string {
+  const v = (item.monthly_data as Record<string, unknown>)?._address
+  return typeof v === 'string' ? v : ''
 }
 
 function itemIsExempt(item: WithholdingRecordItem): boolean {
@@ -104,6 +113,8 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
   const [focusedCell, setFocusedCell] = useState<string | null>(null)
   const [taxFeeMonthly, setTaxFeeMonthly] = useState<Record<string, number>>({})
   const [taxFeeTotal, setTaxFeeTotal] = useState(0)
+  const [notes, setNotes] = useState('')
+  const [notesSaving, setNotesSaving] = useState(false)
 
   useEffect(() => { load() }, [year, clientId])
 
@@ -112,13 +123,14 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
     const supabase = createClient()
 
     // 社労士等レコード読み込み
-    let q = supabase.from('withholding_records').select('id').eq('year', year)
+    let q = supabase.from('withholding_records').select('id, notes').eq('year', year)
     if (clientCode) q = q.eq('client_code', clientCode)
     else q = q.eq('client_id', clientId)
     const { data: rec } = await q.maybeSingle()
-    if (!rec) { setRecordId(null); setItems([]) }
+    if (!rec) { setRecordId(null); setItems([]); setNotes('') }
     else {
       setRecordId(rec.id)
+      setNotes(rec.notes || '')
       const { data } = await supabase.from('withholding_record_items').select('*').eq('record_id', rec.id).order('sort_order')
       setItems(data || [])
     }
@@ -155,6 +167,25 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
     }
 
     setLoading(false)
+  }
+
+  async function saveNotes() {
+    setNotesSaving(true)
+    const supabase = createClient()
+    let recId = recordId
+    if (!recId) {
+      const { data: newRec, error } = await supabase
+        .from('withholding_records')
+        .insert({ client_id: clientId, client_code: clientCode, client_name: clientName, year, notes })
+        .select('id').single()
+      if (error || !newRec) { alert('エラー: ' + error?.message); setNotesSaving(false); return }
+      recId = newRec.id
+      setRecordId(recId)
+    } else {
+      const { error } = await supabase.from('withholding_records').update({ notes }).eq('id', recId)
+      if (error) { alert('保存エラー: ' + error.message); setNotesSaving(false); return }
+    }
+    setNotesSaving(false)
   }
 
   function openAdd() {
@@ -194,6 +225,7 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
     }
     if (form.exempt) monthly_data._exempt = true
     if (form.taxIncluded) monthly_data._taxIncluded = true
+    if (form.payee_address) monthly_data._address = form.payee_address
 
     const payload = {
       record_id: recId,
@@ -326,7 +358,7 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
     const rows: (string | number)[][] = []
     rows.push([`源泉集計　令和${reiwa}年（${year}年）　${clientName}`])
     rows.push([])
-    const headers = ['支払先名', '種別',
+    const headers = ['支払先名', '住所', '種別',
       ...MONTHS.flatMap(m => [`${m}月支払日`, `${m}月支払金額`, `${m}月源泉税額`, `${m}月差引支払額`]),
       '年間支払金額', '年間源泉税額', '年間差引支払額']
     rows.push(headers)
@@ -335,7 +367,7 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
       const tax = itemAnnualTax(item)
       const exempt = itemIsExempt(item)
       rows.push([
-        item.payee_name || '', `${item.payee_type || ''}${exempt ? '（非対象）' : ''}`,
+        item.payee_name || '', itemAddress(item), `${item.payee_type || ''}${exempt ? '（非対象）' : ''}`,
         ...MONTHS.flatMap(m => {
           const d = item.monthly_data?.[String(m)]
           const g = d?.gross || 0, t = exempt ? 0 : (d?.tax || 0)
@@ -345,7 +377,7 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
       ])
     }
     rows.push([])
-    rows.push(['総合計', '', ...Array(MONTHS.length * 4).fill(''), totalGross, totalTax, totalNet])
+    rows.push(['総合計', '', '', ...Array(MONTHS.length * 4).fill(''), totalGross, totalTax, totalNet])
     const ws = XLSX.utils.aoa_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, '源泉集計')
@@ -414,7 +446,10 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
                     const exempt = itemIsExempt(item)
                     return (
                       <tr key={item.id} className="hover:bg-gray-50 group cursor-pointer" onClick={() => openEdit(item)}>
-                        <td className="px-4 py-2.5 font-medium text-gray-800">{item.payee_name || '—'}</td>
+                        <td className="px-4 py-2.5 font-medium text-gray-800">
+                          {item.payee_name || '—'}
+                          {itemAddress(item) && <div className="text-xs font-normal text-gray-400">{itemAddress(item)}</div>}
+                        </td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {item.payee_type && (
@@ -506,6 +541,21 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
         </>
       )}
 
+      {/* 備考 */}
+      <div className="p-4 border-t border-gray-100">
+        <label className="block text-xs font-medium text-gray-500 mb-1">
+          備考{notesSaving && <span className="ml-2 text-gray-400">保存中...</span>}
+        </label>
+        <textarea
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-blue-400"
+          rows={3}
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          onBlur={saveNotes}
+          placeholder={`令和${year - 2018}年分の源泉集計に関するメモ`}
+        />
+      </div>
+
       {/* 追加・編集モーダル */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 overflow-y-auto">
@@ -539,6 +589,11 @@ export default function WithholdingTaxTab({ clientId, clientCode, clientName }: 
                       onChange={e => setForm(f => ({ ...f, payee_type: e.target.value }))} />
                   )}
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">住所</label>
+                <input className={ic} value={form.payee_address}
+                  onChange={e => setForm(f => ({ ...f, payee_address: e.target.value }))} />
               </div>
 
               {/* 源泉対象/非対象トグル */}
