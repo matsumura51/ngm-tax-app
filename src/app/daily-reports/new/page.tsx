@@ -4,11 +4,12 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { DailyReportDetail } from '@/lib/types'
-import { ChevronLeft, Plus, Trash2, ChevronDown, ChevronUp, Calendar, ArrowUpDown } from 'lucide-react'
+import { ChevronLeft, Plus, Trash2, ChevronDown, GripVertical, Calendar, ArrowUpDown } from 'lucide-react'
 import Link from 'next/link'
 import { Schedule } from '@/lib/types'
 import { setUnsavedChanges, confirmLeaveIfDirty, registerBeforeUnloadGuard } from '@/lib/unsavedGuard'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { useDragReorder } from '@/lib/useDragReorder'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const TASK_TYPES = ['記帳', 'チェック', '決算', '来所', '訪問', '所内相談', '電話・メール', '給与計算', '環境整備', '朝礼', '確定申告', '年末調整', '相続税', '建設業', '医療法人', '社会保険', '税務調査', 'その他']
@@ -113,6 +114,7 @@ export default function DailyReportNewPage() {
     total_hours: '',
   })
   const [details, setDetails] = useState([emptyDetail()])
+  const drag = useDragReorder(setDetails, 'bg-indigo-50')
   const [clients, setClients] = useState<{ code: string; name: string }[]>([])
   const [suggestions, setSuggestions] = useState<{ rowIndex: number; matches: { code: string; name: string }[]; top: number; left: number } | null>(null)
   const [daySchedules, setDaySchedules] = useState<Schedule[]>([])
@@ -194,16 +196,6 @@ export default function DailyReportNewPage() {
 
   function removeDetail(i: number) {
     setDetails(d => d.filter((_, idx) => idx !== i))
-  }
-
-  function moveDetail(i: number, dir: -1 | 1) {
-    setDetails(d => {
-      const j = i + dir
-      if (j < 0 || j >= d.length) return d
-      const copy = [...d]
-      ;[copy[i], copy[j]] = [copy[j], copy[i]]
-      return copy
-    })
   }
 
   function sortByTime() {
@@ -397,6 +389,7 @@ export default function DailyReportNewPage() {
           <table className="w-full min-w-[1100px] text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
+                <th className="px-1 py-2 w-6"></th>
                 <th className="px-2 py-2 text-left w-20">開始</th>
                 <th className="px-2 py-2 text-left w-20">終了</th>
                 <th className="px-2 py-2 text-left w-20">時間</th>
@@ -410,7 +403,13 @@ export default function DailyReportNewPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {details.map((d, i) => (
-                <tr key={i}>
+                <tr key={i} {...drag.itemProps(i)} className={`transition ${drag.itemClass(i)}`}>
+                  <td className="px-1 py-1 align-middle">
+                    <span {...drag.handleProps(i)} title="ドラッグして並べ替え"
+                      className="block text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing select-none">
+                      <GripVertical size={18} />
+                    </span>
+                  </td>
                   <td className="px-1 py-1">
                     <input type="time" className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.start_time || ''} onChange={e => setDetail(i, 'start_time', e.target.value)} />
                   </td>
@@ -461,16 +460,6 @@ export default function DailyReportNewPage() {
                   </td>
                   <td className="px-1 py-1">
                     <div className="flex items-center gap-1">
-                      <div className="flex flex-col border border-gray-300 rounded overflow-hidden shadow-sm">
-                        <button type="button" title="上へ移動" onClick={() => moveDetail(i, -1)} disabled={i === 0}
-                          className="px-1 py-0.5 bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed">
-                          <ChevronUp size={16} />
-                        </button>
-                        <button type="button" title="下へ移動" onClick={() => moveDetail(i, 1)} disabled={i === details.length - 1}
-                          className="px-1 py-0.5 bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed border-t border-gray-300">
-                          <ChevronDown size={16} />
-                        </button>
-                      </div>
                       {details.length > 1 && (
                         <button onClick={() => removeDetail(i)} className="text-gray-400 hover:text-red-500">
                           <Trash2 size={14} />

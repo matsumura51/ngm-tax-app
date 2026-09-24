@@ -1,7 +1,8 @@
 import { useState } from 'react'
 
 // リスト項目をドラッグ＆ドロップで並べ替える（つまみを掴んだときだけドラッグ可能にし、テキスト選択を妨げない）
-export function useDragReorder<T>(setItems: React.Dispatch<React.SetStateAction<T[]>>) {
+// overClass: ドロップ先の強調表示（表の行は ring が効かないため背景色などを渡す）
+export function useDragReorder<T>(setItems: React.Dispatch<React.SetStateAction<T[]>>, overClass = 'ring-2 ring-indigo-400') {
   const [armed, setArmed] = useState<number | null>(null)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [overIndex, setOverIndex] = useState<number | null>(null)
@@ -52,7 +53,7 @@ export function useDragReorder<T>(setItems: React.Dispatch<React.SetStateAction<
 
   function itemClass(i: number) {
     if (dragIndex === i) return 'opacity-40'
-    if (overIndex === i && dragIndex !== null) return 'ring-2 ring-indigo-400'
+    if (overIndex === i && dragIndex !== null) return overClass
     return ''
   }
 

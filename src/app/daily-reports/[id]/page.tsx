@@ -4,11 +4,12 @@ import { useEffect, useState, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { DailyReport, DailyReportDetail } from '@/lib/types'
-import { ChevronLeft, Trash2, Plus, ChevronDown, ChevronUp, Calendar, ArrowUpDown } from 'lucide-react'
+import { ChevronLeft, Trash2, Plus, ChevronDown, GripVertical, Calendar, ArrowUpDown } from 'lucide-react'
 import Link from 'next/link'
 import { Schedule } from '@/lib/types'
 import { setUnsavedChanges, confirmLeaveIfDirty, registerBeforeUnloadGuard } from '@/lib/unsavedGuard'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { useDragReorder } from '@/lib/useDragReorder'
 
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const TASK_TYPES = ['記帳', 'チェック', '決算', '来所', '訪問', '所内相談', '電話・メール', '給与計算', '環境整備', '朝礼', '確定申告', '年末調整', '相続税', '建設業', '医療法人', '社会保険', '税務調査', 'その他']
@@ -91,6 +92,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
   const router = useRouter()
   const [report, setReport] = useState<DailyReport | null>(null)
   const [details, setDetails] = useState<DailyReportDetail[]>([])
+  const drag = useDragReorder(setDetails, 'bg-indigo-50')
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<Partial<DailyReport>>({})
   const [clients, setClients] = useState<{ code: string; name: string }[]>([])
@@ -266,16 +268,6 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
     router.push('/daily-reports')
   }
 
-  function moveRow(i: number, dir: -1 | 1) {
-    setDetails(d => {
-      const j = i + dir
-      if (j < 0 || j >= d.length) return d
-      const copy = [...d]
-      ;[copy[i], copy[j]] = [copy[j], copy[i]]
-      return copy
-    })
-  }
-
   function sortByTime() {
     setDetails(d => {
       const withTime = d.filter(r => r.start_time)
@@ -409,6 +401,7 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
           <table className="w-full min-w-[1100px] text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
+                <th className="px-1 py-2 w-6"></th>
                 <th className="px-2 py-2 text-left w-20">開始</th>
                 <th className="px-2 py-2 text-left w-20">終了</th>
                 <th className="px-2 py-2 text-left w-20">時間</th>
@@ -422,7 +415,13 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
             </thead>
             <tbody className="divide-y divide-gray-100">
               {details.map((d, i) => (
-                <tr key={i}>
+                <tr key={i} {...drag.itemProps(i)} className={`transition ${drag.itemClass(i)}`}>
+                  <td className="px-1 py-1 align-middle">
+                    <span {...drag.handleProps(i)} title="ドラッグして並べ替え"
+                      className="block text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing select-none">
+                      <GripVertical size={18} />
+                    </span>
+                  </td>
                   <td className="px-1 py-1"><input type="time" className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.start_time || ''} onChange={e => setRow(i, 'start_time', e.target.value)} /></td>
                   <td className="px-1 py-1"><input type="time" className="w-full border border-gray-200 rounded px-1 py-1 text-xs" value={d.end_time || ''} onChange={e => setRow(i, 'end_time', e.target.value)} /></td>
                   <td className="px-1 py-1"><input className="w-full border border-gray-100 rounded px-1 py-1 text-xs bg-gray-50 text-gray-600 text-center" value={d.work_time || ''} readOnly tabIndex={-1} placeholder="自動" /></td>
@@ -458,16 +457,6 @@ export default function DailyReportDetailPage({ params }: { params: Promise<{ id
                   <td className="px-1 py-1"><textarea rows={2} className="w-full border border-gray-200 rounded px-1 py-1 text-xs resize-y" value={d.report_content || ''} onChange={e => setRow(i, 'report_content', e.target.value)} /></td>
                   <td className="px-1 py-1">
                     <div className="flex items-center gap-1">
-                      <div className="flex flex-col border border-gray-300 rounded overflow-hidden shadow-sm">
-                        <button type="button" title="上へ移動" onClick={() => moveRow(i, -1)} disabled={i === 0}
-                          className="px-1 py-0.5 bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed">
-                          <ChevronUp size={16} />
-                        </button>
-                        <button type="button" title="下へ移動" onClick={() => moveRow(i, 1)} disabled={i === details.length - 1}
-                          className="px-1 py-0.5 bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed border-t border-gray-300">
-                          <ChevronDown size={16} />
-                        </button>
-                      </div>
                       <button onClick={() => setDetails(d => d.filter((_, idx) => idx !== i))} className="text-gray-400 hover:text-red-500">
                         <Trash2 size={14} />
                       </button>
