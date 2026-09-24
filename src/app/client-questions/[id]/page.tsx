@@ -4,10 +4,11 @@ import { useEffect, useState, use, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ClientQuestion, ClientQuestionAttachment } from '@/lib/types'
-import { ChevronLeft, Trash2, Paperclip, Download, X, Plus, Printer } from 'lucide-react'
+import { ChevronLeft, Trash2, Paperclip, Download, X, Plus, Printer, GripVertical } from 'lucide-react'
 import Link from 'next/link'
 import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { useDragReorder } from '@/lib/useDragReorder'
 
 const ic = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const CATEGORIES = ['月次', '決算', '確定申告', '年末調整', '給与計算', 'その他']
@@ -56,6 +57,7 @@ export default function ClientQuestionDetailPage({ params }: { params: Promise<{
   const [question, setQuestion] = useState<ClientQuestion | null>(null)
   const [form, setForm] = useState<Partial<ClientQuestion>>({})
   const [items, setItems] = useState<QItem[]>([{ text: '', answered: false, answer: '' }])
+  const drag = useDragReorder(setItems)
   const [workYear, setWorkYear] = useState('')
   const [workMonth, setWorkMonth] = useState('')
   const [saving, setSaving] = useState(false)
@@ -431,8 +433,13 @@ ${itemRows}
           </div>
           <div className="space-y-3">
             {items.map((item, i) => (
-              <div key={i} className={`rounded-xl border p-3 transition ${item.answered ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+              <div key={i} {...drag.itemProps(i)} className={`rounded-xl border p-3 transition ${item.answered ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'} ${drag.itemClass(i)}`}>
                 <div className="flex items-start gap-2 mb-2">
+                  {/* 並べ替えつまみ */}
+                  <span {...drag.handleProps(i)} title="ドラッグして並べ替え"
+                    className="mt-0.5 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing flex-shrink-0 select-none">
+                    <GripVertical size={18} />
+                  </span>
                   {/* チェックボックス */}
                   <button
                     type="button"
@@ -466,7 +473,7 @@ ${itemRows}
                   )}
                 </div>
                 {/* 回答欄 */}
-                <div className="ml-7">
+                <div className="ml-[54px]">
                   <textarea
                     className={`w-full border rounded-lg px-3 py-1.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 ${
                       item.answered ? 'bg-white border-green-200' : 'bg-white border-gray-200'

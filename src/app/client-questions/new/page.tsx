@@ -3,10 +3,11 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ChevronLeft, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, Plus, Trash2, GripVertical } from 'lucide-react'
 import Link from 'next/link'
 import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { useDragReorder } from '@/lib/useDragReorder'
 
 const ic = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const CATEGORIES = ['月次', '決算', '確定申告', '年末調整', '給与計算', 'その他']
@@ -23,6 +24,7 @@ function ClientQuestionNewForm() {
   const [clients, setClients] = useState<{ id: string; code: string; name: string }[]>([])
   const [suggestions, setSuggestions] = useState<{ matches: { id: string; code: string; name: string }[]; top: number; left: number } | null>(null)
   const [items, setItems] = useState<QItem[]>([{ text: '', answered: false, answer: '' }])
+  const drag = useDragReorder(setItems)
   const now = new Date()
   const todayJST = new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().split('T')[0]
   const [workYear, setWorkYear] = useState(String(now.getFullYear()))
@@ -245,8 +247,13 @@ function ClientQuestionNewForm() {
           </div>
           <div className="space-y-3">
             {items.map((item, i) => (
-              <div key={i} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div key={i} {...drag.itemProps(i)} className={`rounded-xl border border-gray-200 bg-gray-50 p-3 transition ${drag.itemClass(i)}`}>
                 <div className="flex items-start gap-2 mb-2">
+                  {/* 並べ替えつまみ */}
+                  <span {...drag.handleProps(i)} title="ドラッグして並べ替え"
+                    className="mt-0.5 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing flex-shrink-0 select-none">
+                    <GripVertical size={18} />
+                  </span>
                   <div className="mt-0.5 w-5 h-5 rounded border-2 border-gray-300 bg-white flex-shrink-0" />
                   <textarea
                     className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y"
@@ -262,7 +269,7 @@ function ClientQuestionNewForm() {
                     </button>
                   )}
                 </div>
-                <div className="ml-7">
+                <div className="ml-[54px]">
                   <textarea
                     className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm resize-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
                     rows={2}
