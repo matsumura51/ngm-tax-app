@@ -49,12 +49,13 @@ interface SettleItem {
   settle_return_prepared: string | null
 }
 
-const MONTHLY_STATUS_OPTIONS = ['要対応', '処理中', '質問回答待ち', '不足書類待ち', '未対応', 'その他'] as const
+const MONTHLY_STATUS_OPTIONS = ['要対応', '処理中', 'チェック中', '質問回答待ち', '不足書類待ち', '未対応', 'その他'] as const
 type MonthlyStatusOption = typeof MONTHLY_STATUS_OPTIONS[number]
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
   '要対応':       { bg: 'bg-red-100',    text: 'text-red-700',    dot: 'bg-red-500' },
   '処理中':       { bg: 'bg-blue-100',   text: 'text-blue-700',   dot: 'bg-blue-500' },
+  'チェック中':   { bg: 'bg-teal-100',   text: 'text-teal-700',   dot: 'bg-teal-500' },
   '質問回答待ち': { bg: 'bg-yellow-100', text: 'text-yellow-700', dot: 'bg-yellow-500' },
   '不足書類待ち': { bg: 'bg-orange-100', text: 'text-orange-700', dot: 'bg-orange-400' },
   '未対応':       { bg: 'bg-gray-100',   text: 'text-gray-600',   dot: 'bg-gray-400' },
