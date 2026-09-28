@@ -98,8 +98,19 @@ export default function ClientNewPage() {
     }
     setSaving(true)
     const supabase = createClient()
+    // 顧客コードの重複チェック（DBの一意制約エラーだと分かりにくいため、既存の顧客名を示す）
+    const code = form.code.trim()
+    const { data: dup } = await supabase.from('clients').select('name, contract_status').eq('code', code).maybeSingle()
+    if (dup) {
+      setErrors({ code: `顧客コード「${code}」は既に「${dup.name}」で使われています` })
+      alert(`顧客コード「${code}」は既に「${dup.name}」${dup.contract_status ? `（${dup.contract_status}）` : ''}で登録されています。\n別の顧客コードを入力するか、既存の顧客カルテを編集してください。`)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      setSaving(false)
+      return
+    }
     const { data, error } = await supabase.from('clients').insert({
       ...form,
+      code,
       fiscal_month: form.fiscal_month ? parseInt(form.fiscal_month) : null,
       employee_count: form.employee_count ? parseInt(form.employee_count) : null,
       capital: form.capital ? parseInt(form.capital) : null,

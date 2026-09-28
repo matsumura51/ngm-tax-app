@@ -314,6 +314,14 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     setErrorFields(new Set())
     setSaving(true)
     const supabase = createClient()
+    // 顧客コードを他の顧客と重複する値に変更した場合は、どの顧客と重複しているかを示す
+    const { data: dup } = await supabase.from('clients').select('name').eq('code', String(form.code ?? '').trim()).neq('id', id).maybeSingle()
+    if (dup) {
+      setErrorFields(new Set(['code']))
+      alert(`顧客コード「${form.code}」は既に「${dup.name}」で使われています。別の顧客コードを入力してください。`)
+      setSaving(false)
+      return
+    }
     const { error } = await supabase.from('clients').update(form).eq('id', id)
     if (error) alert('保存エラー: ' + error.message)
     else { setSaved(true); setIsDirty(false); setTimeout(() => setSaved(false), 2000); await loadClient() }
