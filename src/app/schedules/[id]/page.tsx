@@ -235,7 +235,7 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
     const supabase = createClient()
     await supabase.from('schedules').delete().eq('id', id)
     setUnsavedChanges(false)
-    router.push('/schedules')
+    router.push(`/schedules?date=${form.date}`)
   }
 
   if (!schedule) return <div className="p-6 text-gray-400">読み込み中...</div>
@@ -244,7 +244,7 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
     <div className="p-6 max-w-2xl">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Link href="/schedules" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="text-gray-400 hover:text-gray-600">
+          <Link href={`/schedules?date=${form.date}`}onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="text-gray-400 hover:text-gray-600">
             <ChevronLeft size={20} />
           </Link>
           <h1 className="text-2xl font-bold text-gray-800">スケジュール詳細</h1>
@@ -422,7 +422,7 @@ export default function ScheduleDetailPage({ params }: { params: Promise<{ id: s
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
-          <Link href="/schedules" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+          <Link href={`/schedules?date=${form.date}`}onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
             戻る
           </Link>
           <button onClick={save} disabled={saving}

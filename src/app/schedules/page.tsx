@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Schedule } from '@/lib/types'
 import { Plus, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -90,6 +90,7 @@ interface Report { user_id: string; date: string }
 
 function SchedulesContent() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [reports, setReports] = useState<Report[]>([])
   const [today] = useState(new Date())
@@ -107,11 +108,24 @@ function SchedulesContent() {
   const year = viewDate.getFullYear()
   const month = viewDate.getMonth()
 
-  // URLパラム ?view= でビュー切替
+  // URLパラム ?view= / ?date= でビュー・表示日を復元（登録・編集画面から戻った時に同じ月を表示するため）
+  const paramView = searchParams.get('view')
+  const paramDate = searchParams.get('date')
   useEffect(() => {
-    const v = searchParams.get('view') as ViewMode | null
+    let v = paramView as ViewMode | null
+    if (!v) { try { v = sessionStorage.getItem('schedulesViewMode') as ViewMode | null } catch {} }
     if (v && ['月間', '週間', '日間'].includes(v)) setViewMode(v)
-  }, [searchParams])
+    const m = paramDate?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (m) setViewDate(prev => toDateStr(prev) === paramDate ? prev : new Date(+m[1], +m[2] - 1, +m[3]))
+  }, [paramView, paramDate])
+
+  // 表示中の日付・ビューをURLに反映（ブラウザの戻る・他画面からの復帰で同じ表示に戻れるように）
+  useEffect(() => {
+    const ds = toDateStr(viewDate)
+    try { sessionStorage.setItem('schedulesViewMode', viewMode) } catch {}
+    if (paramDate === ds && paramView === viewMode) return
+    router.replace(`/schedules?date=${ds}&view=${encodeURIComponent(viewMode)}`, { scroll: false })
+  }, [viewDate, viewMode])
 
   useEffect(() => { loadUsers() }, [])
   useEffect(() => { load() }, [viewDate, viewMode, selectedUserId])

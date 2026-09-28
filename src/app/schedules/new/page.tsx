@@ -270,13 +270,14 @@ function ScheduleNewForm() {
       if (error) { alert('エラー: ' + error.message); setSaving(false); return }
     }
     setUnsavedChanges(false)
-    router.push('/schedules')
+    // 登録した予定の日付の月（週・日）に戻る
+    router.push(`/schedules?date=${dates[0]}`)
   }
 
   return (
     <div className="p-6 max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/schedules" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="text-gray-400 hover:text-gray-600">
+        <Link href={`/schedules?date=${paramDate}`}onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="text-gray-400 hover:text-gray-600">
           <ChevronLeft size={20} />
         </Link>
         <h1 className="text-2xl font-bold text-gray-800">スケジュール 新規追加</h1>
@@ -523,7 +524,7 @@ function ScheduleNewForm() {
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
-          <Link href="/schedules" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+          <Link href={`/schedules?date=${paramDate}`}onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
             キャンセル
           </Link>
           <button onClick={save} disabled={saving}
