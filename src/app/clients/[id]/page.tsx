@@ -318,12 +318,12 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     const { data: dup } = await supabase.from('clients').select('name').eq('code', String(form.code ?? '').trim()).neq('id', id).maybeSingle()
     if (dup) {
       setErrorFields(new Set(['code']))
-      alert(`顧客コード「${form.code}」は既に「${dup.name}」で使われています。別の顧客コードを入力してください。`)
+      alert(`すでに顧客コードが使用されています\n\n顧客コード「${form.code}」：${dup.name}`)
       setSaving(false)
       return
     }
     const { error } = await supabase.from('clients').update(form).eq('id', id)
-    if (error) alert('保存エラー: ' + error.message)
+    if (error) alert(error.message.includes('clients_code_key') ? 'すでに顧客コードが使用されています' : '保存エラー: ' + error.message)
     else { setSaved(true); setIsDirty(false); setTimeout(() => setSaved(false), 2000); await loadClient() }
     setSaving(false)
   }

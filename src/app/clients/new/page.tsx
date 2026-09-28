@@ -102,8 +102,8 @@ export default function ClientNewPage() {
     const code = form.code.trim()
     const { data: dup } = await supabase.from('clients').select('name, contract_status').eq('code', code).maybeSingle()
     if (dup) {
-      setErrors({ code: `顧客コード「${code}」は既に「${dup.name}」で使われています` })
-      alert(`顧客コード「${code}」は既に「${dup.name}」${dup.contract_status ? `（${dup.contract_status}）` : ''}で登録されています。\n別の顧客コードを入力するか、既存の顧客カルテを編集してください。`)
+      setErrors({ code: 'すでに顧客コードが使用されています' })
+      alert(`すでに顧客コードが使用されています\n\n顧客コード「${code}」：${dup.name}${dup.contract_status ? `（${dup.contract_status}）` : ''}`)
       window.scrollTo({ top: 0, behavior: 'smooth' })
       setSaving(false)
       return
@@ -120,7 +120,7 @@ export default function ClientNewPage() {
       documents,
     }).select().single()
     if (error) {
-      alert('エラー: ' + error.message)
+      alert(error.message.includes('clients_code_key') ? 'すでに顧客コードが使用されています' : 'エラー: ' + error.message)
       setSaving(false)
       return
     }
