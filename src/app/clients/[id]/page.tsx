@@ -491,7 +491,11 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                 </select>
               </F>
               <F label="契約ステータス" required hasError={errorFields.has('contract_status')}>
-                <select className={ic} value={form.contract_status || ''} onChange={e => set('contract_status', e.target.value)}>
+                <select className={ic} value={form.contract_status || ''} onChange={e => {
+                  set('contract_status', e.target.value)
+                  // 契約中に戻した場合は契約終了日を消す（残っていると一覧で薄く表示され、月次進捗表からも外れるため）
+                  if (e.target.value === '契約中' && form.contract_end_date) set('contract_end_date', null)
+                }}>
                   <option value="">選択</option>
                   {CONTRACT_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
