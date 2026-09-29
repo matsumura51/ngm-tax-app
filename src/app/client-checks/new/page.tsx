@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Paperclip, X } from 'lucide-react'
 import Link from 'next/link'
 import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
 import { fetchAllRows } from '@/lib/fetchAllRows'
@@ -17,6 +17,8 @@ function ClientCheckNewForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [saving, setSaving] = useState(false)
+  const [files, setFiles] = useState<File[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [userName, setUserName] = useState('')
   const [clients, setClients] = useState<{ id: string; code: string; name: string }[]>([])
   const [suggestions, setSuggestions] = useState<{ matches: { id: string; code: string; name: string }[]; top: number; left: number } | null>(null)
@@ -51,7 +53,7 @@ function ClientCheckNewForm() {
     init()
   }, [])
 
-  useUnsavedGuard(!!(form.content.trim() || form.correction_note.trim()))
+  useUnsavedGuard(!!(form.content.trim() || form.correction_note.trim() || files.length > 0))
 
   function onClientNameChange(e: React.ChangeEvent<HTMLInputElement>) {
     const text = e.target.value
@@ -83,7 +85,7 @@ function ClientCheckNewForm() {
     if (!form.client_name.trim()) { alert('顧客名を入力してください'); return }
     setSaving(true)
     const supabase = createClient()
-    const { error } = await supabase.from('client_checks').insert({
+    const { data: created, error } = await supabase.from('client_checks').insert({
       client_id: form.client_id || null,
       client_code: form.client_code || null,
       client_name: form.client_name,
@@ -95,8 +97,21 @@ function ClientCheckNewForm() {
       status: form.type === '処理方法' ? '訂正済' : form.status,
       corrected_date: form.corrected_date || null,
       correction_note: form.correction_note || null,
-    })
+    }).select('id').single()
     if (error) { alert('エラー: ' + error.message); setSaving(false); return }
+    // 添付ファイルをアップロード（指摘詳細画面と同じ保存先・形式）
+    const failed: string[] = []
+    for (const file of files) {
+      const safeName = encodeURIComponent(file.name).replace(/%/g, '_')
+      const path = `client-checks/${created.id}/${Date.now()}_${safeName}`
+      const { error: upErr } = await supabase.storage.from('attachments').upload(path, file)
+      if (upErr) { failed.push(file.name); continue }
+      const { error: dbErr } = await supabase.from('client_check_attachments').insert({
+        check_id: created.id, file_name: file.name, file_path: path, file_size: file.size,
+      })
+      if (dbErr) failed.push(file.name)
+    }
+    if (failed.length > 0) alert(`指摘は保存しましたが、次のファイルの添付に失敗しました。詳細画面から再度添付してください。\n・${failed.join('\n・')}`)
     setUnsavedChanges(false)
     router.push('/client-checks')
   }
@@ -192,6 +207,32 @@ function ClientCheckNewForm() {
             </div>
           </>
         )}
+
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-medium text-gray-500 flex items-center gap-1">
+              <Paperclip size={13} /> 添付ファイル（PDF・Excel・画像など）
+            </label>
+            <button type="button" onClick={() => fileInputRef.current?.click()}
+              className="text-xs px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg">
+              + ファイルを追加
+            </button>
+            <input ref={fileInputRef} type="file" multiple className="hidden"
+              onChange={e => { const picked = Array.from(e.target.files || []); if (picked.length) setFiles(f => [...f, ...picked]); e.target.value = '' }} />
+          </div>
+          {files.length === 0 ? (
+            <p className="text-xs text-gray-400">添付ファイルなし</p>
+          ) : (
+            <ul className="space-y-1">
+              {files.map((f, i) => (
+                <li key={i} className="flex items-center justify-between text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">
+                  <span className="truncate">{f.name} <span className="text-xs text-gray-400">({Math.ceil(f.size / 1024).toLocaleString('ja-JP')}KB)</span></span>
+                  <button type="button" onClick={() => setFiles(fs => fs.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500 ml-2"><X size={14} /></button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         <div className="flex justify-end gap-3 pt-2">
           <Link href="/client-checks" onNavigate={e => { if (!confirmLeaveIfDirty()) e.preventDefault() }} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">キャンセル</Link>

@@ -328,8 +328,8 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
               className="text-xs px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg disabled:opacity-50">
               {uploading ? 'アップロード中...' : '+ ファイルを追加'}
             </button>
-            <input ref={fileInputRef} type="file" className="hidden"
-              onChange={e => { if (e.target.files?.[0]) { uploadFile(e.target.files[0]); e.target.value = '' } }} />
+            <input ref={fileInputRef} type="file" multiple className="hidden"
+              onChange={async e => { const picked = Array.from(e.target.files || []); e.target.value = ''; for (const f of picked) await uploadFile(f) }} />
           </div>
           {attachments.length === 0 ? (
             <div className="text-xs text-gray-400 py-3 text-center border border-dashed border-gray-200 rounded-lg">
