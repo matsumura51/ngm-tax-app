@@ -89,6 +89,59 @@ function DatePartInput({ value, onChange }: { value: string; onChange: (v: strin
   )
 }
 
+// 役員変更：YYYY/MM で入力（年4桁→月へ自動移動）。「なし」「不明」はボタンで入力。値は "YYYY/MM" 形式で保存
+function DirectorChangeInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const parsed = value?.match(/^(\d{4})[/-](\d{1,2})/)
+  const [ly, setLy] = useState(parsed ? parsed[1] : '')
+  const [lm, setLm] = useState(parsed ? parsed[2].padStart(2, '0') : '')
+  const mRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const p = value?.match(/^(\d{4})[/-](\d{1,2})/)
+    if (p) { setLy(p[1]); setLm(p[2].padStart(2, '0')) }
+    else { setLy(''); setLm('') }
+  }, [value])
+
+  function emit(ny: string, nm: string) {
+    const n = parseInt(nm, 10)
+    if (ny.length === 4 && nm.length === 2 && n >= 1 && n <= 12) onChange(`${ny}/${nm}`)
+    else if (!ny && !nm) onChange('')
+  }
+
+  // 年月以外の既存の値（「なし」「R14年9月」など）
+  const textValue = value && !parsed ? value : ''
+  const seg = 'text-center border border-gray-300 rounded px-1 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500'
+  const btn = (v: string) => `text-xs px-2 py-1 rounded border shrink-0 ${value === v ? 'bg-purple-600 text-white border-purple-600' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`
+  return (
+    <div className="flex-1">
+      <div className="flex items-center gap-1">
+        <input type="text" inputMode="numeric" placeholder="YYYY" maxLength={4} value={ly}
+          onChange={e => {
+            const v = e.target.value.replace(/\D/g, '').slice(0, 4)
+            setLy(v); emit(v, lm)
+            if (v.length === 4) mRef.current?.focus()
+          }}
+          className={`${seg} w-16`} />
+        <span className="text-gray-400 text-sm">/</span>
+        <input ref={mRef} type="text" inputMode="numeric" placeholder="MM" maxLength={2} value={lm}
+          onChange={e => {
+            const v = e.target.value.replace(/\D/g, '').slice(0, 2)
+            setLm(v)
+            // 2桁揃うまでは確定しない（「1」だけで「01」になると10〜12月が入力できないため）
+            if (v.length === 2) emit(ly, v)
+          }}
+          onBlur={() => { if (lm.length === 1) { const v = lm.padStart(2, '0'); setLm(v); emit(ly, v) } }}
+          className={`${seg} w-10`} />
+        <button type="button" onClick={() => onChange(value === 'なし' ? '' : 'なし')} className={`${btn('なし')} ml-2`}>なし</button>
+        <button type="button" onClick={() => onChange(value === '不明' ? '' : '不明')} className={btn('不明')}>不明</button>
+      </div>
+      {textValue && textValue !== 'なし' && textValue !== '不明' && (
+        <p className="text-xs text-gray-500 mt-1">現在の入力：{textValue}（年月で入力し直すと置き換わります）</p>
+      )}
+    </div>
+  )
+}
+
 // "YYYY-MM-DD" → "M/D" for table display; pass-through other formats
 function fmtDate(s: string | null | undefined): string {
   if (!s) return ''
@@ -133,7 +186,7 @@ const SETTLE_FIELDS: { key: string; label: string; placeholder?: string; type?: 
   { key: 'direct_debit_local',        label: '地方税ダイレクト納付',   type: 'select', options: DIRECT_DEBIT_STATUS },
   { key: 'direct_debit_account',      label: '登録口座',              placeholder: '例: ○○銀行○○支店 普通1234567' },
   { key: 'settle_return_docs',        label: '返却書類',               type: 'checkbox' },
-  { key: 'director_change',           label: '役員変更',              placeholder: '例: なし' },
+  { key: 'director_change',           label: '役員変更',              type: 'yearmonth' },
 ]
 const SETTLE_TAX_FIELDS = [
   { key: 'settle_corp_tax_amount',        label: '法人税確定額' },
@@ -1267,6 +1320,11 @@ function MonthlyContent() {
                         <button onClick={() => setSettleForm(f => ({ ...f, [key]: '' }))} className="text-gray-300 hover:text-gray-500 text-xs shrink-0">✕</button>
                       )}
                     </div>
+                  ) : type === 'yearmonth' ? (
+                    <DirectorChangeInput
+                      value={settleForm[key] || ''}
+                      onChange={v => setSettleForm(f => ({ ...f, [key]: v }))}
+                    />
                   ) : (
                     <input value={settleForm[key] || ''} onChange={e => setSettleForm(f => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} className={inp} />
                   )}
