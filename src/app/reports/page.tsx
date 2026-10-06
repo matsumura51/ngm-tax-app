@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { allocatePotA, type PotAEntry } from '@/lib/potAlloc'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 
 // 業務区分ごとの配分率と分割方法
@@ -235,12 +236,12 @@ export default function ReportsPage() {
       yearendInfo[p.client_code] = { fee, feeYear: p.year }
     }
     // 処理期間（subject〜details）が含む月キー（'YYYY-M'）の一覧。範囲指定なしはレポート対象月のみ
-    const monthsInRange = (subject: string | null, details: string | null): string[] => {
-      if (!subject) return [`${year}-${monthStr}`]
+    const monthsInRange = (subject: string | null, details: string | null, fallbackKey: string = `${year}-${monthStr}`): string[] => {
+      if (!subject) return [fallbackKey]
       const [sy, sm] = subject.split('-').map(Number)
       const endStr = details || subject
       const [ey, em] = endStr.split('-').map(Number)
-      if (isNaN(sy) || isNaN(sm) || isNaN(ey) || isNaN(em)) return [`${year}-${monthStr}`]
+      if (isNaN(sy) || isNaN(sm) || isNaN(ey) || isNaN(em)) return [fallbackKey]
       const keys: string[] = []
       let y = sy, m = sm, guard = 0
       while ((y < ey || (y === ey && m <= em)) && guard < 600) {
@@ -249,18 +250,6 @@ export default function ReportsPage() {
         guard++
       }
       return keys
-    }
-
-    // 過去（当月より前）の日報で、同じ顧問先・同じ業務区分について既に処理済みの月を集計
-    // 例：8月のレポートで「記帳 7月〜8月」を計上済みなら、9月のレポートで再び「記帳 7月〜8月」が
-    // 入力されても、既に計上済みの月の報酬を二重に配分しないようにする
-    const claimedMonths: Record<string, Record<string, Set<string>>> = {}
-    for (const d of details) {
-      if (!d.client_code || !d.subject || !priorReportIds.has(d.report_id)) continue
-      const tt = d.task_type || 'その他'
-      if (!claimedMonths[d.client_code]) claimedMonths[d.client_code] = {}
-      if (!claimedMonths[d.client_code][tt]) claimedMonths[d.client_code][tt] = new Set()
-      for (const key of monthsInRange(d.subject, d.details)) claimedMonths[d.client_code][tt].add(key)
     }
 
     // 基準月から指定ヶ月数以内かどうか（年をまたぐ場合にも対応）
@@ -355,15 +344,21 @@ export default function ReportsPage() {
       }
     }
 
-    // 処理期間が含む各月の「登録済み」報酬の合計（未登録月は0円・他月からの借用なし）。
-    // 複数月分をまとめて処理した実績を、実際に発生した報酬の範囲内で正しく評価するために使う。
-    // 過去の日報で同じ業務区分について既に計上済みの月は、二重配分を避けるため0円として扱う
-    const sumFeeForRange = (code: string, taskType: string, subject: string | null, details: string | null): number => {
-      const claimed = claimedMonths[code]?.[taskType]
-      return monthsInRange(subject, details)
-        .filter(key => !claimed?.has(key))
-        .reduce((s, key) => s + (feeByMonth[code]?.[key] || 0), 0)
+    // Pot A（月額報酬ベースの通常配分）：全期間の日報から「顧問先×処理対象月×区分」ごとに計上した全担当者を集め、人数均等割する。
+    // 後から別の月のレポートで同じ対象月・区分を計上した担当者とも折半し、各担当者は最初に計上した月のレポートで受け取る（src/lib/potAlloc.ts）。
+    // 決算報酬が登録されている法人の「決算」区分は決算報酬側（Pot B）専属のため対象外
+    const potAEntries: PotAEntry[] = []
+    for (const d of details) {
+      const rdate = allReportDate[d.report_id]
+      const user = allReportUser[d.report_id]
+      if (!d.client_code || !rdate || !user) continue
+      const tt = d.task_type || 'その他'
+      if (tt === '決算' && settlementInfo[d.client_code]) continue
+      const [ry, rm] = rdate.split('-').map(Number)
+      const reportKey = `${ry}-${rm}`
+      potAEntries.push({ client_code: d.client_code, task_type: tt, user, reportKey, months: monthsInRange(d.subject, d.details, reportKey) })
     }
+    const potA = allocatePotA(potAEntries, feeByMonth, TASK_ALLOC, `${year}-${Number(monthStr)}`)
 
     // WorkEntryを組み立て（当月の日報に紐づくものだけ）
     const entries: WorkEntry[] = details
@@ -408,7 +403,7 @@ export default function ReportsPage() {
     // 報酬配分を計算。処理期間（subject〜details）が含む各月の「登録済み」報酬を合算して評価するため、
     // 複数月分をまとめて処理した実績はその分だけ正しく多く評価され、未登録月は0円のまま（他月からの借用なし）
     for (const row of Object.values(clientMap)) {
-      let rowEntries = entries.filter(e => e.client_code === row.client_code)
+      const rowEntries = entries.filter(e => e.client_code === row.client_code)
       let potBCTotal = 0  // 決算報酬・年末調整報酬のうち今月実際に配分した額（表示用「月次報酬」に含める）
 
       // 決算報酬（Pot B）: 決算報酬が登録されている法人は、決算・訪問来所の配分方法を月額報酬（Pot A）とは
@@ -465,8 +460,7 @@ export default function ReportsPage() {
             }
           }
         }
-        // 決算報酬のみのルールで全て配分済みのため、Pot A（月額報酬ベースの通常配分）の対象からは除外
-        rowEntries = []
+        // 決算報酬のみの法人は月額報酬が無いため、Pot A（月額報酬ベースの通常配分）は発生しない
       } else if (st) {
         // 月額報酬もある法人向け: 決算65%（決算区分の担当者で均等割）／訪問来所35%（決算月・翌月の担当者で均等割）
         const decisionInfo = settlementDecisionInfo[row.client_code]
@@ -495,9 +489,8 @@ export default function ReportsPage() {
           for (const u of visitUsers) row.staff_alloc[u] = (row.staff_alloc[u] || 0) + share
           potBCTotal += share * visitUsers.length
         }
-        // 決算区分のみ、常にPot B（決算報酬）側で配分するため通常配分（Pot A）の対象から除外。
-        // 訪問・来所は月額報酬（Pot A）側でも通常通り配分するため除外しない。
-        rowEntries = rowEntries.filter(e => e.task_type !== '決算')
+        // 決算区分は常にPot B（決算報酬）側で配分するため、Pot Aの対象からは除外済み（potAEntries構築時）。
+        // 訪問・来所は月額報酬（Pot A）側でも通常通り配分する。
       }
 
       // 年末調整報酬: 登録がある法人は全額を「年末調整」区分の担当者に配分する。
@@ -518,86 +511,11 @@ export default function ReportsPage() {
         // 年末調整はTASK_ALLOCに含まれずPot Aでは元々配分されないため、rowEntriesからの除外は不要
       }
 
-      // Pot A（月額報酬ベースの通常配分）。表示用「月次報酬」＝ Pot Aの配分原資 ＋ 決算報酬・年末調整の今月配分分
-      let potATotal = 0
-      if (rowEntries.length > 0) {
-        // task_typeごとにグループ化。fee = 処理期間の各月の登録済み報酬の合計（範囲指定なしは当月報酬のみ）
-        const byTask: Record<string, { user: string; mins: number; fee: number }[]> = {}
-        for (const e of rowEntries) {
-          const tt = e.task_type || 'その他'
-          if (!byTask[tt]) byTask[tt] = []
-          byTask[tt].push({ user: e.user_name, mins: e.work_minutes, fee: sumFeeForRange(row.client_code, tt, e.subject, e.details) })
-        }
-
-        // この顧客の実績が参照する全月（当月＋処理期間で遡及した月）の登録済み報酬合計を配分原資とする。
-        // 社会保険・所内相談等、報酬配分の対象外区分（TASK_ALLOCに無い区分）は無関係な月を巻き込まないよう対象外にする。
-        // 区分ごとに既に他月で計上済み（claimedMonths）の月は除外し、翌月にまたがっても二重計上しない
-        const referencedMonths = new Set<string>()
-        for (const e of rowEntries) {
-          const tt = e.task_type || 'その他'
-          if (!TASK_ALLOC[tt]) continue
-          const claimed = claimedMonths[row.client_code]?.[tt]
-          for (const key of monthsInRange(e.subject, e.details)) {
-            if (!claimed?.has(key)) referencedMonths.add(key)
-          }
-        }
-        const capFee = Array.from(referencedMonths).reduce((s, key) => s + (feeByMonth[row.client_code]?.[key] || 0), 0)
-        potATotal = capFee
-
-        if (capFee > 0) {
-          // 各タスクの生プール。区分ごとのレート上限（rate×配分原資）でキャップし、1区分が他区分の取り分まで食い込まないようにする
-          const rawPools: Record<string, number> = {}
-          for (const [taskType, alloc] of Object.entries(TASK_ALLOC)) {
-            const taskEntries = byTask[taskType] || []
-            if (taskEntries.length === 0) continue
-            if (alloc.splitBy === 'time') {
-              const totalWeightedFee = taskEntries.reduce((s, e) => s + e.fee * e.mins, 0)
-              const totalMins = taskEntries.reduce((s, e) => s + e.mins, 0)
-              const raw = totalMins > 0 ? alloc.rate * totalWeightedFee / totalMins : 0
-              rawPools[taskType] = Math.min(raw, alloc.rate * capFee)
-            } else {
-              // 担当者ごとに最大のfee（同一人物の複数実績があれば大きい方）
-              const personFee: Record<string, number> = {}
-              for (const e of taskEntries) {
-                if (!(e.user in personFee) || e.fee > personFee[e.user]) personFee[e.user] = e.fee
-              }
-              const totalFee = Object.values(personFee).reduce((s, f) => s + f, 0)
-              const numPersons = Object.keys(personFee).length
-              const raw = numPersons > 0 ? alloc.rate * totalFee / numPersons : 0
-              rawPools[taskType] = Math.min(raw, alloc.rate * capFee)
-            }
-          }
-
-          // 合計が配分原資を超えないよう正規化（区分をまたいだ合算が100%を超える場合の保険）
-          const totalRaw = Object.values(rawPools).reduce((s, v) => s + v, 0)
-          const normFactor = totalRaw > capFee ? capFee / totalRaw : 1
-
-          // 配分を実行
-          for (const [taskType, alloc] of Object.entries(TASK_ALLOC)) {
-            const taskEntries = byTask[taskType] || []
-            if (taskEntries.length === 0) continue
-            const pool = (rawPools[taskType] || 0) * normFactor
-
-            if (alloc.splitBy === 'time') {
-              const totalWeightedFee = taskEntries.reduce((s, e) => s + e.fee * e.mins, 0)
-              for (const e of taskEntries) {
-                const w = e.fee * e.mins
-                const share = totalWeightedFee > 0 ? (w / totalWeightedFee) * pool : pool / taskEntries.length
-                row.staff_alloc[e.user] = (row.staff_alloc[e.user] || 0) + share
-              }
-            } else {
-              const personFee: Record<string, number> = {}
-              for (const e of taskEntries) {
-                if (!(e.user in personFee) || e.fee > personFee[e.user]) personFee[e.user] = e.fee
-              }
-              const totalFee = Object.values(personFee).reduce((s, f) => s + f, 0)
-              for (const [user, fee] of Object.entries(personFee)) {
-                const share = totalFee > 0 ? (fee / totalFee) * pool : pool / Object.keys(personFee).length
-                row.staff_alloc[user] = (row.staff_alloc[user] || 0) + share
-              }
-            }
-          }
-        }
+      // Pot A（月額報酬ベースの通常配分）。表示用「月次報酬」＝ 当月に初めて処理対象になった月の報酬 ＋ 決算報酬・年末調整の今月配分分
+      const pa = potA[row.client_code]
+      const potATotal = pa?.displayFee || 0
+      for (const [user, amt] of Object.entries(pa?.alloc || {})) {
+        row.staff_alloc[user] = (row.staff_alloc[user] || 0) + amt
       }
 
       // 表示用「月次報酬」を、実際に配分原資となった額（Pot A＋決算報酬・年末調整の今月配分分）で上書きする
