@@ -226,10 +226,13 @@ export default function ReportsPage() {
     }
 
     // 年末調整報酬が登録されている顧客: 1月分の金額を取得。
-    // 年末調整の実績は前年12月に計上されることも多いため、翌年1月分（year+1のレコード）も対象に含める
+    // 年末調整の実績は前年10月〜当年3月に計上されるため、10〜12月のレポートは翌年1月分（year+1のレコード）、
+    // 1〜3月のレポートは当年1月分を対象にする（4〜9月は年末調整の配分なし）
+    const yearendFeeYear = month >= 10 ? year + 1 : year
     const yearendInfo: Record<string, { fee: number; feeYear: number }> = {}
     for (const p of (progress || [])) {
-      if (p.year !== year && p.year !== year + 1) continue
+      if (month >= 4 && month <= 9) break
+      if (p.year !== yearendFeeYear) continue
       const raw = (p.monthly_fee_yearend || {})['1']
       const fee = raw ? Number(String(raw).replace(/[^0-9]/g, '')) : 0
       if (fee <= 0) continue
@@ -297,11 +300,11 @@ export default function ReportsPage() {
       (code, ry, rm) => inMonthWindow(settlementInfo[code].fiscalYear, settlementInfo[code].fiscalMonth, 7, ry, rm)
     )
 
-    // 年末調整: 前年12月〜当年3月の間に「年末調整」区分で計上されれば良い（複数月にまたがってもOK）
+    // 年末調整: 前年10月〜当年3月の間に「年末調整」区分で計上した全担当者で均等割（複数月にまたがってもOK）
     const yearendDecisionInfo = earliestStaffByClient(
       '年末調整',
       code => !!yearendInfo[code],
-      (code, ry, rm) => inMonthWindow(yearendInfo[code].feeYear - 1, 12, 4, ry, rm)
+      (code, ry, rm) => inMonthWindow(yearendInfo[code].feeYear - 1, 10, 6, ry, rm)
     )
 
     // 月額報酬が無く決算報酬のみの法人かどうか
