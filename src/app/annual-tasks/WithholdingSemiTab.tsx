@@ -22,10 +22,11 @@ function DateInput({ value, onChange }: { value: string | null; onChange: (v: st
   )
 }
 
-interface Props { year: number }
+interface Props { year: number; openCode?: string | null }
 
-export default function WithholdingSemiTab({ year }: Props) {
+export default function WithholdingSemiTab({ year, openCode }: Props) {
   const [records, setRecords] = useState<WithholdingSemiRecord[]>([])
+  const [autoOpened, setAutoOpened] = useState(false)
   const [loading, setLoading] = useState(false)
   const [filterName, setFilterName] = useState('')
   const [filterStaff, setFilterStaff] = useState('')
@@ -49,6 +50,14 @@ export default function WithholdingSemiTab({ year }: Props) {
   }, [year])
 
   useEffect(() => { load() }, [load])
+
+  // ダッシュボードから顧問先コード指定で遷移してきた場合、その顧問先の入力画面を開く
+  useEffect(() => {
+    if (!openCode || autoOpened || records.length === 0) return
+    const rec = records.find(r => r.client_code === openCode)
+    setAutoOpened(true)
+    if (rec) openEdit(rec)
+  }, [openCode, autoOpened, records])
 
   function openEdit(rec: WithholdingSemiRecord) {
     setEditingRecord(rec)

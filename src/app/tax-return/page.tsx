@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import TaxReturnTab from './TaxReturnTab'
 import { RefreshCw } from 'lucide-react'
@@ -10,6 +10,15 @@ export default function TaxReturnPage() {
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
+  const [openCode, setOpenCode] = useState<string | null>(null)
+
+  // ダッシュボードからの遷移: ?year=YYYY&open=顧客コード
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    const y = Number(p.get('year'))
+    if (y) setYear(y)
+    setOpenCode(p.get('open'))
+  }, [])
 
   async function syncRecords() {
     setSyncing(true)
@@ -90,7 +99,7 @@ export default function TaxReturnPage() {
         {syncMsg && <span className="text-sm text-green-600 font-medium">{syncMsg}</span>}
       </div>
 
-      <TaxReturnTab key={`tr-${year}-${reloadKey}`} year={year} />
+      <TaxReturnTab key={`tr-${year}-${reloadKey}`} year={year} openCode={openCode} />
     </div>
   )
 }

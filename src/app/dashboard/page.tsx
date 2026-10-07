@@ -757,13 +757,20 @@ export default function DashboardPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                          {displayList.map((r, i) => (
+                          {displayList.map((r, i) => {
+                            // 顧問先をクリックすると、進捗ページでその顧問先の入力画面を開く
+                            const base = sectionKey === 'taxReturn' ? '/tax-return?' : `/annual-tasks?tab=${sectionKey}&`
+                            const href = r.client_code ? `${base}year=${currentYear}&open=${encodeURIComponent(r.client_code)}` : null
+                            return (
                             <tr key={i} className="hover:bg-gray-50">
                               <td className="px-4 py-1.5 font-mono text-gray-400">{r.client_code || '—'}</td>
-                              <td className="px-4 py-1.5 font-medium text-gray-800">{r.client_name}</td>
+                              <td className="px-4 py-1.5 font-medium text-gray-800">
+                                {href ? <Link href={href} className="hover:underline hover:text-blue-600">{r.client_name}</Link> : r.client_name}
+                              </td>
                               <td className="px-4 py-1.5 text-gray-500">{r.staff_name || '—'}</td>
                             </tr>
-                          ))}
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>

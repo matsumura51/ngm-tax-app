@@ -13,6 +13,17 @@ export default function AnnualTasksPage() {
   const [year, setYear] = useState(new Date().getFullYear())
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
+  const [openCode, setOpenCode] = useState<string | null>(null)
+
+  // ダッシュボードからの遷移: ?tab=yearEnd|withholding&year=YYYY&open=顧客コード
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    if (p.get('tab') === 'withholding') setTab('源泉納期の特例（7月）')
+    else if (p.get('tab') === 'yearEnd') setTab('年末調整（1月）')
+    const y = Number(p.get('year'))
+    if (y) setYear(y)
+    setOpenCode(p.get('open'))
+  }, [])
 
   // 顧客カルテから対象顧客を同期してレコードを生成
   async function syncRecords() {
@@ -146,8 +157,8 @@ export default function AnnualTasksPage() {
       </div>
 
       {tab === '年末調整（1月）'
-        ? <YearEndAdjTab key={`yea-${year}-${reloadKey}`} year={year} />
-        : <WithholdingSemiTab key={`whs-${year}-${reloadKey}`} year={year} />
+        ? <YearEndAdjTab key={`yea-${year}-${reloadKey}`} year={year} openCode={openCode} />
+        : <WithholdingSemiTab key={`whs-${year}-${reloadKey}`} year={year} openCode={openCode} />
       }
     </div>
   )
