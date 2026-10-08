@@ -104,6 +104,7 @@ export default function UsersPage() {
                 <th className="px-4 py-3 text-left">氏名</th>
                 <th className="px-4 py-3 text-left">ログインID</th>
                 <th className="px-4 py-3 text-left">所属</th>
+                <th className="px-4 py-3 text-left">目標マス</th>
                 <th className="px-4 py-3 text-left">入社日</th>
                 <th className="px-4 py-3 text-left">権限</th>
                 <th className="px-4 py-3"></th>
@@ -115,6 +116,7 @@ export default function UsersPage() {
                   <td className="px-4 py-3 font-medium text-gray-800">{u.name}</td>
                   <td className="px-4 py-3 text-gray-600 font-mono">{u.code || '-'}</td>
                   <td className="px-4 py-3 text-gray-600">{u.division || '-'}</td>
+                  <td className="px-4 py-3 text-gray-600">{(u as { monthly_target_squares?: number | null }).monthly_target_squares ?? '-'}</td>
                   <td className="px-4 py-3 text-gray-600">{u.hire_date || '-'}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${

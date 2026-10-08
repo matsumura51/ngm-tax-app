@@ -15,7 +15,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params)
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
-  const [form, setForm] = useState({ name: '', code: '', department: '', role: 'staff', hire_date: '', leave_date: '', division: '' })
+  const [form, setForm] = useState({ name: '', code: '', department: '', role: 'staff', hire_date: '', leave_date: '', division: '', monthly_target_squares: '' })
+  const [hasTargetColumn, setHasTargetColumn] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -44,7 +45,9 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
     const { data } = await supabase.from('users').select('*').eq('id', id).single()
     if (data) {
       setUser(data)
-      const loadedForm = { name: data.name || '', code: data.code || '', department: data.department || '', role: data.role || 'staff', hire_date: data.hire_date || '', leave_date: data.leave_date || '', division: data.division || '' }
+      const loadedForm = { name: data.name || '', code: data.code || '', department: data.department || '', role: data.role || 'staff', hire_date: data.hire_date || '', leave_date: data.leave_date || '', division: data.division || '', monthly_target_squares: data.monthly_target_squares != null ? String(data.monthly_target_squares) : '' }
+      // DBに列が追加されるまでは目標マス数を保存しない（列が無いと保存エラーになるため）
+      setHasTargetColumn('monthly_target_squares' in data)
       setForm(loadedForm)
       initialSnapshot.current = JSON.stringify(loadedForm)
     }
@@ -61,6 +64,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
       hire_date: form.hire_date || null,
       leave_date: form.leave_date || null,
       division: form.division || null,
+      ...(hasTargetColumn ? { monthly_target_squares: form.monthly_target_squares ? parseInt(form.monthly_target_squares, 10) : null } : {}),
     }).eq('id', id)
     if (error) alert('エラー: ' + error.message)
     else {
@@ -103,6 +107,15 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
               <option value="">選択してください</option>
               {DIVISION_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">毎月の目標マス数（進捗グラフ）</label>
+            <input type="text" inputMode="numeric" className={inputClass} value={form.monthly_target_squares}
+              onChange={e => setForm(f => ({ ...f, monthly_target_squares: e.target.value.replace(/[^0-9]/g, '') }))}
+              placeholder="例：30" disabled={!hasTargetColumn} />
+            <p className="text-xs text-gray-400 mt-1">
+              {hasTargetColumn ? '所属事業部の全員の合計が、進捗グラフの月末の目標になります' : 'データベースの準備（列の追加）が済むと入力できます'}
+            </p>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">入社日</label>
