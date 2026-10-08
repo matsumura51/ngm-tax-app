@@ -559,6 +559,7 @@ function MonthlyContent() {
       const val = p?.[key as keyof MonthlyProgress] as Record<string, string | null> | undefined
       dates[key] = val?.[String(month)] || ''
     }
+    dates.monthly_payroll = p?.monthly_payroll?.[String(month)] || ''
     setMonthDates(dates)
     setMonthRangeEnd(null)
     setMonthRangeFields(new Set(MONTHLY_FIELDS.map(f => f.key)))
@@ -608,6 +609,10 @@ function MonthlyContent() {
       const existing = (p[key as keyof MonthlyProgress] as Record<string, string | null>) || {}
       updates[key] = { ...existing, [String(fromMonth)]: monthDates[key] || null }
     }
+    // 給与計算完了日（顧客カルテで「給与計算あり」の顧問先のみ）。範囲適用の対象外で開始月のみ更新
+    if (client.include_payroll) {
+      updates.monthly_payroll = { ...(p.monthly_payroll || {}), [String(fromMonth)]: monthDates.monthly_payroll || null }
+    }
     const res = await fetch('/api/monthly-progress/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -633,6 +638,7 @@ function MonthlyContent() {
         const val = newP[key as keyof MonthlyProgress] as Record<string, string | null> | undefined
         dates[key] = val?.[String(nextMonth)] || ''
       }
+      dates.monthly_payroll = newP.monthly_payroll?.[String(nextMonth)] || ''
       setMonthDates(dates)
       setMonthRangeEnd(null)
       setMonthRangeFields(new Set(MONTHLY_FIELDS.map(f => f.key)))
@@ -905,6 +911,9 @@ function MonthlyContent() {
                               fi === 0 ? (isFiscal ? 'border-l-2 border-blue-400' : 'border-l border-gray-200') : ''
                             } ${bgClass} ${isFee && val ? 'text-green-700 font-medium' : 'text-gray-700'}`}>
                             {val}
+                            {f.key === 'monthly_completion' && p?.monthly_payroll?.[m] && (
+                              <div className="text-[9px] text-pink-600 leading-tight font-normal">給与 {fmtDate(p.monthly_payroll[m])}</div>
+                            )}
                             {extras.map(ef => {
                               const raw = (p?.[ef.key as keyof MonthlyProgress] as Record<string, string | null> | undefined)?.[m] || ''
                               const shown = fmtFee(raw)
@@ -1265,6 +1274,18 @@ function MonthlyContent() {
                   )}
                 </div>
               ))}
+              {monthModal.client.include_payroll && (
+                <div className="flex items-center gap-3">
+                  <label className="text-xs font-medium text-pink-600 w-16 shrink-0">給与計算完了</label>
+                  <DatePartInput
+                    value={monthDates.monthly_payroll || ''}
+                    onChange={v => setMonthDates(d => ({ ...d, monthly_payroll: v }))}
+                  />
+                  {monthDates.monthly_payroll && (
+                    <button onClick={() => setMonthDates(d => ({ ...d, monthly_payroll: '' }))} className="text-gray-300 hover:text-gray-500 text-xs">✕</button>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex gap-2 mt-5">
               <button onClick={() => setMonthModal(null)} className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">キャンセル</button>

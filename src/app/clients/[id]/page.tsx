@@ -468,6 +468,15 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                 />
                 <span className="text-sm font-medium text-blue-700">確定申告 対象</span>
               </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+                <input
+                  type="checkbox"
+                  checked={!!form.include_payroll}
+                  onChange={e => set('include_payroll', e.target.checked)}
+                  className="w-4 h-4 rounded accent-pink-600"
+                />
+                <span className="text-sm font-medium text-pink-700">給与計算あり（進捗グラフの対象）</span>
+              </label>
             </div>
             <div className="grid grid-cols-4 gap-4">
               <F label="顧客コード" required hasError={errorFields.has('code')}>

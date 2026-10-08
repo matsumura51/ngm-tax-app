@@ -65,6 +65,7 @@ export interface Client {
   include_year_end_adj: boolean
   include_withholding_semi: boolean
   include_tax_return: boolean
+  include_payroll?: boolean
   // 担当スタッフ
   primary_staff: string | null
   sub_staff: string | null
@@ -97,6 +98,7 @@ export interface MonthlyProgress {
   monthly_fee: Record<string, string | null>
   monthly_fee_yearend: Record<string, string | null>
   monthly_fee_settlement: Record<string, string | null>
+  monthly_payroll?: Record<string, string | null>  // 給与計算完了日（月キー）
   ledger_status: string | null
   report_status: string | null
   consumption_tax_filed: string | null
