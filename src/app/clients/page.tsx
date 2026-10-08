@@ -9,6 +9,7 @@ import * as XLSX from 'xlsx'
 import { CLIENT_COLUMNS } from '@/lib/clientColumns'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { useSessionState } from '@/lib/useSessionState'
+import { staffKey } from '@/lib/staffName'
 
 function formatValue(key: string, value: unknown): string {
   if (value === null || value === undefined) return ''
@@ -134,14 +135,14 @@ export default function ClientsPage() {
   }
 
   const divisionOptions = Array.from(new Set(allUsers.map(u => u.division).filter(Boolean))).sort() as string[]
-  const staffInDivision = filterDivision ? allUsers.filter(u => u.division === filterDivision).map(u => u.name) : null
-  const staffOptions = Array.from(new Set(clients.map(c => c.primary_staff).filter(s => !staffInDivision || staffInDivision.includes(s || '')).filter(Boolean))).sort() as string[]
+  const staffInDivision = filterDivision ? new Set(allUsers.filter(u => u.division === filterDivision).map(u => staffKey(u.name))) : null
+  const staffOptions = Array.from(new Set(clients.map(c => c.primary_staff).filter(s => !staffInDivision || staffInDivision.has(staffKey(s))).filter(Boolean))).sort() as string[]
 
   const norm = (s: string) => s.normalize('NFKC').toLowerCase()
   const filtered = clients.filter(c => {
     if (!showAll && (c.contract_end_date || c.contract_status === '契約終了')) return false
     if (search && !norm(c.name).includes(norm(search)) && !norm(c.code).includes(norm(search))) return false
-    if (filterDivision && staffInDivision && !staffInDivision.includes(c.primary_staff || '')) return false
+    if (filterDivision && staffInDivision && !staffInDivision.has(staffKey(c.primary_staff))) return false
     if (staffFilter && c.primary_staff !== staffFilter) return false
     if (fiscalFilter !== '') {
       const fv = Number(fiscalFilter)

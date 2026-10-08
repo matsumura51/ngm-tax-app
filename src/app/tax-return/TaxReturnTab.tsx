@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { Search, Printer, X, AlertTriangle, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
 import { TaxReturnRecord } from '@/lib/types'
 import * as XLSX from 'xlsx'
+import { staffKey } from '@/lib/staffName'
 
 const ic = 'border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 w-full'
 const STATUSES = ['未着手', '入力中', '申告書作成中', '完了', '返却完了']
@@ -153,7 +154,7 @@ export default function TaxReturnTab({ year, openCode }: Props) {
 
   const DONE_STATUSES = ['完了', '返却完了']
   const divisionOptions = Array.from(new Set(allUsers.map(u => u.division).filter(Boolean))).sort() as string[]
-  const staffInDivision = filterDivision ? allUsers.filter(u => u.division === filterDivision).map(u => u.name) : null
+  const staffInDivision = filterDivision ? new Set(allUsers.filter(u => u.division === filterDivision).map(u => staffKey(u.name))) : null
 
   const normFilterName = filterName.normalize('NFKC')
   const filtered = records.filter(r => {
@@ -163,7 +164,7 @@ export default function TaxReturnTab({ year, openCode }: Props) {
       if (r.status !== filterStatus) return false
     }
     if (normFilterName && !r.client_name.normalize('NFKC').includes(normFilterName) && !(r.client_code || '').normalize('NFKC').includes(normFilterName)) return false
-    if (filterDivision && staffInDivision && !staffInDivision.includes(r.staff_name || '')) return false
+    if (filterDivision && staffInDivision && !staffInDivision.has(staffKey(r.staff_name))) return false
     if (filterStaff && !(r.staff_name || '').includes(filterStaff)) return false
     return true
   })

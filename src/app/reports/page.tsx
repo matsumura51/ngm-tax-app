@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { allocatePotA, type PotAEntry } from '@/lib/potAlloc'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { staffKey } from '@/lib/staffName'
 
 // 業務区分ごとの配分率と分割方法
 const TASK_ALLOC: Record<string, { rate: number; splitBy: 'time' | 'person' }> = {
@@ -869,11 +870,11 @@ ${tableHTML}
           </div>
           {(() => {
             const staffDivMap: Record<string, string> = {}
-            for (const u of allUsers) if (u.name && u.division) staffDivMap[u.name] = u.division
+            for (const u of allUsers) if (u.name && u.division) staffDivMap[staffKey(u.name)] = u.division
             const hasDivisions = allUsers.some(u => u.division)
 
             const filteredStaff = filterDivision
-              ? staffRows.filter(r => staffDivMap[r.user_name] === filterDivision)
+              ? staffRows.filter(r => staffDivMap[staffKey(r.user_name)] === filterDivision)
               : staffRows
 
             if (filteredStaff.length === 0) return (
@@ -883,7 +884,7 @@ ${tableHTML}
             // チーム別集計
             const divSummary: Record<string, { alloc: number; minutes: number }> = {}
             for (const r of filteredStaff) {
-              const div = staffDivMap[r.user_name] || '未設定'
+              const div = staffDivMap[staffKey(r.user_name)] || '未設定'
               if (!divSummary[div]) divSummary[div] = { alloc: 0, minutes: 0 }
               divSummary[div].alloc += r.total_alloc
               divSummary[div].minutes += r.total_minutes
@@ -924,7 +925,7 @@ ${tableHTML}
                     {filteredStaff.map(r => (
                       <tr key={r.user_name} className="hover:bg-gray-50">
                         <td className="px-5 py-3 font-semibold text-gray-800">{r.user_name}</td>
-                        {hasDivisions && <td className="px-4 py-3 text-xs text-gray-500">{staffDivMap[r.user_name] || '—'}</td>}
+                        {hasDivisions && <td className="px-4 py-3 text-xs text-gray-500">{staffDivMap[staffKey(r.user_name)] || '—'}</td>}
                         <td className="px-4 py-3 text-right font-bold text-blue-700">
                           <button onClick={() => setFeeBreakStaff(r)} className="hover:underline">
                             {fmtFee(r.total_alloc)}

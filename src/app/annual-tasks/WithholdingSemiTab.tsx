@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { Search, Printer, CheckCircle, Circle, X } from 'lucide-react'
 import { WithholdingSemiRecord } from '@/lib/types'
 import * as XLSX from 'xlsx'
+import { staffKey } from '@/lib/staffName'
 
 const ic = 'border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 w-full'
 const PAYMENT_METHODS = ['', 'ダイレクト', '納付書', 'クレジット', 'ネットバンク', 'e-Tax']
@@ -90,13 +91,13 @@ export default function WithholdingSemiTab({ year, openCode }: Props) {
   }
 
   const divisionOptions = Array.from(new Set(allUsers.map(u => u.division).filter(Boolean))).sort() as string[]
-  const staffInDivision = filterDivision ? allUsers.filter(u => u.division === filterDivision).map(u => u.name) : null
+  const staffInDivision = filterDivision ? new Set(allUsers.filter(u => u.division === filterDivision).map(u => staffKey(u.name))) : null
 
   const normFilterName = filterName.normalize('NFKC')
   const filtered = records.filter(r => {
     if (filterStatus !== '全て' && r.status !== filterStatus) return false
     if (normFilterName && !r.client_name.normalize('NFKC').includes(normFilterName) && !(r.client_code || '').normalize('NFKC').includes(normFilterName)) return false
-    if (filterDivision && staffInDivision && !staffInDivision.includes(r.staff_name || '')) return false
+    if (filterDivision && staffInDivision && !staffInDivision.has(staffKey(r.staff_name))) return false
     if (filterStaff && !(r.staff_name || '').includes(filterStaff)) return false
     return true
   })

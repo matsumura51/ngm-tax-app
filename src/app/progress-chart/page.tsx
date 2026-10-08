@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { staffKey } from '@/lib/staffName'
 
 // 進捗グラフ：事業部ごとに、その月に完了した件数を日付の位置へ1件1マスで積み上げ、
 // 「月初0 → 月末に対象件数」の目標線と比べる。
@@ -25,7 +26,7 @@ interface ClientLite {
 }
 
 const PALETTE = ['#e11d48', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#65a30d', '#ea580c', '#4f46e5', '#0d9488', '#a21caf']
-const norm = (s: string | null | undefined) => (s || '').replace(/[\s　]/g, '')
+const norm = staffKey  // 空白除去＋旧字体（關→関など）をそろえて担当者名を照合
 const pad = (n: number) => String(n).padStart(2, '0')
 
 export default function ProgressChartPage() {
@@ -129,11 +130,12 @@ export default function ProgressChartPage() {
   const target = monthlyTarget + payrollTarget
 
   const divUnits = units.filter(u => u.division === division).sort((a, b) => a.date.localeCompare(b.date) || a.staff.localeCompare(b.staff) || a.code.localeCompare(b.code))
-  const staffNames = Array.from(new Set([
-    ...users.filter(u => u.division === division).map(u => u.name),
-    ...divUnits.map(u => u.staff),
-  ])).sort()
-  const colorOf = (staff: string) => PALETTE[Math.max(0, staffNames.indexOf(staff)) % PALETTE.length]
+  // 凡例の担当者（ユーザー登録名を優先。「關口」と「関口」のような字の違いは同じ人として1つにまとめる）
+  const staffByKey = new Map<string, string>()
+  for (const u of users.filter(u => u.division === division)) staffByKey.set(norm(u.name), u.name)
+  for (const u of divUnits) if (!staffByKey.has(norm(u.staff))) staffByKey.set(norm(u.staff), u.staff)
+  const staffKeys = Array.from(staffByKey.keys()).sort()
+  const colorOf = (staff: string) => PALETTE[Math.max(0, staffKeys.indexOf(norm(staff))) % PALETTE.length]
 
   // ---- グラフ ----
   const days = new Date(year, month, 0).getDate()
@@ -163,7 +165,7 @@ export default function ProgressChartPage() {
   const yStep = yMax <= 60 ? 5 : yMax <= 150 ? 10 : 20
 
   const staffCount: Record<string, number> = {}
-  for (const u of divUnits) staffCount[u.staff] = (staffCount[u.staff] || 0) + 1
+  for (const u of divUnits) staffCount[norm(u.staff)] = (staffCount[norm(u.staff)] || 0) + 1
 
   return (
     <div className="p-6">
@@ -255,10 +257,10 @@ export default function ProgressChartPage() {
 
             {/* 凡例 */}
             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-600">
-              {staffNames.map(s => (
-                <span key={s} className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: colorOf(s) }} />
-                  {s} {staffCount[s] || 0}件
+              {staffKeys.map(k => (
+                <span key={k} className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: colorOf(k) }} />
+                  {staffByKey.get(k)} {staffCount[k] || 0}件
                 </span>
               ))}
               <span className="text-gray-400">（薄い色＝給与計算）</span>
