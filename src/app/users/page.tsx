@@ -23,6 +23,9 @@ export default function UsersPage() {
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  // 目標マス数の一覧での直接入力（入力中の値・保存状態）
+  const [targetDraft, setTargetDraft] = useState<Record<string, string>>({})
+  const [targetSaved, setTargetSaved] = useState<Record<string, 'saving' | 'saved' | 'error'>>({})
   const [form, setForm] = useState({ code: '', name: '', password: '', role: 'staff', department: '', hire_date: '', leave_date: '', division: '' })
 
   useEffect(() => { checkAdminAndLoad() }, [])
@@ -46,6 +49,25 @@ export default function UsersPage() {
     const { data } = await supabase.from('users').select('*').order('code')
     setUsers(data || [])
     setLoading(false)
+  }
+
+  async function saveTarget(u: User) {
+    const draft = targetDraft[u.id]
+    if (draft === undefined) return
+    const current = (u as { monthly_target_squares?: number | null }).monthly_target_squares
+    const next = draft === '' ? null : parseInt(draft, 10)
+    if (next === (current ?? null)) return
+    setTargetSaved(s => ({ ...s, [u.id]: 'saving' }))
+    const supabase = createClient()
+    const { error } = await supabase.from('users').update({ monthly_target_squares: next }).eq('id', u.id)
+    if (error) {
+      setTargetSaved(s => ({ ...s, [u.id]: 'error' }))
+      alert('保存エラー: ' + error.message)
+      return
+    }
+    setUsers(list => list.map(x => x.id === u.id ? { ...x, monthly_target_squares: next } as User : x))
+    setTargetSaved(s => ({ ...s, [u.id]: 'saved' }))
+    setTimeout(() => setTargetSaved(s => { const n = { ...s }; delete n[u.id]; return n }), 1500)
   }
 
   function set(field: string, value: string) {
@@ -116,7 +138,19 @@ export default function UsersPage() {
                   <td className="px-4 py-3 font-medium text-gray-800">{u.name}</td>
                   <td className="px-4 py-3 text-gray-600 font-mono">{u.code || '-'}</td>
                   <td className="px-4 py-3 text-gray-600">{u.division || '-'}</td>
-                  <td className="px-4 py-3 text-gray-600">{(u as { monthly_target_squares?: number | null }).monthly_target_squares ?? '-'}</td>
+                  <td className="px-4 py-2 text-gray-600" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-1.5">
+                      <input type="text" inputMode="numeric"
+                        value={targetDraft[u.id] ?? String((u as { monthly_target_squares?: number | null }).monthly_target_squares ?? '')}
+                        onChange={e => setTargetDraft(d => ({ ...d, [u.id]: e.target.value.replace(/[^0-9]/g, '') }))}
+                        onBlur={() => saveTarget(u)}
+                        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                        placeholder="-"
+                        className="w-16 border border-gray-300 rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                      {targetSaved[u.id] === 'saving' && <span className="text-[11px] text-gray-400">保存中</span>}
+                      {targetSaved[u.id] === 'saved' && <span className="text-[11px] text-green-600">保存</span>}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-gray-600">{u.hire_date || '-'}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
