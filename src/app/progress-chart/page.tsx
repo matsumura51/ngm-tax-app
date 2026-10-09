@@ -387,8 +387,9 @@ export default function ProgressChartPage() {
                             <span className={`w-12 shrink-0 text-right text-xs ${s.prepared ? (late ? 'text-orange-600' : 'text-red-600') : 'text-gray-300'}`}>
                               {s.prepared ? fmtMD(s.prepared) : '未'}
                             </span>
-                            <span className={`flex-1 ${s.prepared ? 'line-through decoration-red-500 text-gray-500' : 'text-gray-800'}`} title={`${s.code} 担当：${s.staff}`}>
-                              {s.name}
+                            <span className="flex-1" title={s.code}>
+                              <span className={s.prepared ? 'line-through decoration-red-500 text-gray-500' : 'text-gray-800'}>{s.name}</span>
+                              <span className="text-xs text-gray-500">（{s.staff}）</span>
                             </span>
                           </li>
                         )
