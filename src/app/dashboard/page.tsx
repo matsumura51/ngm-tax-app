@@ -145,6 +145,9 @@ export default function DashboardPage() {
   const now = new Date()
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
+  // 未返却書類に出す年末調整の対象年分（1月20日以降は前年分まで、それより前は前々年分まで）
+  const jstToday = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const yearEndReturnMaxYear = jstToday >= `${jstToday.slice(0, 4)}-01-20` ? Number(jstToday.slice(0, 4)) - 1 : Number(jstToday.slice(0, 4)) - 2
 
   // 決算期限月: 申告期限 = 決算月 + 2 → 決算月 = 当月 - 2
   let settleMonth = currentMonth - 2
@@ -279,10 +282,11 @@ export default function DashboardPage() {
         .select('client_code, client_name, primary_staff, settle_return_docs, settle_return_prepared')
         .eq('year', currentYear)
         .not('settle_return_prepared', 'is', null),
-      // 年末調整: returned が false または null
+      // 年末調整: returned が false または null。○年分の年末調整は翌年1月20日以降に未返却なら表示する
+      // （例：2026年分は2027/1/20以降。それより前は返却期限前のため表示しない）
       supabase.from('year_end_adj_records')
         .select('client_code, client_name, staff_name, returned')
-        .eq('year', currentYear)
+        .lte('year', yearEndReturnMaxYear)
         .or('returned.is.null,returned.eq.false'),
       // 確定申告: doc_returned が false または null かつ未着手以外
       supabase.from('tax_return_records')
