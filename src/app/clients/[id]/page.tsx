@@ -349,6 +349,14 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     }
   }
 
+  // 給与計算担当の選択肢（在籍中のユーザー）
+  const [payrollStaffOptions, setPayrollStaffOptions] = useState<string[]>([])
+  useEffect(() => {
+    createClient().from('users').select('name, leave_date').order('code').then(({ data }) => {
+      setPayrollStaffOptions((data || []).filter((u: { leave_date: string | null }) => !u.leave_date).map((u: { name: string }) => u.name))
+    })
+  }, [])
+
   function set(field: keyof Client, value: string | boolean | number | null | Director[] | ClientDocument[]) {
     setForm(f => ({ ...f, [field]: value }))
     setIsDirty(true)
@@ -477,6 +485,16 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                 />
                 <span className="text-sm font-medium text-pink-700">給与計算あり（進捗グラフの対象）</span>
               </label>
+              {form.include_payroll && (
+                <label className="flex items-center gap-2 select-none w-fit ml-6">
+                  <span className="text-sm text-pink-700">給与計算担当</span>
+                  <select value={form.payroll_staff || ''} onChange={e => set('payroll_staff', e.target.value || null)}
+                    className="border border-gray-300 rounded px-2 py-1 text-sm">
+                    <option value="">主担当と同じ</option>
+                    {payrollStaffOptions.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </label>
+              )}
             </div>
             <div className="grid grid-cols-4 gap-4">
               <F label="顧客コード" required hasError={errorFields.has('code')}>

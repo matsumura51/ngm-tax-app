@@ -66,6 +66,7 @@ export interface Client {
   include_withholding_semi: boolean
   include_tax_return: boolean
   include_payroll?: boolean
+  payroll_staff?: string | null  // 給与計算担当（未設定なら主担当）
   // 担当スタッフ
   primary_staff: string | null
   sub_staff: string | null

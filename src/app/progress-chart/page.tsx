@@ -27,7 +27,7 @@ interface Unit {
 
 interface ClientLite {
   code: string; name: string; primary_staff: string | null; fiscal_month: number | null
-  show_in_monthly: boolean | null; contract_end_date: string | null; include_payroll?: boolean | null
+  show_in_monthly: boolean | null; contract_end_date: string | null; include_payroll?: boolean | null; payroll_staff?: string | null
 }
 
 interface UserLite { name: string; division: string | null; leave_date: string | null; monthly_target_squares?: number | null }
@@ -135,7 +135,10 @@ export default function ProgressChartPage() {
         }
         const pay = p.monthly_payroll?.[String(m)]
         if (pay && c.include_payroll && inMonth(pay)) {
-          out.push({ date: pay, code: c.code, name: c.name, staff, kind: '給与', target, division: div })
+          // 給与計算は「給与計算担当」（未設定なら主担当）のマスとして、その人の事業部に入れる
+          const pStaff = c.payroll_staff || staff
+          const pDiv = c.payroll_staff ? (divisionOf[norm(c.payroll_staff)] || '未所属') : div
+          out.push({ date: pay, code: c.code, name: c.name, staff: pStaff, kind: '給与', target, division: pDiv })
         }
       }
     }
@@ -169,8 +172,10 @@ export default function ProgressChartPage() {
     const members = users.filter(u => u.division === div)
     const userTarget = members.reduce((s, u) => s + (u.monthly_target_squares || 0), 0)
     // 目標マス数が未設定の間は、月次対象顧問先数＋給与計算あり顧問先数で代用
-    const divClients = clients.filter(c => c.show_in_monthly && !c.contract_end_date && members.some(u => norm(u.name) === norm(c.primary_staff)))
-    const fallback = divClients.length + divClients.filter(c => c.include_payroll).length
+    const isMember = (name: string | null | undefined) => members.some(u => norm(u.name) === norm(name))
+    const divClients = clients.filter(c => c.show_in_monthly && !c.contract_end_date && isMember(c.primary_staff))
+    const payrollClients = clients.filter(c => c.include_payroll && !c.contract_end_date && isMember(c.payroll_staff || c.primary_staff))
+    const fallback = divClients.length + payrollClients.length
     const target = userTarget > 0 ? userTarget : fallback
     const divUnits = units.filter(u => u.division === div)
     let cum = 0, reachedDay: number | null = null
