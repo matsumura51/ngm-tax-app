@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { allocatePotA, type PotAEntry } from '@/lib/potAlloc'
-import { fetchAllRows } from '@/lib/fetchAllRows'
+import { fetchAllRows, fetchAllRowsParallel } from '@/lib/fetchAllRows'
 import { staffKey } from '@/lib/staffName'
 
 // 業務区分ごとの配分率と分割方法
@@ -96,6 +96,42 @@ interface StaffRow {
   entries: StaffEntry[]
 }
 
+interface ReportData {
+  users: { name: string; division: string | null }[]
+  details: {
+    report_id: string; task_type: string | null; work_time: string | null
+    client_code: string | null; client_name: string | null; report_content: string | null
+    subject: string | null; details: string | null
+  }[]
+  reports: { id: string; user_name: string; date: string }[]
+  progress: {
+    client_code: string; year: number; fiscal_month: number | null
+    monthly_fee: Record<string, string | null> | null
+    monthly_fee_settlement: Record<string, string | null> | null
+    monthly_fee_yearend: Record<string, string | null> | null
+  }[]
+}
+
+// 実績レポートに必要なデータを同時に読み込む（work_time入力済みの日報明細・日報・報酬・ユーザー）
+async function fetchReportData(): Promise<ReportData> {
+  const supabase = createClient()
+  const [{ data: users }, details, reports, progress] = await Promise.all([
+    supabase.from('users').select('name, division').order('name'),
+    fetchAllRowsParallel<ReportData['details'][number]>(() => supabase
+      .from('daily_report_details')
+      .select('report_id, task_type, work_time, client_code, client_name, report_content, subject, details')
+      .not('work_time', 'is', null)
+      .order('id')),
+    fetchAllRowsParallel<ReportData['reports'][number]>(() => supabase
+      .from('daily_reports').select('id, user_name, date').order('id')),
+    fetchAllRows<ReportData['progress'][number]>(() => supabase
+      .from('monthly_progress')
+      .select('client_code, monthly_fee, monthly_fee_settlement, monthly_fee_yearend, fiscal_month, year')
+      .order('id')),
+  ])
+  return { users: users || [], details, reports, progress }
+}
+
 export default function ReportsPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -112,45 +148,41 @@ export default function ReportsPage() {
 
   useEffect(() => { load() }, [year, month])
 
+  // 日報・報酬などのデータは月を切り替えても同じなので、ページを開いている間は1回だけ読み込んで使い回す
+  const dataRef = useRef<Promise<ReportData> | null>(null)
+
   async function load() {
     setLoading(true)
-    const supabase = createClient()
+    if (!dataRef.current) dataRef.current = fetchReportData()
+    let data: ReportData
+    try {
+      data = await dataRef.current
+    } catch (e) {
+      dataRef.current = null
+      alert('読み込みエラー: ' + (e instanceof Error ? e.message : String(e)))
+      setLoading(false)
+      return
+    }
     const monthStr = String(month)
 
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`
     const endDate = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`
 
-    const { data: usersData } = await supabase.from('users').select('name, division').order('name')
-    setAllUsers(usersData || [])
+    setAllUsers(data.users)
 
-    // 顧客カルテの業務ログと同じアプローチ:
-    // client_codeがあり且つwork_timeが入力済みの明細を先に取得 → 日報で日付・担当者を確認
-    const details = await fetchAllRows<{
-      report_id: string; task_type: string | null; work_time: string | null
-      client_code: string | null; client_name: string | null; report_content: string | null
-      subject: string | null; details: string | null
-    }>(() => supabase
-      .from('daily_report_details')
-      .select('report_id, task_type, work_time, client_code, client_name, report_content, subject, details')
-      .not('client_code', 'is', null)
-      .not('work_time', 'is', null))
+    // client_codeがあり且つwork_timeが入力済みの明細（全期間）
+    const details = data.details.filter(d => d.client_code)
 
-    if (!details || details.length === 0) {
+    if (details.length === 0) {
       setClientRows([]); setStaffRows([]); setLoading(false); return
     }
 
-    // 明細のreport_idで日報を取得（月をまたいだ二重計上チェックのため全期間分を取得し、当月のものと当月より前のものに分ける）
-    const allReportIds = [...new Set(details.map(d => d.report_id))]
-    const { data: allReportsMeta } = await supabase
-      .from('daily_reports')
-      .select('id, user_name, date')
-      .in('id', allReportIds)
-
+    // 日報（全期間）を当月のものと当月より前のものに分ける（月をまたいだ配分・二重計上チェックのため）
     const reportMap: Record<string, { user_name: string; date: string }> = {}
     const priorReportIds = new Set<string>()
     const allReportDate: Record<string, string> = {}
     const allReportUser: Record<string, string> = {}
-    for (const r of (allReportsMeta || [])) {
+    for (const r of data.reports) {
       allReportDate[r.id] = r.date
       allReportUser[r.id] = r.user_name
       if (r.date >= startDate && r.date <= endDate) {
@@ -165,19 +197,9 @@ export default function ReportsPage() {
     }
 
     // 担当者別業務時間: 当月日報の全明細（client_codeなし含む）を集計
-    const monthReportIds = Object.keys(reportMap)
-    const allStaffDetails = await fetchAllRows<{
-      report_id: string; work_time: string | null; task_type: string | null
-      client_name: string | null; report_content: string | null
-    }>(() => supabase
-      .from('daily_report_details')
-      .select('report_id, work_time, task_type, client_name, report_content')
-      .in('report_id', monthReportIds)
-      .not('work_time', 'is', null))
-
     const staffTotalMinutes: Record<string, number> = {}
     const staffEntriesMap: Record<string, StaffEntry[]> = {}
-    for (const d of (allStaffDetails || [])) {
+    for (const d of data.details) {
       const rep = reportMap[d.report_id]
       if (!rep) continue
       const userName = rep.user_name
@@ -196,10 +218,8 @@ export default function ReportsPage() {
       entries.sort((a, b) => a.date.localeCompare(b.date))
     }
 
-    // monthly_progressから全年度の報酬を取得（処理月の報酬を参照するため全年度が必要）
-    const { data: progress } = await supabase
-      .from('monthly_progress')
-      .select('client_code, monthly_fee, monthly_fee_settlement, monthly_fee_yearend, fiscal_month, year')
+    // monthly_progressの全年度の報酬（処理月の報酬を参照するため全年度が必要）
+    const progress = data.progress
 
     // feeByMonth[client_code]['YYYY-M'] = fee
     const feeByMonth: Record<string, Record<string, number>> = {}
