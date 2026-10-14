@@ -154,6 +154,7 @@ export interface DailyReport {
   manager_comment: string | null
   unread_check: string
   created_at: string
+  updated_at?: string | null  // 最終更新日時（DBトリガーで自動更新。明細の追加・変更・削除でも更新）
   details?: DailyReportDetail[]
 }
 

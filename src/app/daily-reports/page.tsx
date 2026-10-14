@@ -8,6 +8,12 @@ import { fetchAllRows, fetchAllRowsParallel } from '@/lib/fetchAllRows'
 import { useSessionState } from '@/lib/useSessionState'
 import { Plus, ChevronDown, ChevronRight, Search, X } from 'lucide-react'
 
+// 更新日時を日本時間の「M/D HH:mm」で表示
+function fmtUpdated(iso: string): string {
+  const d = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000)
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
+}
+
 export default function DailyReportsPage() {
   const [reports, setReports] = useState<DailyReport[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,6 +59,8 @@ export default function DailyReportsPage() {
     function buildQuery() {
       let q = supabase.from('daily_reports')
         .select('*, daily_report_details(report_id, sort_order, work_time, task_type, subject, details, client_name, report_content)')
+        // 更新順（最後に作成・編集した日報が上）。更新日時が同じ場合は日付の新しい順
+        .order('updated_at', { ascending: false, nullsFirst: false })
         .order('date', { ascending: false })
         .order('id')
         .order('sort_order', { referencedTable: 'daily_report_details' })
@@ -176,10 +184,13 @@ export default function DailyReportsPage() {
                 return (
                   <li key={r.id}>
                     <div className="flex items-center px-6 py-3 gap-3 hover:bg-gray-50 transition">
-                      <Link href={`/daily-reports/${r.id}`} className="shrink-0 w-48">
+                      <Link href={`/daily-reports/${r.id}`} className="shrink-0 w-56">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-gray-800 text-sm">{r.date}</span>
                           <span className="text-sm text-gray-500">{r.user_name}</span>
+                          {r.updated_at && (
+                            <span className="text-[11px] text-gray-400">更新 {fmtUpdated(r.updated_at)}</span>
+                          )}
                           {r.unread_check === '未チェック' && (
                             <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">未読</span>
                           )}
