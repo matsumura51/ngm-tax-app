@@ -61,11 +61,12 @@ function MonthPartInput({ value, onChange, className }: { value: string; onChang
   )
 }
 
-function calcWorkTime(start: string, end: string): string {
+// 業務時間＝終了−開始−休憩（休憩はスケジュールから取り込んだ場合のみ）
+function calcWorkTime(start: string, end: string, breakMinutes = 0): string {
   if (!start || !end) return ''
   const [sh, sm] = start.split(':').map(Number)
   const [eh, em] = end.split(':').map(Number)
-  const diff = (eh * 60 + em) - (sh * 60 + sm)
+  const diff = (eh * 60 + em) - (sh * 60 + sm) - (breakMinutes || 0)
   if (diff <= 0) return ''
   return `${Math.floor(diff / 60)}:${(diff % 60).toString().padStart(2, '0')}`
 }
@@ -175,7 +176,8 @@ export default function DailyReportNewPage() {
       ...emptyDetail(),
       start_time: startTime,
       end_time: endTime,
-      work_time: calcWorkTime(startTime, endTime),
+      work_time: calcWorkTime(startTime, endTime, s.break_minutes || 0),
+      break_minutes: s.break_minutes || null,
       client_code: s.client_code || '',
       client_name: s.client_name || '',
       report_content: s.title || '',
@@ -245,11 +247,11 @@ export default function DailyReportNewPage() {
   function setDetail(i: number, field: string, value: string) {
     setDetails(d => d.map((row, idx) => {
       if (idx !== i) return row
-      const updated = { ...row, [field]: value }
-      if (field === 'start_time' || field === 'end_time') {
+      const updated = field === 'break_minutes' ? { ...row, break_minutes: Number(value) || null } : { ...row, [field]: value }
+      if (field === 'start_time' || field === 'end_time' || field === 'break_minutes') {
         const start = field === 'start_time' ? value : (row.start_time || '')
         const end = field === 'end_time' ? value : (row.end_time || '')
-        updated.work_time = calcWorkTime(start, end)
+        updated.work_time = calcWorkTime(start, end, updated.break_minutes || 0)
       }
       return updated
     }))
@@ -418,6 +420,12 @@ export default function DailyReportNewPage() {
                   </td>
                   <td className="px-1 py-1">
                     <input className="w-full border border-gray-100 rounded px-1 py-1 text-xs bg-gray-50 text-gray-600 text-center" value={d.work_time || ''} readOnly tabIndex={-1} placeholder="自動" />
+                    {!!d.break_minutes && (
+                      <div className="text-[10px] text-orange-600 text-center leading-tight mt-0.5 whitespace-nowrap">
+                        休憩{d.break_minutes}分控除
+                        <button type="button" title="休憩の控除をやめる" onClick={() => setDetail(i, 'break_minutes', '0')} className="ml-0.5 text-gray-400 hover:text-red-500">×</button>
+                      </div>
+                    )}
                   </td>
                   <td className="px-1 py-1">
                     <select className={`w-full border rounded px-1 py-1 text-xs ${!d.task_type && hasRowContent(d) ? 'border-red-400 bg-red-50' : 'border-gray-200'}`} value={d.task_type || ''} onChange={e => setDetail(i, 'task_type', e.target.value)}>

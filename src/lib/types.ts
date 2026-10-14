@@ -174,6 +174,7 @@ export interface DailyReportDetail {
   report_content: string | null
   details: string | null
   subject: string | null
+  break_minutes?: number | null  // 控除する休憩時間（分）。スケジュール取込時に休憩が入っていればセット
 }
 
 export interface Schedule {
