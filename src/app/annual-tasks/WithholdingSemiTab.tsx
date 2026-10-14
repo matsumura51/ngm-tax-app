@@ -52,6 +52,22 @@ export default function WithholdingSemiTab({ year, openCode }: Props) {
 
   useEffect(() => { load() }, [load])
 
+  // 担当者の絞り込みは、最初はログインしている人にする（一覧にその人の担当が無ければ「全員」のまま）
+  const [staffDefaultApplied, setStaffDefaultApplied] = useState(false)
+  useEffect(() => {
+    if (staffDefaultApplied || records.length === 0) return
+    setStaffDefaultApplied(true)
+    ;(async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: me } = await supabase.from('users').select('name').eq('id', user.id).maybeSingle()
+      if (!me?.name) return
+      const mine = records.find(r => r.staff_name && staffKey(r.staff_name) === staffKey(me.name))?.staff_name
+      if (mine) setFilterStaff(mine)
+    })()
+  }, [records, staffDefaultApplied])
+
   // ダッシュボードから顧問先コード指定で遷移してきた場合、その顧問先の入力画面を開く
   useEffect(() => {
     if (!openCode || autoOpened || records.length === 0) return
