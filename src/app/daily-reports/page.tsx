@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { DailyReport, DailyReportDetail } from '@/lib/types'
-import { fetchAllRows } from '@/lib/fetchAllRows'
+import { fetchAllRows, fetchAllRowsParallel } from '@/lib/fetchAllRows'
 import { useSessionState } from '@/lib/useSessionState'
 import { Plus, ChevronDown, ChevronRight, Search, X } from 'lucide-react'
 
@@ -48,8 +48,14 @@ export default function DailyReportsPage() {
       }
     }
 
+    // 日報と業務明細（一覧に表示する列のみ）を1回の問い合わせでまとめて取得し、ページ分割分は同時に取得する。
+    // （以前は日報取得後に、全日報IDを並べたin()で明細を別途取得していたため遅く、件数増加でURLが長くなりすぎるおそれもあった）
     function buildQuery() {
-      let q = supabase.from('daily_reports').select('*').order('date', { ascending: false })
+      let q = supabase.from('daily_reports')
+        .select('*, daily_report_details(report_id, sort_order, work_time, task_type, subject, details, client_name, report_content)')
+        .order('date', { ascending: false })
+        .order('id')
+        .order('sort_order', { referencedTable: 'daily_report_details' })
       if (df) q = q.gte('date', df)
       if (dt) q = q.lte('date', dt)
       if (sn) q = q.eq('user_name', sn)
@@ -57,22 +63,14 @@ export default function DailyReportsPage() {
       return q
     }
 
-    const reps = await fetchAllRows<DailyReport>(buildQuery)
+    const rows = await fetchAllRowsParallel<DailyReport & { daily_report_details: DailyReportDetail[] | null }>(buildQuery)
+    const map: Record<string, DailyReportDetail[]> = {}
+    const reps: DailyReport[] = rows.map(({ daily_report_details, ...r }) => {
+      map[r.id] = daily_report_details || []
+      return r as DailyReport
+    })
     setReports(reps)
-
-    if (reps.length > 0) {
-      const ids = reps.map(r => r.id)
-      const detailData = await fetchAllRows<DailyReportDetail>(() =>
-        supabase.from('daily_report_details').select('*').in('report_id', ids).order('sort_order'))
-      const map: Record<string, DailyReportDetail[]> = {}
-      for (const d of (detailData || [])) {
-        if (!map[d.report_id]) map[d.report_id] = []
-        map[d.report_id].push(d)
-      }
-      setDetailsMap(map)
-    } else {
-      setDetailsMap({})
-    }
+    setDetailsMap(map)
     setLoading(false)
   }
 
