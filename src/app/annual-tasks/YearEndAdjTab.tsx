@@ -120,13 +120,15 @@ export default function YearEndAdjTab({ year, openCode }: Props) {
 
   const divisionOptions = Array.from(new Set(allUsers.map(u => u.division).filter(Boolean))).sort() as string[]
   const staffInDivision = filterDivision ? new Set(allUsers.filter(u => u.division === filterDivision).map(u => staffKey(u.name))) : null
+  // 担当者のドロップダウン：一覧に出てくる担当者（所属を選んでいればその所属の人のみ）
+  const staffFilterOptions = Array.from(new Set(records.map(r => r.staff_name).filter((n): n is string => !!n && (!staffInDivision || staffInDivision.has(staffKey(n)))))).sort()
 
   const normFilterName = filterName.normalize('NFKC')
   const filtered = records.filter(r => {
     if (filterStatus !== '全て' && r.status !== filterStatus) return false
     if (normFilterName && !r.client_name.normalize('NFKC').includes(normFilterName) && !(r.client_code || '').normalize('NFKC').includes(normFilterName)) return false
     if (filterDivision && staffInDivision && !staffInDivision.has(staffKey(r.staff_name))) return false
-    if (filterStaff && !(r.staff_name || '').includes(filterStaff)) return false
+    if (filterStaff && staffKey(r.staff_name) !== staffKey(filterStaff)) return false
     return true
   })
 
@@ -231,12 +233,11 @@ export default function YearEndAdjTab({ year, openCode }: Props) {
             placeholder="顧客名・コード" value={filterName}
             onChange={e => setFilterName(e.target.value)} />
         </div>
-        <div className="relative">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input className="border border-gray-300 rounded-lg pl-8 pr-3 py-1.5 text-sm w-32"
-            placeholder="担当者" value={filterStaff}
-            onChange={e => setFilterStaff(e.target.value)} />
-        </div>
+        <select className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-700 min-w-[130px]"
+          value={filterStaff} onChange={e => setFilterStaff(e.target.value)}>
+          <option value="">担当者（全員）</option>
+          {staffFilterOptions.map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
         {divisionOptions.length > 0 && (
           <select value={filterDivision} onChange={e => { setFilterDivision(e.target.value); setFilterStaff('') }}
             className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-700">
