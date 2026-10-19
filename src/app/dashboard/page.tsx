@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 import { Users, ClipboardList, FileText, Calendar, Plus, AlertCircle, Clock, ListChecks, HardDrive } from 'lucide-react'
 
 const COLOR_MAP: Record<string, { bg: string; text: string }> = {
@@ -265,6 +266,13 @@ export default function DashboardPage() {
     setProgressLoading(true)
     const supabase = createClient()
 
+    // 主担当・副担当は顧客カルテの値を正とする（月次進捗データ側の控えは顧客カルテで担当を変えても古いまま残ることがあるため）
+    const clientStaffRows = await fetchAllRows<{ id: string; code: string; primary_staff: string | null; sub_staff: string | null }>(
+      () => supabase.from('clients').select('id, code, primary_staff, sub_staff').order('id'))
+    const staffById: Record<string, { primary_staff: string | null; sub_staff: string | null }> = {}
+    const staffByCode: Record<string, { primary_staff: string | null; sub_staff: string | null }> = {}
+    for (const c of clientStaffRows) { staffById[c.id] = c; staffByCode[c.code] = c }
+
     // ── 年調・源泉・確定申告（全レコード取得）+ 返却書類未返却 ──
     const [{ data: yearEndRaw }, { data: withholdingRaw }, { data: taxReturnRaw },
            { data: retMonthly }, { data: retYearEnd }, { data: retTaxReturn }] = await Promise.all([
@@ -314,7 +322,7 @@ export default function DashboardPage() {
     const allReturnItems: ReturnItem[] = [
       ...(retMonthly || [])
         .filter(p => p.settle_return_docs !== '1')
-        .map(p => ({ client_code: p.client_code, client_name: p.client_name, staff_name: p.primary_staff, category: '決算業務' as const })),
+        .map(p => ({ client_code: p.client_code, client_name: p.client_name, staff_name: staffByCode[p.client_code]?.primary_staff ?? p.primary_staff, category: '決算業務' as const })),
       ...(retYearEnd || [])
         .map(r => ({ client_code: r.client_code, client_name: r.client_name, staff_name: r.staff_name, category: '年末調整' as const })),
       ...(retTaxReturn || [])
@@ -386,7 +394,7 @@ export default function DashboardPage() {
         if (matDate && !compDate && !seen.has(key)) {
           seen.add(key)
           const elapsed = Math.floor((todayTime - new Date(matDate).getTime()) / 86400000)
-          unfinished.push({ progress_id: p.id ?? null, client_id: p.client_id, client_code: p.client_code, client_name: p.client_name, primary_staff: p.primary_staff, sub_staff: p.sub_staff, material_date: matDate, elapsed_days: elapsed, months_count: 1, monthly_status: p.monthly_status ?? null, is_mikaishuu: false, mikaishuu_months: 0 })
+          unfinished.push({ progress_id: p.id ?? null, client_id: p.client_id, client_code: p.client_code, client_name: p.client_name, primary_staff: staffById[p.client_id]?.primary_staff ?? p.primary_staff, sub_staff: staffById[p.client_id]?.sub_staff ?? p.sub_staff, material_date: matDate, elapsed_days: elapsed, months_count: 1, monthly_status: p.monthly_status ?? null, is_mikaishuu: false, mikaishuu_months: 0 })
         }
       }
     }
@@ -453,8 +461,8 @@ export default function DashboardPage() {
           client_id: firstRec.client_id,
           client_code: firstRec.client_code || '',
           client_name: firstRec.client_name,
-          primary_staff: firstRec.primary_staff ?? null,
-          sub_staff: firstRec.sub_staff ?? null,
+          primary_staff: staffById[firstRec.client_id]?.primary_staff ?? firstRec.primary_staff ?? null,
+          sub_staff: staffById[firstRec.client_id]?.sub_staff ?? firstRec.sub_staff ?? null,
           material_date: '',
           elapsed_days: monthDiff,
           months_count: 1,

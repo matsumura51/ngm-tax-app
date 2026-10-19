@@ -323,6 +323,14 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       return
     }
     const { error } = await supabase.from('clients').update(form).eq('id', id)
+    if (!error) {
+      // 月次進捗データ側に控えている主担当・副担当も顧客カルテに合わせる（全年度分）
+      await fetch('/api/monthly-progress/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: id, updates: { primary_staff: form.primary_staff || null, sub_staff: form.sub_staff || null } }),
+      }).catch(() => {})
+    }
     if (error) alert(error.message.includes('clients_code_key') ? 'すでに顧客コードが使用されています' : '保存エラー: ' + error.message)
     else { setSaved(true); setIsDirty(false); setTimeout(() => setSaved(false), 2000); await loadClient() }
     setSaving(false)
