@@ -8,6 +8,7 @@ import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import PaymentReportTab from './PaymentReportTab'
 import WithholdingTaxTab from './WithholdingTaxTab'
+import StaffSelect from '@/components/StaffSelect'
 
 const WITHHOLDING_TAX_OPTIONS = ['納特', '毎月', '不要']
 const CONTRACT_STATUS_OPTIONS = ['契約中', '契約終了', '見込み', '休止']
@@ -751,13 +752,13 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           <Section title="担当スタッフ">
             <div className="grid grid-cols-3 gap-4">
               <F label="主担当" required hasError={errorFields.has('primary_staff')}>
-                <input className={ic} value={form.primary_staff || ''} onChange={e => set('primary_staff', e.target.value)} />
+                <StaffSelect className={ic} value={form.primary_staff} onChange={v => set('primary_staff', v || null)} />
               </F>
               <F label="副担当">
-                <input className={ic} value={form.sub_staff || ''} onChange={e => set('sub_staff', e.target.value)} />
+                <StaffSelect className={ic} value={form.sub_staff} onChange={v => set('sub_staff', v || null)} emptyLabel="（なし）" />
               </F>
               <F label="所長/責任者">
-                <input className={ic} value={form.manager || ''} onChange={e => set('manager', e.target.value)} />
+                <StaffSelect className={ic} value={form.manager} onChange={v => set('manager', v || null)} emptyLabel="（なし）" />
               </F>
             </div>
           </Section>

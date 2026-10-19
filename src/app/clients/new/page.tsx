@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { ChevronLeft, Plus, Trash2 } from 'lucide-react'
 import { Director, ClientDocument } from '@/lib/types'
 import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
+import StaffSelect from '@/components/StaffSelect'
 
 const WITHHOLDING_TAX_OPTIONS = ['納特', '毎月', '不要']
 const CONTRACT_STATUS_OPTIONS = ['契約中', '契約終了', '見込み', '休止']
@@ -397,14 +398,14 @@ export default function ClientNewPage() {
         <Section title="担当スタッフ">
           <div className="grid grid-cols-3 gap-4">
             <F label="主担当" required>
-              <input className={errors.primary_staff ? icReq : ic} value={form.primary_staff} onChange={e => set('primary_staff', e.target.value)} />
+              <StaffSelect className={errors.primary_staff ? icReq : ic} value={form.primary_staff} onChange={v => set('primary_staff', v)} />
               {errors.primary_staff && <p className="text-xs text-red-500 mt-0.5">{errors.primary_staff}</p>}
             </F>
             <F label="副担当">
-              <input className={ic} value={form.sub_staff} onChange={e => set('sub_staff', e.target.value)} />
+              <StaffSelect className={ic} value={form.sub_staff} onChange={v => set('sub_staff', v)} emptyLabel="（なし）" />
             </F>
             <F label="所長/責任者">
-              <input className={ic} value={form.manager} onChange={e => set('manager', e.target.value)} />
+              <StaffSelect className={ic} value={form.manager} onChange={v => set('manager', v)} emptyLabel="（なし）" />
             </F>
           </div>
         </Section>
