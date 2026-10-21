@@ -144,6 +144,7 @@ export default function ReportsPage() {
   const [detailStaffRow, setDetailStaffRow] = useState<StaffRow | null>(null)
   const [feeBreakStaff, setFeeBreakStaff] = useState<StaffRow | null>(null)
   const [filterDivision, setFilterDivision] = useState('')
+  const [clientSearch, setClientSearch] = useState('')
   const [allUsers, setAllUsers] = useState<{ name: string; division: string | null }[]>([])
 
   useEffect(() => { load() }, [year, month])
@@ -568,6 +569,13 @@ export default function ReportsPage() {
   }
 
   const totalFee = clientRows.reduce((s, r) => s + r.monthly_fee, 0)
+  // 顧問先別実績の検索（顧問先名・コードの部分一致。全角半角・大文字小文字は区別しない）
+  const searchKey = (v: string) => v.normalize('NFKC').toLowerCase().replace(/s/g, '')
+  const filteredClientRows = clientSearch.trim()
+    ? clientRows.filter(r => searchKey(r.client_name).includes(searchKey(clientSearch)) || searchKey(r.client_code).includes(searchKey(clientSearch)))
+    : clientRows
+  const filteredFee = filteredClientRows.reduce((s, r) => s + r.monthly_fee, 0)
+  const filteredMinutes = filteredClientRows.reduce((s, r) => s + r.total_minutes, 0)
   const totalMinutes = clientRows.reduce((s, r) => s + r.total_minutes, 0)
 
   function handlePrint() {
@@ -836,7 +844,7 @@ ${tableHTML}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-blue-50 rounded-xl p-4">
             <div className="text-xs text-blue-400 mb-1">月次報酬合計</div>
-            <div className="text-2xl font-bold text-blue-700">{totalFee.toLocaleString('ja-JP')}円</div>
+            <div className="text-2xl font-bold text-blue-700">{Math.round(totalFee).toLocaleString('ja-JP')}円</div>
           </div>
           <div className="bg-indigo-50 rounded-xl p-4">
             <div className="text-xs text-indigo-400 mb-1">総業務時間</div>
@@ -867,6 +875,16 @@ ${tableHTML}
               <option key={d} value={d}>{d}</option>
             ))}
           </select>
+        )}
+        {viewMode === 'client' && (
+          <div className="relative ml-2">
+            <input value={clientSearch} onChange={e => setClientSearch(e.target.value)}
+              placeholder="顧問先名・コードで検索"
+              className="border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            {clientSearch && (
+              <button onClick={() => setClientSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm">×</button>
+            )}
+          </div>
         )}
         <div className="ml-auto flex gap-2">
           <button onClick={handlePrint}
@@ -984,6 +1002,8 @@ ${tableHTML}
           </div>
           {clientRows.length === 0 ? (
             <div className="text-center py-12 text-gray-400">データがありません</div>
+          ) : filteredClientRows.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">「{clientSearch}」に一致する顧問先はありません</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -997,7 +1017,7 @@ ${tableHTML}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {clientRows.map(r => {
+                  {filteredClientRows.map(r => {
                     const hourly = r.total_minutes > 0 && r.monthly_fee > 0
                       ? r.monthly_fee / (r.total_minutes / 60) : 0
                     const isLow = hourly > 0 && hourly < 3000
@@ -1035,6 +1055,17 @@ ${tableHTML}
                     )
                   })}
                 </tbody>
+                <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                  <tr>
+                    <td className="px-4 py-2 font-bold text-gray-700 text-xs">
+                      {clientSearch.trim() ? `絞り込み結果の合計（${filteredClientRows.length}社）` : `合計（${filteredClientRows.length}社）`}
+                    </td>
+                    <td className="px-3 py-2 text-right font-bold text-gray-700">{Math.round(filteredFee).toLocaleString('ja-JP')}円</td>
+                    <td className="px-3 py-2 text-right font-mono font-bold text-gray-700">{fmtMinutes(filteredMinutes)}</td>
+                    <td className="px-3 py-2 text-right font-bold text-gray-700">{fmtRate(filteredFee, filteredMinutes)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}
