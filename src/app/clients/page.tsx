@@ -32,6 +32,7 @@ export default function ClientsPage() {
   const [staffFilter, setStaffFilter] = useSessionState('clients_staffFilter', '')
   const [filterDivision, setFilterDivision] = useSessionState('clients_filterDivision', '')
   const [fiscalFilter, setFiscalFilter] = useSessionState('clients_fiscalFilter', '')
+  const [entityFilter, setEntityFilter] = useSessionState('clients_entityFilter', '')  // 法・個区分（''=すべて／'法人'／'個人'）
   const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(true)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -144,6 +145,7 @@ export default function ClientsPage() {
     if (search && !norm(c.name).includes(norm(search)) && !norm(c.code).includes(norm(search))) return false
     if (filterDivision && staffInDivision && !staffInDivision.has(staffKey(c.primary_staff))) return false
     if (staffFilter && c.primary_staff !== staffFilter) return false
+    if (entityFilter && c.entity_type !== entityFilter) return false
     if (fiscalFilter !== '') {
       const fv = Number(fiscalFilter)
       if (c.fiscal_month !== fv) return false
@@ -205,8 +207,14 @@ export default function ClientsPage() {
           className="w-32 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
           {FISCAL_MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
-        {(staffFilter || filterDivision) && (
-          <button onClick={() => { setStaffFilter(''); setFilterDivision('') }}
+        <select value={entityFilter} onChange={e => setEntityFilter(e.target.value)}
+          className="w-36 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">法・個（すべて）</option>
+          <option value="法人">法人のみ</option>
+          <option value="個人">個人のみ</option>
+        </select>
+        {(staffFilter || filterDivision || entityFilter) && (
+          <button onClick={() => { setStaffFilter(''); setFilterDivision(''); setEntityFilter('') }}
             className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
             <X size={14} />絞り込み解除
           </button>
