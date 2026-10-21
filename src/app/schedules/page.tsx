@@ -35,6 +35,19 @@ function colorStyle(color: string | null): React.CSSProperties {
   const c = COLOR_MAP[color || '白'] ?? { bg: '#e57373', text: '#fff' }
   return { backgroundColor: c.bg, color: c.text }
 }
+// 予定にマウスを乗せたときに出す内容（省略されて見えない部分も含めて全部）
+function schedTooltip(s: Schedule): string {
+  const comps = s.companions ? s.companions.split(',').map(c => c.trim()).filter(c => c) : []
+  const lines = [
+    `${formatTime(s.start_datetime)}${s.end_datetime ? ` - ${formatTime(s.end_datetime)}` : ''}${s.break_minutes ? `（休憩${s.break_minutes}分）` : ''}${s.direct_start ? ' 直行' : ''}${s.direct_end ? ' 直帰' : ''}`,
+    [s.user_name, ...comps].filter(Boolean).join('・'),
+    s.client_name && !(s.title || '').includes(s.client_name) ? s.client_name : '',
+    s.title || '',
+    s.facility ? `施設：${s.facility}` : '',
+  ]
+  return lines.filter(Boolean).join('\n')
+}
+
 function DirectBadges({ s }: { s: Schedule }) {
   if (!s.direct_start && !s.direct_end) return null
   return (
@@ -100,6 +113,8 @@ function SchedulesContent() {
     return '月間'
   })
   const [facilityFilter, setFacilityFilter] = useState<string | null>(null)
+  // 月間表示で「+○件」を押した日（その日の予定一覧をその場に開く）
+  const [moreDay, setMoreDay] = useState<string | null>(null)
   const [users, setUsers] = useState<UserInfo[]>([])
   const [selectedUserId, setSelectedUserId] = useState<string>('all')
   const [selectedDivision, setSelectedDivision] = useState<string>('all')
@@ -251,7 +266,7 @@ function SchedulesContent() {
             const reportUsers = date ? reports.filter(r => r.date === ds) : []
             const allHaveReport = scheds.length > 0 && displayUsers.every(u => reportUsers.some(r => r.user_id === u.id))
             return (
-              <div key={i} className={`min-h-36 border border-gray-300 rounded p-1.5 text-xs ${d ? (holiday ? 'bg-red-50' : 'bg-white') : 'bg-gray-50'}`}>
+              <div key={i} className={`relative min-h-36 border border-gray-300 rounded p-1.5 text-xs ${d ? (holiday ? 'bg-red-50' : 'bg-white') : 'bg-gray-50'}`}>
                 {d && (
                   <>
                     <div className="flex items-center justify-between mb-0.5">
@@ -285,7 +300,7 @@ function SchedulesContent() {
                         const filterUserName = selectedUserId !== 'all' ? users.find(u => u.id === selectedUserId)?.name : undefined
                         const isCompanionEvent = !!filterUserName && s.user_id !== selectedUserId && comps.includes(filterUserName)
                         return (
-                          <Link key={s.id} href={`/schedules/${s.id}`}>
+                          <Link key={s.id} href={`/schedules/${s.id}`} title={schedTooltip(s)}>
                             <div className={`text-xs px-1.5 py-1 rounded leading-snug hover:opacity-80 transition ${isCompanionEvent ? 'ring-1 ring-white/60' : ''}`}
                               style={colorStyle(s.color)}>
                               <div className="opacity-90 text-xs font-bold whitespace-nowrap">
@@ -304,7 +319,39 @@ function SchedulesContent() {
                           </Link>
                         )
                       })}
-                      {scheds.length > 4 && <div className="text-gray-400 pl-1 text-[10px]">+{scheds.length - 4}件</div>}
+                      {scheds.length > 4 && (
+                        <button type="button" onClick={() => setMoreDay(moreDay === ds ? null : ds)}
+                          className="text-blue-500 hover:text-blue-700 hover:underline pl-1 text-[10px]">
+                          +{scheds.length - 4}件
+                        </button>
+                      )}
+                      {moreDay === ds && (
+                        <>
+                          {/* 一覧の外をクリックしたら閉じる */}
+                          <div className="fixed inset-0 z-30" onClick={() => setMoreDay(null)} />
+                          <div className={`absolute ${dayOfWeek >= 5 ? 'right-0' : 'left-0'} top-0 z-40 w-64 max-h-96 overflow-y-auto bg-white border border-gray-300 rounded-lg shadow-xl p-2`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-xs font-bold text-gray-700">{month + 1}月{d}日の予定（{scheds.length}件）</span>
+                              <button type="button" onClick={() => setMoreDay(null)} className="text-gray-400 hover:text-gray-600 text-sm leading-none">×</button>
+                            </div>
+                            <div className="space-y-1">
+                              {scheds.map(s => (
+                                <Link key={s.id} href={`/schedules/${s.id}`} title={schedTooltip(s)}>
+                                  <div className="text-xs px-1.5 py-1 rounded leading-snug hover:opacity-80 transition mb-1" style={colorStyle(s.color)}>
+                                    <div className="font-bold whitespace-nowrap">
+                                      {formatTime(s.start_datetime)}{s.end_datetime ? ` - ${formatTime(s.end_datetime)}` : ''}
+                                      {s.break_minutes ? <span className="ml-1 opacity-70">休{s.break_minutes}分</span> : null}
+                                      <DirectBadges s={s} />
+                                    </div>
+                                    {s.user_name && <div className="text-[10px] opacity-80">{s.user_name}{s.companions ? `・${s.companions.split(',').map(c => c.trim()).filter(c => c).join('・')}` : ''}</div>}
+                                    <div className="font-bold break-words">{s.title}</div>
+                                  </div>
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                     {calcTotal(scheds) && <div className="text-right text-[9px] text-gray-400 mt-0.5">{calcTotal(scheds)}</div>}
                   </>
@@ -370,7 +417,7 @@ function SchedulesContent() {
                         // この行のユーザーが同行者として登録されているか（主担当でない場合）
                         const isCompanionEvent = s.user_id !== user.id && comps.includes(user.name)
                         return (
-                          <Link key={s.id} href={`/schedules/${s.id}`}>
+                          <Link key={s.id} href={`/schedules/${s.id}`} title={schedTooltip(s)}>
                             <div className={`text-xs px-1.5 py-1 rounded leading-snug hover:opacity-80 transition ${isCompanionEvent ? 'ring-1 ring-white/60' : ''}`}
                               style={colorStyle(s.color)}>
                               <div className="opacity-90 text-xs font-bold whitespace-nowrap">
@@ -426,7 +473,7 @@ function SchedulesContent() {
                       {fScheds.length === 0
                         ? <div className="text-[8px] text-gray-300 text-center py-2">-</div>
                         : fScheds.map(s => (
-                          <Link key={s.id} href={`/schedules/${s.id}`}>
+                          <Link key={s.id} href={`/schedules/${s.id}`} title={schedTooltip(s)}>
                             <div className="text-xs px-1.5 py-1 rounded leading-snug mb-0.5 hover:opacity-80 transition"
                               style={colorStyle(s.color)}>
                               <div className="opacity-80 text-[10px] font-medium">{formatTime(s.start_datetime)}{s.end_datetime ? `-${formatTime(s.end_datetime)}` : ''}</div>
