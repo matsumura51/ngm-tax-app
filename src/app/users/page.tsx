@@ -168,8 +168,8 @@ export default function UsersPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-xl shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-96 max-h-[calc(100vh-2rem)] overflow-y-auto">
             <div className="flex justify-between items-center mb-5">
               <h2 className="text-lg font-bold text-gray-800">スタッフを追加</h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
@@ -177,7 +177,8 @@ export default function UsersPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">ログインID *</label>
-                <input className={inputClass} value={form.code} onChange={e => set('code', e.target.value)} placeholder="例：001" />
+                <input className={inputClass} value={form.code} onChange={e => set('code', e.target.value)}
+                  onBlur={e => set('code', e.target.value.normalize('NFKC').replace(/\s/g, ''))} placeholder="例：001" />
                 <p className="text-xs text-gray-400 mt-0.5">このIDでログインします</p>
               </div>
               <div>

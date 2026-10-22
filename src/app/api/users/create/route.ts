@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req: NextRequest) {
-  const { code, name, password, role, department, hire_date, leave_date, division } = await req.json()
+  const body = await req.json()
+  const { name, password, role, department, hire_date, leave_date, division } = body
+  // 全角のログインIDは半角に揃える（ログイン画面は半角で入力されるため）
+  const code = String(body.code || '').normalize('NFKC').replace(/\s/g, '')
 
   if (!code || !name || !password) {
     return NextResponse.json({ error: 'ログインID・氏名・パスワードは必須です' }, { status: 400 })
