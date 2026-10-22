@@ -38,6 +38,21 @@ type WorkLog = {
   work_time: string | null
   task_type: string | null
   report_content: string | null
+  subject: string | null
+  details: string | null
+}
+
+const YEAR_TASKS = ['確定申告', '年末調整']
+
+// 日報の処理期間（subject〜details）を表示用に整形
+function formatPeriod(log: { task_type: string | null; subject: string | null; details: string | null }): string {
+  const s = log.subject || ''
+  const e = log.details || ''
+  if (log.task_type && YEAR_TASKS.includes(log.task_type)) return s ? `${s}年度` : '－'
+  const fmt = (v: string) => /^\d{4}-\d{2}$/.test(v) ? v.replace('-', '/') : v
+  if (!s) return e ? fmt(e) : '－'
+  if (!e || e === s) return fmt(s)
+  return `${fmt(s)}〜${fmt(e)}`
 }
 
 const checkStatusStyle: Record<string, string> = {
@@ -79,7 +94,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   const [showChecklist, setShowChecklist] = useState(false)
   const [logDetailReportId, setLogDetailReportId] = useState<string | null>(null)
   const [addLogOpen, setAddLogOpen] = useState(false)
-  const [addLogForm, setAddLogForm] = useState({ date: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0], user_name: '', task_type: '記帳', start_time: '', end_time: '', work_time: '', report_content: '' })
+  const [addLogForm, setAddLogForm] = useState({ date: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0], user_name: '', task_type: '記帳', start_time: '', end_time: '', work_time: '', report_content: '', subject: '', details: '' })
   const [addLogSaving, setAddLogSaving] = useState(false)
   const [logUsers, setLogUsers] = useState<{ id: string; name: string }[]>([])
 
@@ -126,7 +141,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     const supabase = createClient()
     const { data: details } = await supabase
       .from('daily_report_details')
-      .select('id, report_id, start_time, end_time, work_time, task_type, report_content')
+      .select('id, report_id, start_time, end_time, work_time, task_type, report_content, subject, details')
       .eq('client_code', client!.code)
       .limit(500)
     if (!details || details.length === 0) { setWorkLogs([]); return }
@@ -195,11 +210,13 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       client_code: client.code,
       client_name: client.name,
       report_content: addLogForm.report_content || null,
+      subject: addLogForm.subject || null,
+      details: (!YEAR_TASKS.includes(addLogForm.task_type) && addLogForm.task_type !== '決算' && addLogForm.details) || null,
     })
     if (error) { alert('保存エラー: ' + error.message); setAddLogSaving(false); return }
     setAddLogSaving(false)
     setAddLogOpen(false)
-    setAddLogForm({ date: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0], user_name: '', task_type: '記帳', start_time: '', end_time: '', work_time: '', report_content: '' })
+    setAddLogForm({ date: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0], user_name: '', task_type: '記帳', start_time: '', end_time: '', work_time: '', report_content: '', subject: '', details: '' })
     await loadWorkLogs()
   }
 
@@ -845,6 +862,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                     <th className="text-left px-4 py-2 font-medium">日付</th>
                     <th className="text-left px-4 py-2 font-medium">担当者</th>
                     <th className="text-left px-4 py-2 font-medium">業務区分</th>
+                    <th className="text-left px-4 py-2 font-medium">処理期間</th>
                     <th className="text-left px-4 py-2 font-medium">時間</th>
                     <th className="text-left px-4 py-2 font-medium">作業内容</th>
                     <th className="px-4 py-2"></th>
@@ -860,6 +878,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                           <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{log.task_type}</span>
                         )}
                       </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-gray-700 text-xs">{formatPeriod(log)}</td>
                       <td className="px-4 py-2 text-gray-500 text-xs font-mono">{log.work_time || ''}</td>
                       <td className="px-4 py-2 text-gray-600 text-xs max-w-xs truncate">{log.report_content || ''}</td>
                       <td className="px-4 py-2 whitespace-nowrap">
@@ -896,6 +915,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                       <th className="text-left px-3 py-2">日付</th>
                       <th className="text-left px-3 py-2">担当者</th>
                       <th className="text-left px-3 py-2">業務区分</th>
+                      <th className="text-left px-3 py-2">処理期間</th>
                       <th className="text-left px-3 py-2">時間</th>
                       <th className="text-left px-3 py-2">作業内容</th>
                     </tr>
@@ -908,6 +928,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                         <td className="px-3 py-2">
                           {log.task_type && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{log.task_type}</span>}
                         </td>
+                        <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap">{formatPeriod(log)}</td>
                         <td className="px-3 py-2 text-xs font-mono text-gray-500">{log.work_time || ''}</td>
                         <td className="px-3 py-2 text-xs text-gray-600">{log.report_content || ''}</td>
                       </tr>
@@ -955,6 +976,28 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                   onChange={e => setAddLogForm(f => ({ ...f, task_type: e.target.value }))}>
                   {TASK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">処理期間</label>
+                {YEAR_TASKS.includes(addLogForm.task_type) ? (
+                  <div className="flex items-center gap-2">
+                    <input type="number" placeholder="2026" min="2000" max="2100" className={`${ic} w-32`} value={addLogForm.subject}
+                      onChange={e => setAddLogForm(f => ({ ...f, subject: e.target.value }))} />
+                    <span className="text-xs text-gray-500">年度</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <input type="month" className={ic} value={addLogForm.subject}
+                      onChange={e => setAddLogForm(f => ({ ...f, subject: e.target.value }))} />
+                    {addLogForm.task_type !== '決算' && (
+                      <>
+                        <span className="text-xs text-gray-400 shrink-0">～</span>
+                        <input type="month" className={ic} value={addLogForm.details}
+                          onChange={e => setAddLogForm(f => ({ ...f, details: e.target.value }))} />
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
