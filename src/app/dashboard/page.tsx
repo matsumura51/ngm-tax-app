@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { bulletinTargets } from '@/lib/bulletinTarget'
 import { Users, ClipboardList, FileText, Calendar, Plus, AlertCircle, Clock, ListChecks, HardDrive } from 'lucide-react'
 
 const COLOR_MAP: Record<string, { bg: string; text: string }> = {
@@ -110,7 +111,7 @@ interface DashBulletin {
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats>({ corporateCount: 0, individualCount: 0, todaySchedules: 0, unreadReports: 0 })
   const [bulletins, setBulletins] = useState<DashBulletin[]>([])
-  const [activeUsers, setActiveUsers] = useState<{ id: string; name: string }[]>([])
+  const [activeUsers, setActiveUsers] = useState<{ id: string; name: string; hire_date: string | null }[]>([])
   const [bulletinReads, setBulletinReads] = useState<{ bulletin_id: string; user_id: string; user_name: string | null }[]>([])
   const BULLETIN_EXCLUDE = ['坂倉']
   const [currentUserId, setCurrentUserId] = useState('')
@@ -221,7 +222,7 @@ export default function DashboardPage() {
     const [{ data: bData }, { data: rData }, { data: uData }] = await Promise.all([
       supabase.from('bulletins').select('*').order('created_at', { ascending: false }),
       supabase.from('bulletin_reads').select('bulletin_id, user_id, user_name'),
-      supabase.from('users').select('id, name').is('leave_date', null),
+      supabase.from('users').select('id, name, hire_date').is('leave_date', null),
     ])
     // 坂倉を確認対象から除外
     const filteredUsers = (uData || []).filter((u: { id: string; name: string }) =>
@@ -229,7 +230,6 @@ export default function DashboardPage() {
     )
     setActiveUsers(filteredUsers)
     setBulletinReads(rData || [])
-    const totalActive = filteredUsers.length
     const confirmedIdsByBulletin: Record<string, Set<string>> = {}
     for (const r of (rData || [])) {
       if (!confirmedIdsByBulletin[r.bulletin_id]) confirmedIdsByBulletin[r.bulletin_id] = new Set()
@@ -243,10 +243,10 @@ export default function DashboardPage() {
         is_read_by_me: bReads.some(r => r.user_id === myId),
       }
     })
-    // 全対象ユーザーが確認済みのものはダッシュボードに表示しない
+    // 全対象ユーザーが確認済みのものはダッシュボードに表示しない（入社日より前の掲示板はその人を対象外）
     setBulletins(mapped.filter(b => {
       const confirmed = confirmedIdsByBulletin[b.id] || new Set()
-      return filteredUsers.some(u => !confirmed.has(u.id))
+      return bulletinTargets(filteredUsers, b).some(u => !confirmed.has(u.id))
     }))
   }
 
@@ -932,16 +932,18 @@ export default function DashboardPage() {
                       <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed mb-2">{b.content}</p>
                     )}
                     {(() => {
-                      const total = activeUsers.length
-                      const unconf = activeUsers.filter(u => !bulletinReads.some(r => r.bulletin_id === b.id && r.user_id === u.id))
+                      const targets = bulletinTargets(activeUsers, b)
+                      const total = targets.length
+                      const unconf = targets.filter(u => !bulletinReads.some(r => r.bulletin_id === b.id && r.user_id === u.id))
+                      const confirmedCount = total - unconf.length
                       return (
                         <>
                           <div className="flex items-center gap-2">
                             <div className="flex-1 bg-amber-100 rounded-full h-1.5 max-w-[160px]">
                               <div className="bg-amber-400 h-full rounded-full transition-all"
-                                style={{ width: `${total > 0 ? (b.read_count / total) * 100 : 0}%` }} />
+                                style={{ width: `${total > 0 ? (confirmedCount / total) * 100 : 0}%` }} />
                             </div>
-                            <span className="text-xs text-gray-500">{b.read_count}/{total}名確認済み</span>
+                            <span className="text-xs text-gray-500">{confirmedCount}/{total}名確認済み</span>
                           </div>
                           {unconf.length > 0 && (
                             <div className="mt-1.5 flex flex-wrap gap-1">

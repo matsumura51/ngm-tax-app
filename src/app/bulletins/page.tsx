@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Plus, ChevronDown, ChevronUp, CheckCircle, Clock, Users, Paperclip, Download, X } from 'lucide-react'
 import { setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
+import { bulletinTargets } from '@/lib/bulletinTarget'
 
 interface Bulletin {
   id: string
@@ -43,7 +44,7 @@ const EXCLUDE_NAMES = ['坂倉']
 export default function BulletinsPage() {
   const [bulletins, setBulletins] = useState<Bulletin[]>([])
   const [reads, setReads] = useState<BulletinRead[]>([])
-  const [activeUsers, setActiveUsers] = useState<{ id: string; name: string }[]>([])
+  const [activeUsers, setActiveUsers] = useState<{ id: string; name: string; hire_date: string | null }[]>([])
   const [loading, setLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState('')
   const [currentUserName, setCurrentUserName] = useState('')
@@ -79,7 +80,7 @@ export default function BulletinsPage() {
     const [{ data: bData }, { data: rData }, { data: uData }, { data: aData }] = await Promise.all([
       supabase.from('bulletins').select('*').order('created_at', { ascending: false }),
       supabase.from('bulletin_reads').select('*'),
-      supabase.from('users').select('id, name').is('leave_date', null),
+      supabase.from('users').select('id, name, hire_date').is('leave_date', null),
       supabase.from('bulletin_attachments').select('*').order('created_at'),
     ])
     setBulletins(bData || [])
@@ -140,9 +141,15 @@ export default function BulletinsPage() {
     return reads.filter(r => r.bulletin_id === bulletinId)
   }
 
+  // 確認対象者（入社日より前に書き込まれた掲示板はその人を対象外）
+  function targetUsers(bulletinId: string) {
+    const b = bulletins.find(x => x.id === bulletinId)
+    return b ? bulletinTargets(activeUsers, b) : activeUsers
+  }
+
   function unconfirmedUsers(bulletinId: string) {
     const confirmedIds = new Set(readsFor(bulletinId).map(r => r.user_id))
-    return activeUsers.filter(u => !confirmedIds.has(u.id))
+    return targetUsers(bulletinId).filter(u => !confirmedIds.has(u.id))
   }
 
   function fmtDate(b: Bulletin) {
@@ -419,18 +426,19 @@ export default function BulletinsPage() {
 
                         {(() => {
                           const unconf = unconfirmedUsers(b.id)
-                          const total = activeUsers.length
+                          const total = targetUsers(b.id).length
+                          const confirmedCount = total - unconf.length
                           return (
                             <>
                               <div className="mt-3 flex items-center gap-2">
                                 <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
                                   <div className="bg-amber-400 h-full rounded-full transition-all"
-                                    style={{ width: `${total > 0 ? (bReads.length / total) * 100 : 0}%` }} />
+                                    style={{ width: `${total > 0 ? (confirmedCount / total) * 100 : 0}%` }} />
                                 </div>
                                 <button onClick={() => toggleExpand(b.id)}
                                   className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
                                   <Users size={11} />
-                                  {bReads.length}/{total}名確認済み
+                                  {confirmedCount}/{total}名確認済み
                                   {isExp ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
                                 </button>
                               </div>
