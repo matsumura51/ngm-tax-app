@@ -59,9 +59,9 @@ export default function DailyReportsPage() {
     function buildQuery() {
       let q = supabase.from('daily_reports')
         .select('*, daily_report_details(report_id, sort_order, work_time, task_type, subject, details, client_name, report_content)')
-        // 更新順（最後に作成・編集した日報が上）。更新日時が同じ場合は日付の新しい順
-        .order('updated_at', { ascending: false, nullsFirst: false })
+        // 日付の新しい順。同じ日付の中は更新順（最後に作成・編集した日報が上）
         .order('date', { ascending: false })
+        .order('updated_at', { ascending: false, nullsFirst: false })
         .order('id')
         .order('sort_order', { referencedTable: 'daily_report_details' })
       if (df) q = q.gte('date', df)
