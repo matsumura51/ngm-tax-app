@@ -89,7 +89,10 @@ export default function ProgressChartPage() {
         client_code: string; year: number
         monthly_completion: Record<string, string | null> | null
         monthly_payroll?: Record<string, string | null> | null
+        monthly_completion_staff?: Record<string, string | null> | null
+        monthly_payroll_staff?: Record<string, string | null> | null
         settle_return_prepared: string | null
+        settle_return_prepared_staff?: string | null
       }>(() => supabase.from('monthly_progress').select('*').in('year', [year - 1, year])),
       fetchAllRows<{ report_id: string; client_code: string; subject: string | null; details: string | null }>(
         () => supabase.from('daily_report_details').select('report_id, client_code, subject, details').eq('task_type', '記帳').not('client_code', 'is', null)),
@@ -122,9 +125,11 @@ export default function ProgressChartPage() {
     for (const p of progress) {
       const c = clientByCode[p.client_code]
       if (!c) continue
-      const staff = c.primary_staff || '未割当'
-      const div = divisionOf[norm(c.primary_staff)] || '未所属'
       for (let m = 1; m <= 12; m++) {
+        // 月次完成を入力した時点の担当者（記録が無ければ今の主担当）
+        const mStaff = p.monthly_completion_staff?.[String(m)] || c.primary_staff
+        const staff = mStaff || '未割当'
+        const div = divisionOf[norm(mStaff)] || '未所属'
         const key = `${p.year}-${m}`
         const target = `${p.year}年${m}月分`
         const comp = p.monthly_completion?.[String(m)]
@@ -135,10 +140,9 @@ export default function ProgressChartPage() {
         }
         const pay = p.monthly_payroll?.[String(m)]
         if (pay && c.include_payroll && inMonth(pay)) {
-          // 給与計算は「給与計算担当」（未設定なら主担当）のマスとして、その人の事業部に入れる
-          const pStaff = c.payroll_staff || staff
-          const pDiv = c.payroll_staff ? (divisionOf[norm(c.payroll_staff)] || '未所属') : div
-          out.push({ date: pay, code: c.code, name: c.name, staff: pStaff, kind: '給与', target, division: pDiv })
+          // 給与計算完了を入力した時点の給与計算担当（記録が無ければ今の給与計算担当、未設定なら主担当）のマス・事業部
+          const pName = p.monthly_payroll_staff?.[String(m)] || c.payroll_staff || c.primary_staff
+          out.push({ date: pay, code: c.code, name: c.name, staff: pName || '未割当', kind: '給与', target, division: divisionOf[norm(pName)] || '未所属' })
         }
       }
     }
@@ -147,16 +151,21 @@ export default function ProgressChartPage() {
     // 決算：その月が申告期限の顧問先（決算月＝2か月前。決算月0＝個人は対象外）と申告書作成日
     const fm = ((month - 3 + 12) % 12) + 1
     const fiscalYear = fm > month ? year - 1 : year
-    const progByKey: Record<string, { settle_return_prepared: string | null }> = {}
+    const progByKey: Record<string, { settle_return_prepared: string | null; settle_return_prepared_staff?: string | null }> = {}
     for (const p of progress) progByKey[`${p.client_code}|${p.year}`] = p
     const settles: Settlement[] = clientsData
       .filter(c => c.fiscal_month === fm && !c.contract_end_date)
-      .map(c => ({
-        code: c.code, name: c.name, staff: c.primary_staff || '未割当',
-        fiscal: `${fiscalYear}年${fm}月決算`,
-        prepared: toIsoDate(progByKey[`${c.code}|${fiscalYear}`]?.settle_return_prepared, year, month),
-        division: divisionOf[norm(c.primary_staff)] || '未所属',
-      }))
+      .map(c => {
+        const sp = progByKey[`${c.code}|${fiscalYear}`]
+        // 申告書作成済みなら作成を入力した時点の担当者（記録が無ければ今の主担当）
+        const sName = (sp?.settle_return_prepared && sp.settle_return_prepared_staff) || c.primary_staff
+        return {
+          code: c.code, name: c.name, staff: sName || '未割当',
+          fiscal: `${fiscalYear}年${fm}月決算`,
+          prepared: toIsoDate(sp?.settle_return_prepared, year, month),
+          division: divisionOf[norm(sName)] || '未所属',
+        }
+      })
       .sort((a, b) => a.code.localeCompare(b.code))
     setSettlements(settles)
     setLoading(false)

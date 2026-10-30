@@ -7,6 +7,17 @@ import { createClient } from '@/lib/supabase'
 import { MonthlyProgress, Client, TaxSchedule } from '@/lib/types'
 import { Search, X, RefreshCw, Calendar } from 'lucide-react'
 import { staffKey } from '@/lib/staffName'
+import StaffSelect from '@/components/StaffSelect'
+
+// 進捗グラフのマスの担当者として、完了日を入力した時点の担当者を記録する。
+// 日付を消せば消去。画面で選び直した場合はその人。日付が変わらなければ記録済みの人のまま。それ以外は今の担当者
+function decideStaff(newDate: string | null | undefined, oldDate: string | null | undefined,
+  oldStaff: string | null | undefined, chosen: string | null | undefined, current: string | null | undefined): string | null {
+  if (!newDate) return null
+  if (chosen && chosen !== (oldStaff || '')) return chosen
+  if (newDate === oldDate && oldStaff) return oldStaff
+  return current || null
+}
 
 const MONTHS = ['1','2','3','4','5','6','7','8','9','10','11','12']
 const MONTHLY_FIELDS = [
@@ -561,6 +572,8 @@ function MonthlyContent() {
       dates[key] = val?.[String(month)] || ''
     }
     dates.monthly_payroll = p?.monthly_payroll?.[String(month)] || ''
+    dates.monthly_completion_staff = p?.monthly_completion_staff?.[String(month)] || ''
+    dates.monthly_payroll_staff = p?.monthly_payroll_staff?.[String(month)] || ''
     setMonthDates(dates)
     setMonthRangeEnd(null)
     setMonthRangeFields(new Set(MONTHLY_FIELDS.map(f => f.key)))
@@ -578,6 +591,8 @@ function MonthlyContent() {
       const val = p?.[f.key as keyof MonthlyProgress] as Record<string, string | null> | undefined
       dates[f.key] = val?.[String(prevMonth)] || ''
     }
+    dates.monthly_completion_staff = monthDates.monthly_completion_staff || ''
+    dates.monthly_payroll_staff = monthDates.monthly_payroll_staff || ''
     setMonthDates(dates)
   }
 
@@ -614,6 +629,19 @@ function MonthlyContent() {
     if (client.include_payroll) {
       updates.monthly_payroll = { ...(p.monthly_payroll || {}), [String(fromMonth)]: monthDates.monthly_payroll || null }
     }
+    // 進捗グラフ用：月次完成・給与計算完了を入力した時点の担当者を記録
+    const compStaff: Record<string, string | null> = { ...(p.monthly_completion_staff || {}) }
+    for (let m = fromMonth; m <= toMonth; m++) {
+      const k = String(m)
+      compStaff[k] = decideStaff(updates.monthly_completion?.[k], p.monthly_completion?.[k], p.monthly_completion_staff?.[k],
+        m === fromMonth ? monthDates.monthly_completion_staff : null, client.primary_staff)
+    }
+    updates.monthly_completion_staff = compStaff
+    if (client.include_payroll) {
+      const k = String(fromMonth)
+      updates.monthly_payroll_staff = { ...(p.monthly_payroll_staff || {}), [k]: decideStaff(updates.monthly_payroll?.[k], p.monthly_payroll?.[k],
+        p.monthly_payroll_staff?.[k], monthDates.monthly_payroll_staff, client.payroll_staff || client.primary_staff) }
+    }
     const res = await fetch('/api/monthly-progress/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -640,6 +668,8 @@ function MonthlyContent() {
         dates[key] = val?.[String(nextMonth)] || ''
       }
       dates.monthly_payroll = newP.monthly_payroll?.[String(nextMonth)] || ''
+      dates.monthly_completion_staff = newP.monthly_completion_staff?.[String(nextMonth)] || ''
+      dates.monthly_payroll_staff = newP.monthly_payroll_staff?.[String(nextMonth)] || ''
       setMonthDates(dates)
       setMonthRangeEnd(null)
       setMonthRangeFields(new Set(MONTHLY_FIELDS.map(f => f.key)))
@@ -653,6 +683,7 @@ function MonthlyContent() {
     const p = prog(client.code)
     const form: Record<string, string> = {}
     for (const f of [...SETTLE_FIELDS, ...SETTLE_TAX_FIELDS]) form[f.key] = (p?.[f.key as keyof MonthlyProgress] as string | null) || ''
+    form.settle_return_prepared_staff = p?.settle_return_prepared_staff || ''
     setSettleForm(form)
     setSettleModal(client)
   }
@@ -665,6 +696,9 @@ function MonthlyContent() {
     if (!p) { setSaving(false); return }
     const updates: Record<string, string | null> = {}
     for (const [k, v] of Object.entries(settleForm)) updates[k] = v || null
+    // 進捗グラフの決算一覧用：申告書作成を入力した時点の主担当を記録
+    updates.settle_return_prepared_staff = decideStaff(updates.settle_return_prepared, p.settle_return_prepared,
+      p.settle_return_prepared_staff, settleForm.settle_return_prepared_staff, settleModal.primary_staff)
     const res = await fetch('/api/monthly-progress/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1257,6 +1291,12 @@ function MonthlyContent() {
                   {monthDates[f.key] && (
                     <button onClick={() => setMonthDates(d => ({ ...d, [f.key]: '' }))} className="text-gray-300 hover:text-gray-500 text-xs">✕</button>
                   )}
+                  {f.key === 'monthly_completion' && monthDates.monthly_completion && (
+                    <StaffSelect value={monthDates.monthly_completion_staff}
+                      onChange={v => setMonthDates(d => ({ ...d, monthly_completion_staff: v }))}
+                      emptyLabel={`担当：${monthModal.client.primary_staff || '未設定'}`}
+                      className="border border-gray-300 rounded px-1 py-1 text-xs text-gray-600 max-w-[9rem]" />
+                  )}
                 </div>
                 )
               })}
@@ -1284,6 +1324,12 @@ function MonthlyContent() {
                   />
                   {monthDates.monthly_payroll && (
                     <button onClick={() => setMonthDates(d => ({ ...d, monthly_payroll: '' }))} className="text-gray-300 hover:text-gray-500 text-xs">✕</button>
+                  )}
+                  {monthDates.monthly_payroll && (
+                    <StaffSelect value={monthDates.monthly_payroll_staff}
+                      onChange={v => setMonthDates(d => ({ ...d, monthly_payroll_staff: v }))}
+                      emptyLabel={`担当：${monthModal.client.payroll_staff || monthModal.client.primary_staff || '未設定'}`}
+                      className="border border-gray-300 rounded px-1 py-1 text-xs text-gray-600 max-w-[9rem]" />
                   )}
                 </div>
               )}
@@ -1340,6 +1386,12 @@ function MonthlyContent() {
                       />
                       {settleForm[key] && (
                         <button onClick={() => setSettleForm(f => ({ ...f, [key]: '' }))} className="text-gray-300 hover:text-gray-500 text-xs shrink-0">✕</button>
+                      )}
+                      {key === 'settle_return_prepared' && settleForm[key] && (
+                        <StaffSelect value={settleForm.settle_return_prepared_staff}
+                          onChange={v => setSettleForm(f => ({ ...f, settle_return_prepared_staff: v }))}
+                          emptyLabel={`担当：${settleModal.primary_staff || '未設定'}`}
+                          className="border border-gray-300 rounded px-1 py-1 text-xs text-gray-600 max-w-[9rem]" />
                       )}
                     </div>
                   ) : type === 'yearmonth' ? (

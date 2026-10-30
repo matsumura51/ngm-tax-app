@@ -100,6 +100,8 @@ export interface MonthlyProgress {
   monthly_fee_yearend: Record<string, string | null>
   monthly_fee_settlement: Record<string, string | null>
   monthly_payroll?: Record<string, string | null>  // 給与計算完了日（月キー）
+  monthly_completion_staff?: Record<string, string | null>  // 月次完成を入力した時点の主担当（進捗グラフのマスの担当）
+  monthly_payroll_staff?: Record<string, string | null>  // 給与計算完了を入力した時点の給与計算担当（未設定なら主担当）
   ledger_status: string | null
   report_status: string | null
   consumption_tax_filed: string | null
@@ -125,6 +127,7 @@ export interface MonthlyProgress {
   settle_notice: string | null
   settle_materials: string | null
   settle_return_prepared: string | null
+  settle_return_prepared_staff?: string | null  // 申告書作成を入力した時点の主担当（進捗グラフの決算一覧）
   settle_contact: string | null
   settle_filed: string | null
   settle_payment_method: string | null
