@@ -66,12 +66,20 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
       division: form.division || null,
       ...(hasTargetColumn ? { monthly_target_squares: form.monthly_target_squares ? parseInt(form.monthly_target_squares, 10) : null } : {}),
     }).eq('id', id)
-    if (error) alert('エラー: ' + error.message)
-    else {
-      setSaved(true); setTimeout(() => setSaved(false), 2000)
-      initialSnapshot.current = JSON.stringify(form)
-      setUnsavedChanges(false)
+    if (error) { alert('エラー: ' + error.message); setSaving(false); return }
+    // 退職日が入っていればログイン不可、消せばログイン可に戻す
+    const res = await fetch('/api/users/set-access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, leave_date: form.leave_date || null }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(`保存しましたが、ログイン可否の切り替えに失敗しました: ${err.error || res.status}`)
     }
+    setSaved(true); setTimeout(() => setSaved(false), 2000)
+    initialSnapshot.current = JSON.stringify(form)
+    setUnsavedChanges(false)
     setSaving(false)
   }
 
@@ -124,6 +132,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">退社日</label>
             <input type="date" className={inputClass} value={form.leave_date} onChange={e => setForm(f => ({ ...f, leave_date: e.target.value }))} />
+            <p className="text-xs text-gray-400 mt-0.5">退社日を入れて保存すると、すぐにログインできなくなります（消すとログインできる状態に戻ります）</p>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">部署</label>

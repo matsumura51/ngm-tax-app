@@ -24,7 +24,9 @@ export default function LoginPage() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
-      setError('ログインIDまたはパスワードが正しくありません')
+      // 退職日が入っているスタッフは利用停止にしている
+      const banned = error.code === 'user_banned' || /banned/i.test(error.message)
+      setError(banned ? '退職済みのためログインできません' : 'ログインIDまたはパスワードが正しくありません')
       setLoading(false)
       return
     }

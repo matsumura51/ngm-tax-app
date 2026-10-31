@@ -27,6 +27,8 @@ export async function POST(req: NextRequest) {
     email,
     password: '111111',
     email_confirm: true,
+    // 退職日が入っていればログインできない状態で作成する
+    ...(leave_date ? { ban_duration: '876000h' } : {}),
     user_metadata: { name },
   })
 
