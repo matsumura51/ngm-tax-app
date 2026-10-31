@@ -9,6 +9,7 @@ import * as XLSX from 'xlsx'
 import PaymentReportTab from './PaymentReportTab'
 import WithholdingTaxTab from './WithholdingTaxTab'
 import StaffSelect from '@/components/StaffSelect'
+import { ClientChangeLog, diffClient, writeClientChangeLogs } from '@/lib/clientChangeLog'
 
 const WITHHOLDING_TAX_OPTIONS = ['納特', '毎月', '不要']
 const CONTRACT_STATUS_OPTIONS = ['契約中', '契約終了', '見込み', '休止']
@@ -105,6 +106,15 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => { if (tab === '質問事項' && client) loadQuestions() }, [tab, client])
 
   const [clientLoaded, setClientLoaded] = useState(false)
+  const [changeLogs, setChangeLogs] = useState<ClientChangeLog[]>([])
+  const [showAllChangeLogs, setShowAllChangeLogs] = useState(false)
+
+  async function loadChangeLogs() {
+    const { data } = await createClient().from('client_change_logs').select('*').eq('client_id', id)
+      .order('changed_at', { ascending: false }).limit(500)
+    setChangeLogs(data || [])
+  }
+  useEffect(() => { loadChangeLogs() }, [id])
 
   async function loadClient() {
     const supabase = createClient()
@@ -340,8 +350,11 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       setSaving(false)
       return
     }
+    const changes = client ? diffClient(client as unknown as Record<string, unknown>, form as Record<string, unknown>) : []
     const { error } = await supabase.from('clients').update(form).eq('id', id)
     if (!error) {
+      await writeClientChangeLogs(id, changes)
+      await loadChangeLogs()
       // 月次進捗データ側に控えている主担当・副担当も顧客カルテに合わせる（全年度分）
       await fetch('/api/monthly-progress/update', {
         method: 'POST',
@@ -789,6 +802,51 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               {saved ? '保存しました ✓' : saving ? '保存中...' : '保存'}
             </button>
           </div>
+
+          {/* 変更ログ（保存したときに変わった項目を記録） */}
+          <Section title="変更ログ">
+            {changeLogs.length === 0 ? (
+              <p className="text-sm text-gray-400">変更の記録はまだありません（2026年10月31日から記録しています）</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-xs text-gray-500">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium whitespace-nowrap">日時</th>
+                        <th className="text-left px-3 py-2 font-medium whitespace-nowrap">変更した人</th>
+                        <th className="text-left px-3 py-2 font-medium whitespace-nowrap">項目</th>
+                        <th className="text-left px-3 py-2 font-medium">変更前 → 変更後</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {(showAllChangeLogs ? changeLogs : changeLogs.slice(0, 20)).map(l => (
+                        <tr key={l.id}>
+                          <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">
+                            {new Date(l.changed_at).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{l.user_name || '-'}</td>
+                          <td className="px-3 py-2 text-xs text-gray-800 whitespace-nowrap">{l.field_label}</td>
+                          <td className="px-3 py-2 text-xs text-gray-700 whitespace-pre-wrap break-all">
+                            {l.old_value === null && l.new_value === null ? '' : <>
+                              <span className="text-gray-400">{l.old_value || '（なし）'}</span>
+                              <span className="mx-1.5 text-gray-400">→</span>
+                              <span>{l.new_value || '（なし）'}</span>
+                            </>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {changeLogs.length > 20 && (
+                  <button onClick={() => setShowAllChangeLogs(v => !v)} className="mt-2 text-xs text-blue-600 hover:underline">
+                    {showAllChangeLogs ? '最新20件だけ表示' : `すべて表示（${changeLogs.length}件）`}
+                  </button>
+                )}
+              </>
+            )}
+          </Section>
         </div>
       )}
 

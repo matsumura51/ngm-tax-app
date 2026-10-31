@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { writeClientChangeLogs } from '@/lib/clientChangeLog'
 import Link from 'next/link'
 import { ChevronLeft, Plus, Trash2 } from 'lucide-react'
 import { Director, ClientDocument } from '@/lib/types'
@@ -125,6 +126,7 @@ export default function ClientNewPage() {
       setSaving(false)
       return
     }
+    await writeClientChangeLogs(data.id, [{ field_label: '新規登録', old_value: null, new_value: null }])
     setUnsavedChanges(false)
     router.push(`/clients/${data.id}`)
   }
