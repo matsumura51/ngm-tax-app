@@ -7,6 +7,9 @@ import { fetchAllRows } from '@/lib/fetchAllRows'
 import { useSessionState } from '@/lib/useSessionState'
 import { Plus, Search, X, Trash2, Printer } from 'lucide-react'
 import Link from 'next/link'
+import StaffSelect from '@/components/StaffSelect'
+import { staffKey } from '@/lib/staffName'
+import { useClientPrimaryStaff } from '@/lib/useClientPrimaryStaff'
 
 const CATEGORIES = ['月次', '決算', '確定申告', '年末調整', '給与計算', 'その他']
 const STATUSES = ['未訂正', '訂正済', '確認中']
@@ -33,6 +36,10 @@ export default function ClientChecksPage() {
   const [type, setType] = useSessionState('clientChecks_type', '')
   const [dateFrom, setDateFrom] = useSessionState('clientChecks_dateFrom', '')
   const [dateTo, setDateTo] = useSessionState('clientChecks_dateTo', '')
+  const [staff, setStaff] = useSessionState('clientChecks_staff', '')
+  const primaryStaffOf = useClientPrimaryStaff()
+  // 顧問先の主担当で絞り込み（顧客カルテの今の主担当。字体の違いは同一視）
+  const shownChecks = staff ? checks.filter(c => staffKey(primaryStaffOf(c)) === staffKey(staff)) : checks
 
   const [showTopMistakes, setShowTopMistakes] = useState(false)
   const [topMistakesLoaded, setTopMistakesLoaded] = useState(false)
@@ -110,7 +117,7 @@ export default function ClientChecksPage() {
 
   function search() { load() }
   function clear() {
-    setClientName(''); setStatus(''); setCategory(''); setType(''); setDateFrom(''); setDateTo('')
+    setClientName(''); setStatus(''); setCategory(''); setType(''); setDateFrom(''); setDateTo(''); setStaff('')
     load({ clientName: '', status: '', category: '', type: '', dateFrom: '', dateTo: '' })
   }
 
@@ -214,10 +221,12 @@ export default function ClientChecksPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <input className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
             placeholder="顧客名" value={clientName} onChange={e => setClientName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && search()} />
+          <StaffSelect className="border border-gray-300 rounded-lg px-3 py-2 text-sm" value={staff}
+            onChange={v => setStaff(v)} emptyLabel="主担当：すべて" />
           <select className="border border-gray-300 rounded-lg px-3 py-2 text-sm" value={status} onChange={e => setStatus(e.target.value)}>
             <option value="">状況：すべて</option>
             {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -242,7 +251,7 @@ export default function ClientChecksPage() {
       <div className="bg-white rounded-xl shadow overflow-hidden">
         {loading ? (
           <div className="text-center py-12 text-gray-400">読み込み中...</div>
-        ) : checks.length === 0 ? (
+        ) : shownChecks.length === 0 ? (
           <div className="text-center py-12 text-gray-400">該当する記録がありません</div>
         ) : (
           <table className="w-full text-sm">
@@ -252,6 +261,7 @@ export default function ClientChecksPage() {
                 <th className="px-4 py-3 text-left w-20">種別</th>
                 <th className="px-4 py-3 text-left w-24">顧客コード</th>
                 <th className="px-4 py-3 text-left w-44">顧客名</th>
+                <th className="px-4 py-3 text-left w-20">主担当</th>
                 <th className="px-4 py-3 text-left w-20">区分</th>
                 <th className="px-4 py-3 text-left w-20">確認者</th>
                 <th className="px-4 py-3 text-left">内容</th>
@@ -261,7 +271,7 @@ export default function ClientChecksPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {checks.map(c => (
+              {shownChecks.map(c => (
                 <tr key={c.id} className="hover:bg-gray-50 transition group">
                   <td className="px-4 py-3 text-gray-600">{c.check_date}</td>
                   <td className="px-4 py-3">
@@ -275,6 +285,7 @@ export default function ClientChecksPage() {
                   <td className="px-4 py-3 font-medium text-gray-800">
                     <Link href={`/client-checks/${c.id}`} className="hover:text-blue-600">{c.client_name}</Link>
                   </td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{primaryStaffOf(c) || '—'}</td>
                   <td className="px-4 py-3 text-gray-600">{c.category}</td>
                   <td className="px-4 py-3 text-gray-600">{c.checker}</td>
                   <td className="px-4 py-3 text-gray-700 max-w-xs">
@@ -300,7 +311,7 @@ export default function ClientChecksPage() {
           </table>
         )}
       </div>
-      <div className="mt-2 text-xs text-gray-400 text-right">{checks.length}件</div>
+      <div className="mt-2 text-xs text-gray-400 text-right">{shownChecks.length}件</div>
     </div>
   )
 }

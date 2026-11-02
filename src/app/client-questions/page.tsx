@@ -7,6 +7,9 @@ import { fetchAllRows } from '@/lib/fetchAllRows'
 import { useSessionState } from '@/lib/useSessionState'
 import { Plus, Search, X, Upload, Trash2 } from 'lucide-react'
 import Link from 'next/link'
+import StaffSelect from '@/components/StaffSelect'
+import { staffKey } from '@/lib/staffName'
+import { useClientPrimaryStaff } from '@/lib/useClientPrimaryStaff'
 
 const CATEGORIES = ['月次', '決算', '確定申告', '年末調整', '給与計算', 'その他']
 const STATUSES = ['未回答', '回答済']
@@ -24,6 +27,10 @@ export default function ClientQuestionsPage() {
   const [category, setCategory] = useSessionState('clientQuestions_category', '')
   const [dateFrom, setDateFrom] = useSessionState('clientQuestions_dateFrom', '')
   const [dateTo, setDateTo] = useSessionState('clientQuestions_dateTo', '')
+  const [staff, setStaff] = useSessionState('clientQuestions_staff', '')
+  const primaryStaffOf = useClientPrimaryStaff()
+  // 顧問先の主担当で絞り込み（顧客カルテの今の主担当。字体の違いは同一視）
+  const shownQuestions = staff ? questions.filter(q => staffKey(primaryStaffOf(q)) === staffKey(staff)) : questions
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
@@ -54,7 +61,7 @@ export default function ClientQuestionsPage() {
 
   function search() { load() }
   function clear() {
-    setClientName(''); setStatus(''); setCategory(''); setDateFrom(''); setDateTo('')
+    setClientName(''); setStatus(''); setCategory(''); setDateFrom(''); setDateTo(''); setStaff('')
     load({ clientName: '', status: '', category: '', dateFrom: '', dateTo: '' })
   }
 
@@ -80,7 +87,7 @@ export default function ClientQuestionsPage() {
   }
 
   function toggleAll(checked: boolean) {
-    if (checked) setSelectedIds(new Set(questions.map(q => q.id)))
+    if (checked) setSelectedIds(new Set(shownQuestions.map(q => q.id)))
     else setSelectedIds(new Set())
   }
 
@@ -93,7 +100,7 @@ export default function ClientQuestionsPage() {
     })
   }
 
-  const allSelected = questions.length > 0 && selectedIds.size === questions.length
+  const allSelected = shownQuestions.length > 0 && selectedIds.size === shownQuestions.length
 
   return (
     <div className="p-6">
@@ -112,10 +119,12 @@ export default function ClientQuestionsPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow p-4 mb-4">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <input className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
             placeholder="顧客名" value={clientName} onChange={e => setClientName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && search()} />
+          <StaffSelect className="border border-gray-300 rounded-lg px-3 py-2 text-sm" value={staff}
+            onChange={v => setStaff(v)} emptyLabel="主担当：すべて" />
           <select className="border border-gray-300 rounded-lg px-3 py-2 text-sm" value={status} onChange={e => setStatus(e.target.value)}>
             <option value="">状況：すべて</option>
             {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -155,7 +164,7 @@ export default function ClientQuestionsPage() {
       <div className="bg-white rounded-xl shadow overflow-hidden">
         {loading ? (
           <div className="text-center py-12 text-gray-400">読み込み中...</div>
-        ) : questions.length === 0 ? (
+        ) : shownQuestions.length === 0 ? (
           <div className="text-center py-12 text-gray-400">該当する質問事項がありません</div>
         ) : (
           <table className="w-full text-sm">
@@ -167,6 +176,7 @@ export default function ClientQuestionsPage() {
                 <th className="px-4 py-3 text-left w-28">業務年月日</th>
                 <th className="px-4 py-3 text-left w-28">質問日</th>
                 <th className="px-4 py-3 text-left w-44">顧客名</th>
+                <th className="px-4 py-3 text-left w-20">主担当</th>
                 <th className="px-4 py-3 text-left w-20">区分</th>
                 <th className="px-4 py-3 text-left w-20">質問者</th>
                 <th className="px-4 py-3 text-left">質問内容</th>
@@ -176,7 +186,7 @@ export default function ClientQuestionsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {questions.map(q => (
+              {shownQuestions.map(q => (
                 <tr key={q.id} className={`hover:bg-gray-50 transition group ${selectedIds.has(q.id) ? 'bg-indigo-50' : ''}`}>
                   <td className="px-3 py-3 text-center">
                     <input type="checkbox" checked={selectedIds.has(q.id)}
@@ -189,6 +199,7 @@ export default function ClientQuestionsPage() {
                   <td className="px-4 py-3 font-medium text-gray-800">
                     <Link href={`/client-questions/${q.id}`} className="hover:text-blue-600">{q.client_name}</Link>
                   </td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{primaryStaffOf(q) || '—'}</td>
                   <td className="px-4 py-3 text-gray-600">{q.category}</td>
                   <td className="px-4 py-3 text-gray-600">{q.questioner}</td>
                   <td className="px-4 py-3 text-gray-700 max-w-xs">
@@ -222,7 +233,7 @@ export default function ClientQuestionsPage() {
           </table>
         )}
       </div>
-      <div className="mt-2 text-xs text-gray-400 text-right">{questions.length}件</div>
+      <div className="mt-2 text-xs text-gray-400 text-right">{shownQuestions.length}件</div>
     </div>
   )
 }
