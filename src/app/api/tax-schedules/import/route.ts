@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
       send_date:      r[7] || null,
       payment_date:   r[8] || null,
       confirmation:   r[9] || null,
+      source:         'sheet',
     })
   }
 

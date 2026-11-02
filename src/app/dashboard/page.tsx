@@ -94,7 +94,18 @@ interface TaxSchedItem {
   payment_date: string | null
   contact_date: string | null
   confirmation: string | null
+  imported_at: string | null
+  source: string | null
   staff?: string | null
+}
+
+// 予定納税の金額がどこから・いつ入ったものか（例：「決算業務 10/27」「シート 7/30」）
+const TAX_SOURCE_LABEL: Record<string, string> = { sheet: 'シート', settle: '決算業務', bulk: '一括生成' }
+function taxSourceLabel(s: { source: string | null; imported_at: string | null }): string {
+  const src = s.source ? TAX_SOURCE_LABEL[s.source] || s.source : ''
+  if (!s.imported_at) return src
+  const d = new Date(new Date(s.imported_at).getTime() + 9 * 60 * 60 * 1000)
+  return `${src} ${d.getUTCMonth() + 1}/${d.getUTCDate()}`.trim()
 }
 
 interface DashBulletin {
@@ -498,7 +509,7 @@ export default function DashboardPage() {
     const supabase = createClient()
     const { data } = await supabase
       .from('tax_schedules')
-      .select('id, client_name, matched_client_code, tax_type, amount, installment, deadline, payment_method, send_date, payment_date, contact_date, confirmation')
+      .select('id, client_name, matched_client_code, tax_type, amount, installment, deadline, payment_method, send_date, payment_date, contact_date, confirmation, imported_at, source')
       .eq('year', y)
       .eq('month', m)
       .order('client_name')
@@ -1411,7 +1422,13 @@ export default function DashboardPage() {
                     <td className="px-4 py-2 font-medium text-gray-800">{s.client_name}</td>
                     <td className="px-4 py-2 text-gray-600 text-xs">{s.staff || '—'}</td>
                     <td className="px-4 py-2 text-gray-600">{s.tax_type || ''}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-gray-800">{s.amount || ''}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-gray-800">
+                      <div>{s.amount || ''}</div>
+                      {(s.source || s.imported_at) && (
+                        <div className={`text-[10px] leading-tight whitespace-nowrap ${s.source === 'settle' ? 'text-indigo-500' : 'text-gray-400'}`}
+                          title="金額の出どころと、その金額が入った日">{taxSourceLabel(s)}</div>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-center text-gray-600 text-xs">{s.deadline || ''}</td>
                     <td className="px-4 py-2 text-center">
                       <select

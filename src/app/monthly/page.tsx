@@ -433,7 +433,7 @@ function MonthlyContent() {
             toInsert.push({
               client_id: null, client_name: clientName,
               matched_client_code: clientCode,
-              year, month: 0, tax_type: '法人税中間',
+              year, month: 0, tax_type: '法人税中間', source: 'bulk',
               amount: interim.toLocaleString('ja-JP') + '円',
               installment: '年1回',
               deadline: null, payment_method: null,
@@ -450,7 +450,7 @@ function MonthlyContent() {
             toInsert.push({
               client_id: null, client_name: clientName,
               matched_client_code: clientCode,
-              year, month: 0, tax_type: '消費税中間',
+              year, month: 0, tax_type: '消費税中間', source: 'bulk',
               amount: perAmount.toLocaleString('ja-JP') + '円',
               installment: `年${count}回`,
               deadline: null, payment_method: null,
@@ -762,6 +762,7 @@ function MonthlyContent() {
           matched_client_code: p!.client_code,
           year: taxYear,
           month: taxMonth,
+          source: 'settle',
           deadline: `${taxMonth}月末`,
           tax_type: t.tax_type,
           amount: t.amount,

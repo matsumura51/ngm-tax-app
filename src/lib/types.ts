@@ -222,6 +222,7 @@ export interface TaxSchedule {
   contact_date: string | null
   confirmation: string | null
   imported_at: string
+  source?: string | null  // 金額の出どころ：'sheet'（スプレッドシート読み込み）| 'settle'（決算業務で保存）| 'bulk'（決算業務から一括生成）
 }
 
 export interface User {
