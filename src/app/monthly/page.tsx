@@ -263,7 +263,6 @@ function MonthlyContent() {
   const [taxSchedules, setTaxSchedules] = useState<TaxSchedule[]>([])
   const [scheduleInfo, setScheduleInfo] = useState<{ imported_at: string | null; count: number } | null>(null)
   const [importing, setImporting] = useState(false)
-  const [generating, setGenerating] = useState(false)
   const [sheets, setSheets] = useState<{ name: string }[]>([])
   const [selectedSheet, setSelectedSheet] = useState('6月')
   const [filterStaff, setFilterStaff] = useState('')
@@ -402,73 +401,6 @@ function MonthlyContent() {
       alert('エラー: ' + String(e))
     } finally {
       setImporting(false)
-    }
-  }
-
-  async function generateFromSettle() {
-    setGenerating(true)
-    try {
-      const supabase = createClient()
-      const prevYear = year - 1
-      const { data: prevProgress } = await supabase
-        .from('monthly_progress')
-        .select('*')
-        .eq('year', prevYear)
-      if (!prevProgress || prevProgress.length === 0) {
-        alert(`${prevYear}年度の決算業務データが見つかりません`)
-        return
-      }
-      // 当年の法人税中間・消費税中間レコードをすべて削除してから再生成
-      await supabase.from('tax_schedules').delete().eq('year', year)
-        .in('tax_type', ['法人税中間', '消費税中間'])
-      const now = new Date().toISOString()
-      const toInsert: Omit<TaxSchedule, 'id' | 'contact_date'>[] = []
-      for (const p of prevProgress) {
-        const clientName = p.client_name || ''
-        const clientCode = p.client_code
-        // 法人税中間（手動入力がある場合のみ）
-        if (p.settle_next_corp_interim) {
-          const interim = parseInt(p.settle_next_corp_interim.replace(/[^0-9]/g, ''), 10)
-          if (!isNaN(interim) && interim > 0) {
-            toInsert.push({
-              client_id: null, client_name: clientName,
-              matched_client_code: clientCode,
-              year, month: 0, tax_type: '法人税中間', source: 'bulk',
-              amount: interim.toLocaleString('ja-JP') + '円',
-              installment: '年1回',
-              deadline: null, payment_method: null,
-              send_date: null, payment_date: null,
-              confirmation: null, imported_at: now,
-            })
-          }
-        }
-        // 消費税中間（手動入力がある場合のみ）
-        if (p.settle_next_con_interim && p.settle_con_tax_installments && p.settle_con_tax_installments !== '0') {
-          const perAmount = parseInt(p.settle_next_con_interim.replace(/[^0-9]/g, ''), 10)
-          const count = parseInt(p.settle_con_tax_installments, 10)
-          if (!isNaN(perAmount) && perAmount > 0 && !isNaN(count) && count > 0) {
-            toInsert.push({
-              client_id: null, client_name: clientName,
-              matched_client_code: clientCode,
-              year, month: 0, tax_type: '消費税中間', source: 'bulk',
-              amount: perAmount.toLocaleString('ja-JP') + '円',
-              installment: `年${count}回`,
-              deadline: null, payment_method: null,
-              send_date: null, payment_date: null,
-              confirmation: null, imported_at: now,
-            })
-          }
-        }
-      }
-      if (toInsert.length > 0) {
-        await supabase.from('tax_schedules').insert(toInsert)
-      }
-      await loadTaxSchedules(year)
-      alert(`${prevYear}年度の決算業務から ${toInsert.length}件の予定納税データを生成しました`)
-    } catch (e) {
-      alert('エラー: ' + String(e))
-    } finally {
-      setGenerating(false)
     }
   }
 
@@ -747,33 +679,53 @@ function MonthlyContent() {
         }
       }
 
-      if (toInsert.length > 0) {
-        const supabase = createClient()
-        await supabase.from('tax_schedules')
-          .delete()
-          .eq('matched_client_code', p.client_code)
-          .eq('year', taxYear)
-          .eq('month', taxMonth)
-          .in('tax_type', ['法人税中間', '消費税中間'])
-        const now = new Date().toISOString()
-        await supabase.from('tax_schedules').insert(toInsert.map(t => ({
-          client_id: null,
-          client_name: p!.client_name,
-          matched_client_code: p!.client_code,
-          year: taxYear,
-          month: taxMonth,
-          source: 'settle',
-          deadline: `${taxMonth}月末`,
-          tax_type: t.tax_type,
-          amount: t.amount,
-          installment: t.installment,
-          payment_method: null,
-          send_date: null,
-          payment_date: null,
-          confirmation: null,
-          imported_at: now,
-        })))
+      // 同じ顧問先・月の法人税中間・消費税中間は、消して作り直さずに税目ごとに更新する。
+      // 金額・回数が同じならダッシュボードで入力した納付方法・送付日等はそのまま。変わったら空に戻す（送り直しに気づけるように）
+      const supabase = createClient()
+      const { data: existingRows } = await supabase.from('tax_schedules')
+        .select('id, tax_type, amount, installment, payment_method, send_date, payment_date, contact_date, confirmation')
+        .eq('matched_client_code', p.client_code)
+        .eq('year', taxYear)
+        .eq('month', taxMonth)
+        .in('tax_type', ['法人税中間', '消費税中間'])
+      const existing = existingRows || []
+      const now = new Date().toISOString()
+      const usedIds = new Set<string>()
+      for (const t of toInsert) {
+        const match = existing.find(e => e.tax_type === t.tax_type && !usedIds.has(e.id))
+        if (match) {
+          usedIds.add(match.id)
+          if (match.amount === t.amount && match.installment === t.installment) continue
+          await supabase.from('tax_schedules').update({
+            amount: t.amount, installment: t.installment, deadline: `${taxMonth}月末`, source: 'settle', imported_at: now,
+            payment_method: null, send_date: null, payment_date: null, contact_date: null, confirmation: null,
+          }).eq('id', match.id)
+        } else {
+          await supabase.from('tax_schedules').insert({
+            client_id: null,
+            client_name: p!.client_name,
+            matched_client_code: p!.client_code,
+            year: taxYear,
+            month: taxMonth,
+            source: 'settle',
+            deadline: `${taxMonth}月末`,
+            tax_type: t.tax_type,
+            amount: t.amount,
+            installment: t.installment,
+            payment_method: null,
+            send_date: null,
+            payment_date: null,
+            confirmation: null,
+            imported_at: now,
+          })
+        }
       }
+      // 来期予定納税額を消した税目の行は、何も入力されていないものだけ削除（入力済みは残す）
+      const staleIds = existing
+        .filter(e => !usedIds.has(e.id))
+        .filter(e => !e.payment_method && !e.send_date && !e.payment_date && !e.contact_date && !e.confirmation)
+        .map(e => e.id)
+      if (staleIds.length > 0) await supabase.from('tax_schedules').delete().in('id', staleIds)
     }
 
     setSaving(false)
@@ -1045,13 +997,7 @@ function MonthlyContent() {
                   {importing ? '読み込み中...' : 'スプレッドシートから読み込む'}
                 </button>
               </>
-            ) : (
-              <button onClick={generateFromSettle} disabled={generating}
-                className="flex items-center gap-1.5 bg-blue-700 hover:bg-blue-800 text-white px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
-                <RefreshCw size={13} className={generating ? 'animate-spin' : ''} />
-                {generating ? '生成中...' : `決算業務（${year - 1}年度）から予定を生成`}
-              </button>
-            )}
+            ) : null}
             <select value={filterTaxMonth} onChange={e => setFilterTaxMonth(e.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
               <option value="">月（全て）</option>
