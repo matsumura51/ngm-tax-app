@@ -12,7 +12,8 @@ import { staffKey } from '@/lib/staffName'
 // ・顧問先は主担当の所属事業部のグラフに入り、マスの色は主担当者ごと
 // ・目標マス数＝ユーザー管理で各人に設定した「毎月の目標マス数」の事業部内合計
 // ・右側にその月が申告期限の決算先（2か月前決算）と申告書作成日を表示
-// ・順位：決算の申告書作成が全件20日までに終わり、月末までに目標マス数に届いた事業部のみ、早く届いた順
+// ・決算の期限：2026年10月〜2027年3月は25日、それ以外（2026年9月以前・2027年4月以降）は20日（settleDueDay）
+// ・順位：決算の申告書作成が全件期限日までに終わり、月末までに目標マス数に届いた事業部のみ、早く届いた順
 // ・管理部はグラフ・順位の対象外
 
 interface Unit {
@@ -41,7 +42,7 @@ interface DivisionResult {
   total: number
   reachedDay: number | null  // 累計が目標マス数に届いた日
   settleTotal: number
-  settleDoneBy20: number
+  settleDoneByDue: number
   settleOk: boolean
   achieved: boolean
 }
@@ -50,6 +51,8 @@ const EXCLUDED_DIVISIONS = ['管理部']
 const PALETTE = ['#e11d48', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#65a30d', '#ea580c', '#4f46e5', '#0d9488', '#a21caf']
 const norm = staffKey  // 空白除去＋旧字体（關→関など）をそろえて担当者名を照合
 const pad = (n: number) => String(n).padStart(2, '0')
+// 決算の申告書作成の期限日（2026年10月〜2027年3月は25日、それ以外は20日）
+const settleDueDay = (y: number, m: number) => (y * 12 + m >= 2026 * 12 + 10 && y * 12 + m <= 2027 * 12 + 3) ? 25 : 20
 
 export default function ProgressChartPage() {
   const now = new Date(Date.now() + 9 * 60 * 60 * 1000)  // JST
@@ -172,6 +175,7 @@ export default function ProgressChartPage() {
   }
 
   const days = new Date(year, month, 0).getDate()
+  const dueDay = settleDueDay(year, month)
   const divisions = useMemo(
     () => Array.from(new Set(users.map(u => u.division).filter((d): d is string => !!d && !EXCLUDED_DIVISIONS.includes(d)))).sort(),
     [users])
@@ -193,12 +197,12 @@ export default function ProgressChartPage() {
       if (reachedDay === null && cum >= target) reachedDay = d
     }
     const divSettles = settlements.filter(s => s.division === div)
-    const limit20 = `${year}-${pad(month)}-20`
-    const settleDoneBy20 = divSettles.filter(s => s.prepared && s.prepared <= limit20).length
-    const settleOk = settleDoneBy20 === divSettles.length
+    const limitDue = `${year}-${pad(month)}-${settleDueDay(year, month)}`
+    const settleDoneByDue = divSettles.filter(s => s.prepared && s.prepared <= limitDue).length
+    const settleOk = settleDoneByDue === divSettles.length
     return {
       division: div, target, targetFromUsers: userTarget > 0, total: divUnits.length, reachedDay,
-      settleTotal: divSettles.length, settleDoneBy20, settleOk, achieved: settleOk && reachedDay !== null,
+      settleTotal: divSettles.length, settleDoneByDue, settleOk, achieved: settleOk && reachedDay !== null,
     }
   }), [divisions, users, clients, units, settlements, days, year, month])
 
@@ -275,7 +279,7 @@ export default function ProgressChartPage() {
           <div className="bg-white rounded-xl shadow p-4 mb-4">
             <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
               <div className="font-bold text-gray-800">{month}月の順位{isCurrentMonth && <span className="ml-2 text-xs font-normal text-orange-600">暫定（月末に確定）</span>}</div>
-              <div className="text-xs text-gray-500">決算の申告書作成が全件20日までに終わり、月末までに目標マス数に届いた事業部を、早く届いた順に表示</div>
+              <div className="text-xs text-gray-500">決算の申告書作成が全件{dueDay}日までに終わり、月末までに目標マス数に届いた事業部を、早く届いた順に表示</div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {ranked.map((r, i) => (
@@ -286,7 +290,7 @@ export default function ProgressChartPage() {
                     <span className="font-semibold text-gray-800">{r.division}</span>
                   </div>
                   <div className="text-xs text-gray-600 mt-1">{month}/{r.reachedDay}に目標{r.target}マス達成（月の合計 {r.total}マス）</div>
-                  <div className="text-xs text-gray-500">決算 {r.settleTotal}件すべて20日までに作成</div>
+                  <div className="text-xs text-gray-500">決算 {r.settleTotal}件すべて{dueDay}日までに作成</div>
                 </button>
               ))}
               {notAchieved.map(r => (
@@ -300,7 +304,7 @@ export default function ProgressChartPage() {
                     {r.reachedDay !== null ? `目標${r.target}マス達成済み（${month}/${r.reachedDay}）` : `目標まであと${Math.max(0, r.target - r.total)}マス（${r.total}/${r.target}）`}
                   </div>
                   <div className={`text-xs ${r.settleOk ? 'text-gray-500' : 'text-orange-600'}`}>
-                    決算 20日までに作成 {r.settleDoneBy20}/{r.settleTotal}件
+                    決算 {dueDay}日までに作成 {r.settleDoneByDue}/{r.settleTotal}件
                   </div>
                 </button>
               ))}
@@ -323,8 +327,8 @@ export default function ProgressChartPage() {
                   <div className="text-xl font-bold text-gray-800">{divUnits.filter(u => u.kind === '月次').length}<span className="text-sm text-gray-400"> / </span>{divUnits.filter(u => u.kind === '給与').length}</div>
                 </div>
                 <div className="bg-white rounded-xl shadow p-4">
-                  <div className="text-xs text-gray-500">決算 申告書作成（20日まで）</div>
-                  <div className={`text-xl font-bold ${res?.settleOk ? 'text-green-600' : 'text-orange-600'}`}>{res?.settleDoneBy20 ?? 0}<span className="text-sm text-gray-400"> / {divSettles.length}件</span></div>
+                  <div className="text-xs text-gray-500">決算 申告書作成（{dueDay}日まで）</div>
+                  <div className={`text-xl font-bold ${res?.settleOk ? 'text-green-600' : 'text-orange-600'}`}>{res?.settleDoneByDue ?? 0}<span className="text-sm text-gray-400"> / {divSettles.length}件</span></div>
                 </div>
                 <div className="bg-white rounded-xl shadow p-4">
                   <div className="text-xs text-gray-500">{isCurrentMonth ? `今日（${month}/${today}）時点の目標` : '目標に届いた日'}</div>
@@ -352,10 +356,10 @@ export default function ProgressChartPage() {
                     ))}
                     {Array.from({ length: days }, (_, i) => i + 1).map(d => (
                       <text key={`dx${d}`} x={xOf(d) - colW / 2} y={MT + plotH + 16} textAnchor="middle" fontSize={10}
-                        fill={isCurrentMonth && d === today ? '#dc2626' : d === 20 ? '#7c3aed' : '#6b7280'} fontWeight={(isCurrentMonth && d === today) || d === 20 ? 700 : 400}>{d}</text>
+                        fill={isCurrentMonth && d === today ? '#dc2626' : d === dueDay ? '#7c3aed' : '#6b7280'} fontWeight={(isCurrentMonth && d === today) || d === dueDay ? 700 : 400}>{d}</text>
                     ))}
-                    {/* 決算の締め（20日） */}
-                    <line x1={xOf(20)} x2={xOf(20)} y1={MT} y2={MT + plotH} stroke="#c4b5fd" strokeDasharray="2 3" />
+                    {/* 決算の締め（期限日） */}
+                    <line x1={xOf(dueDay)} x2={xOf(dueDay)} y1={MT} y2={MT + plotH} stroke="#c4b5fd" strokeDasharray="2 3" />
                     {isCurrentMonth && (
                       <line x1={xOf(today)} x2={xOf(today)} y1={MT} y2={MT + plotH} stroke="#fca5a5" strokeDasharray="4 3" />
                     )}
@@ -377,7 +381,7 @@ export default function ProgressChartPage() {
                         {staffByKey.get(k)} {staffCount[k] || 0}マス
                       </span>
                     ))}
-                    <span className="text-gray-400">（薄い色＝給与計算／紫の点線＝20日）</span>
+                    <span className="text-gray-400">（薄い色＝給与計算／紫の点線＝{dueDay}日）</span>
                   </div>
                   {res?.targetFromUsers && (
                     <div className="text-[11px] text-gray-400 mt-1">
@@ -395,7 +399,7 @@ export default function ProgressChartPage() {
                   ) : (
                     <ul className="space-y-1.5">
                       {divSettles.map(s => {
-                        const late = !!s.prepared && s.prepared > `${year}-${pad(month)}-20`
+                        const late = !!s.prepared && s.prepared > `${year}-${pad(month)}-${pad(dueDay)}`
                         return (
                           <li key={s.code} className="flex items-baseline gap-2 text-sm">
                             <span className={`w-12 shrink-0 text-right text-xs ${s.prepared ? (late ? 'text-orange-600' : 'text-red-600') : 'text-gray-300'}`}>
