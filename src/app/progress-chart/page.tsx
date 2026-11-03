@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { staffKey } from '@/lib/staffName'
+import { isHoliday } from 'japanese-holidays'
 
 // 進捗グラフ：事業部ごとに、その月に完了した件数を日付の位置へ1件1マスで積み上げ、
 // 「月初0 → 月末に目標マス数」の目標線と比べる。
@@ -12,7 +13,8 @@ import { staffKey } from '@/lib/staffName'
 // ・顧問先は主担当の所属事業部のグラフに入り、マスの色は主担当者ごと
 // ・目標マス数＝ユーザー管理で各人に設定した「毎月の目標マス数」の事業部内合計
 // ・右側にその月が申告期限の決算先（2か月前決算）と申告書作成日を表示
-// ・決算の期限：2026年10月〜2027年3月は25日、それ以外（2026年9月以前・2027年4月以降）は20日（settleDueDay）
+// ・決算の期限：2026年10月〜2027年3月は25日、それ以外（2026年9月以前・2027年4月以降）は20日（settleDueDay）。
+//   2026年10月以降は、その日が土日・祝日なら次の平日
 // ・順位：決算の申告書作成が全件期限日までに終わり、月末までに目標マス数に届いた事業部のみ、早く届いた順
 // ・管理部はグラフ・順位の対象外
 
@@ -51,8 +53,18 @@ const EXCLUDED_DIVISIONS = ['管理部']
 const PALETTE = ['#e11d48', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#65a30d', '#ea580c', '#4f46e5', '#0d9488', '#a21caf']
 const norm = staffKey  // 空白除去＋旧字体（關→関など）をそろえて担当者名を照合
 const pad = (n: number) => String(n).padStart(2, '0')
-// 決算の申告書作成の期限日（2026年10月〜2027年3月は25日、それ以外は20日）
-const settleDueDay = (y: number, m: number) => (y * 12 + m >= 2026 * 12 + 10 && y * 12 + m <= 2027 * 12 + 3) ? 25 : 20
+// 決算の申告書作成の期限日（2026年10月〜2027年3月は25日、それ以外は20日）。
+// 2026年10月以降は、土日・祝日なら次の平日にずらす（2026年9月以前は20日のまま）
+function settleDueDay(y: number, m: number): number {
+  const ym = y * 12 + m
+  if (ym < 2026 * 12 + 10) return 20
+  let d = ym <= 2027 * 12 + 3 ? 25 : 20
+  for (;;) {
+    const dt = new Date(y, m - 1, d)
+    if (dt.getDay() === 0 || dt.getDay() === 6 || isHoliday(dt)) { d++; continue }
+    return d
+  }
+}
 
 export default function ProgressChartPage() {
   const now = new Date(Date.now() + 9 * 60 * 60 * 1000)  // JST
