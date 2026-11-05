@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { confirmLeaveIfDirty } from '@/lib/unsavedGuard'
-import { LayoutDashboard, FileText, Calendar, ClipboardList, LogOut, Users, UserCog, AlertCircle, HelpCircle, BarChart2, Receipt, Landmark, ListChecks, BookOpen, X, MessageSquare, TrendingUp } from 'lucide-react'
+import { LayoutDashboard, FileText, Calendar, ClipboardList, LogOut, Users, UserCog, AlertCircle, HelpCircle, BarChart2, Receipt, Landmark, ListChecks, BookOpen, X, MessageSquare, TrendingUp, Handshake } from 'lucide-react'
 
 const nav = [
   { href: '/dashboard', label: 'ダッシュボード', icon: LayoutDashboard },
@@ -15,6 +15,7 @@ const nav = [
   { href: '/schedules', label: 'スケジュール', icon: Calendar },
   { href: '/client-checks', label: '指摘・クレーム・処理方法', icon: AlertCircle },
   { href: '/client-questions', label: '質問事項', icon: HelpCircle },
+  { href: '/meetings', label: '打合せ記録', icon: Handshake },
   { href: '/annual-tasks', label: '年調・源泉進捗', icon: ListChecks },
   { href: '/tax-return', label: '確定申告進捗', icon: BookOpen },
   { href: '/payment-reports', label: '支払調書', icon: Receipt },

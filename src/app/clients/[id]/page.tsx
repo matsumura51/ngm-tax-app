@@ -3,7 +3,8 @@
 import { useEffect, useState, use, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Client, MonthlyProgress, Schedule, Director, ClientDocument, ClientCheck, ClientQuestion } from '@/lib/types'
-import { ChevronLeft, ChevronRight, Plus, Trash2, AlertCircle, HelpCircle, Download } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Trash2, AlertCircle, HelpCircle, Download, Handshake, Paperclip } from 'lucide-react'
+import { Meeting, methodStyle, fmtTime } from '@/lib/meetings'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import PaymentReportTab from './PaymentReportTab'
@@ -27,7 +28,7 @@ const PROGRESS_ROWS = [
 const ic = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const TASK_TYPES = ['記帳', 'チェック', '決算', '来所', '訪問', '所内相談', '電話・メール', '給与計算', '環境整備', '朝礼', '確定申告', '年末調整', '相続税', '建設業', '医療法人', '社会保険', '税務調査', 'その他']
 
-type Tab = '基本情報' | '月次進捗' | '業務ログ' | '指摘事項' | '質問事項' | '支払調書' | '源泉集計'
+type Tab = '基本情報' | '月次進捗' | '業務ログ' | '指摘事項' | '質問事項' | '打合せ記録' | '支払調書' | '源泉集計'
 
 type WorkLog = {
   id: string
@@ -86,6 +87,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   const [workLogs, setWorkLogs] = useState<WorkLog[]>([])
   const [clientChecks, setClientChecks] = useState<ClientCheck[]>([])
   const [clientQuestions, setClientQuestions] = useState<ClientQuestion[]>([])
+  const [clientMeetings, setClientMeetings] = useState<Meeting[]>([])
+  const [meetingAttach, setMeetingAttach] = useState<Record<string, number>>({})
   const [exportModal, setExportModal] = useState<null | 'checks' | 'questions'>(null)
   const [exportFrom, setExportFrom] = useState('')
   const [exportTo, setExportTo] = useState('')
@@ -104,6 +107,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => { if (tab === '業務ログ' && client) loadWorkLogs() }, [tab, client])
   useEffect(() => { if (tab === '指摘事項' && client) loadChecks() }, [tab, client])
   useEffect(() => { if (tab === '質問事項' && client) loadQuestions() }, [tab, client])
+  useEffect(() => { if (tab === '打合せ記録' && client) loadMeetings() }, [tab, client])
 
   const [clientLoaded, setClientLoaded] = useState(false)
   const [changeLogs, setChangeLogs] = useState<ClientChangeLog[]>([])
@@ -243,6 +247,20 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     const supabase = createClient()
     const { data } = await supabase.from('client_questions').select('*').eq('client_id', id).order('question_date', { ascending: false }).limit(150)
     setClientQuestions(data || [])
+  }
+
+  async function loadMeetings() {
+    const supabase = createClient()
+    const { data } = await supabase.from('meetings').select('*').eq('client_id', id)
+      .order('meeting_date', { ascending: false }).order('start_time', { ascending: false, nullsFirst: false }).limit(500)
+    const rows = (data || []) as Meeting[]
+    setClientMeetings(rows)
+    if (rows.length > 0) {
+      const { data: att } = await supabase.from('meeting_attachments').select('meeting_id').in('meeting_id', rows.map(r => r.id))
+      const cnt: Record<string, number> = {}
+      for (const a of att || []) cnt[a.meeting_id] = (cnt[a.meeting_id] || 0) + 1
+      setMeetingAttach(cnt)
+    }
   }
 
   function doExport() {
@@ -460,7 +478,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       </div>
 
       <div className="flex gap-1 mb-6 border-b border-gray-200">
-        {(['基本情報', '月次進捗', '業務ログ', '指摘事項', '質問事項', '支払調書', '源泉集計'] as Tab[]).map(t => (
+        {(['基本情報', '月次進捗', '業務ログ', '指摘事項', '質問事項', '打合せ記録', '支払調書', '源泉集計'] as Tab[]).map(t => (
           <button key={t} onClick={() => {
             if (isDirty && tab === '基本情報' && t !== '基本情報') {
               if (!confirm('基本情報が保存されていません。このまま移動しますか？')) return
@@ -1265,6 +1283,55 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{q.answered_date || ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+      {tab === '打合せ記録' && (
+        <div className="bg-white rounded-xl shadow overflow-hidden max-w-4xl">
+          <div className="flex justify-between items-center p-4 border-b">
+            <div className="flex items-center gap-2 text-gray-700 font-medium">
+              <Handshake size={16} className="text-teal-600" /> 打合せ記録一覧
+            </div>
+            <Link href={`/meetings/new?client_id=${client.id}&client_code=${client.code}&client_name=${encodeURIComponent(client.name)}`}
+              className="flex items-center gap-1 text-sm bg-teal-600 text-white px-3 py-1.5 rounded-lg hover:bg-teal-700">
+              <Plus size={14} /> 新規作成
+            </Link>
+          </div>
+          {clientMeetings.length === 0 ? (
+            <div className="text-center py-10 text-gray-400">打合せ記録はありません</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs text-gray-500 border-b border-gray-100">
+                <tr>
+                  <th className="px-4 py-3 text-left w-32">打合せ日</th>
+                  <th className="px-4 py-3 text-left w-24">方法</th>
+                  <th className="px-4 py-3 text-left">件名・内容</th>
+                  <th className="px-4 py-3 text-left w-28">次回予定</th>
+                  <th className="px-4 py-3 text-left w-20">記録者</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {clientMeetings.map(m => (
+                  <tr key={m.id} className="hover:bg-gray-50 transition">
+                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                      {m.meeting_date}
+                      {m.start_time && <div className="text-xs text-gray-400">{fmtTime(m.start_time)}{m.end_time ? `〜${fmtTime(m.end_time)}` : ''}</div>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {m.method && <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${methodStyle[m.method] || methodStyle['その他']}`}>{m.method}</span>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">
+                      <Link href={`/meetings/${m.id}`} className="hover:text-blue-600 block">
+                        <div className="font-medium flex items-center gap-1">{m.subject || '（件名なし）'}{meetingAttach[m.id] ? <Paperclip size={12} className="text-gray-400" /> : null}</div>
+                        <div className="line-clamp-2 text-gray-500 text-xs">{m.content}</div>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{m.next_date || ''}</td>
+                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{m.recorder}</td>
                   </tr>
                 ))}
               </tbody>
