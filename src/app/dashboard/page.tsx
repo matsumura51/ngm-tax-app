@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { bulletinTargets } from '@/lib/bulletinTarget'
+import { staffKey } from '@/lib/staffName'
 import { Users, ClipboardList, FileText, Calendar, Plus, AlertCircle, Clock, ListChecks, HardDrive } from 'lucide-react'
 
 const COLOR_MAP: Record<string, { bg: string; text: string }> = {
@@ -130,6 +131,8 @@ export default function DashboardPage() {
   const [bulletinConfirming, setBulletinConfirming] = useState<string | null>(null)
   const [todayScheduleList, setTodayScheduleList] = useState<{ id: string; title: string; start_datetime: string; end_datetime: string | null; user_name: string; facility: string | null; color: string | null }[]>([])
   const [settleItems, setSettleItems] = useState<SettleItem[]>([])
+  // 決算 処理済み（申告書作成日あり）。担当は作成した時点の担当者（記録がなければ今の主担当）
+  const [settleDoneStaff, setSettleDoneStaff] = useState<(string | null)[]>([])
   const [monthlyItems, setMonthlyItems] = useState<MonthlyItem[]>([])
   const [loading, setLoading] = useState(true)
   const [progressLoading, setProgressLoading] = useState(true)
@@ -353,15 +356,20 @@ export default function DashboardPage() {
 
     // 対象顧客の monthly_progress（settleYear）を API 経由で取得（RLS 対策）
     const settleProgressRes = await fetch(`/api/monthly-progress/list?year=${settleYear}`)
-    const settleProgressAll: { client_code: string; settle_return_prepared: string | null }[] =
+    const settleProgressAll: { client_code: string; settle_return_prepared: string | null; settle_return_prepared_staff?: string | null }[] =
       settleProgressRes.ok ? await settleProgressRes.json() : []
 
     const progressByCode: Record<string, string | null> = {}
+    const preparedStaffByCode: Record<string, string | null> = {}
     for (const p of settleProgressAll) {
       if (settleClientCodes.includes(p.client_code)) {
         progressByCode[p.client_code] = p.settle_return_prepared
+        preparedStaffByCode[p.client_code] = p.settle_return_prepared_staff ?? null
       }
     }
+    setSettleDoneStaff((settleClients || [])
+      .filter(c => progressByCode[c.code])
+      .map(c => preparedStaffByCode[c.code] || c.primary_staff))
 
     // monthly_progress が存在しない、またはsettleフィールドが未入力 → 未処理
     const settleResult: SettleItem[] = (settleClients || [])
@@ -554,6 +562,20 @@ export default function DashboardPage() {
     }
     return Object.entries(map).sort((a, b) => b[1] - a[1])
   }
+
+  // 決算：担当者ごとの処理済み・未処理（字体の違いは同一視）。未処理の多い順
+  function settleStaffRows() {
+    const map = new Map<string, { staff: string; done: number; undone: number }>()
+    const row = (name: string | null) => {
+      const staff = name || '未割当', k = staffKey(staff) || '未割当'
+      if (!map.has(k)) map.set(k, { staff, done: 0, undone: 0 })
+      return map.get(k)!
+    }
+    for (const it of settleItems) row(it.primary_staff).undone++
+    for (const st of settleDoneStaff) row(st).done++
+    return [...map.values()].sort((a, b) => b.undone - a.undone || b.done - a.done)
+  }
+  const isSettleStaff = (name: string | null, filter: string) => staffKey(name || '未割当') === staffKey(filter)
 
   const statCards = [
     { label: '今日の予定（自分）', value: stats.todaySchedules, icon: Calendar, color: 'text-purple-600', bg: 'bg-purple-50', href: '/schedules' },
@@ -1132,19 +1154,19 @@ export default function DashboardPage() {
               )}
             </div>
             <span className={`text-xs font-bold rounded-full px-2 py-0.5 ${now.getDate() >= 20 ? 'text-red-700 bg-red-100' : 'text-orange-600 bg-orange-100'}`}>
-              {progressLoading ? '...' : `${settleItems.length}件`}
+              {progressLoading ? '...' : `処理済み ${settleDoneStaff.length}件／未処理 ${settleItems.length}件`}
             </span>
           </div>
 
           {/* 担当者バッジ（クリックで顧客一覧表示） */}
           {progressLoading ? (
             <div className="text-center py-8 text-sm text-gray-400">読み込み中...</div>
-          ) : settleItems.length === 0 ? (
-            <div className="text-center py-8 text-sm text-green-600 font-medium">✓ 未処理なし</div>
+          ) : settleItems.length === 0 && settleDoneStaff.length === 0 ? (
+            <div className="text-center py-8 text-sm text-gray-400">対象の顧問先はありません</div>
           ) : (
             <>
               <div className="divide-y divide-gray-50">
-                {staffSummary(settleItems).map(([staff, total]) => {
+                {settleStaffRows().map(({ staff, done, undone: total }) => {
                   const overdue = now.getDate() >= 20 ? total : 0
                   const active = settleShowTable && settleFilterStaff === staff
                   return (
@@ -1152,7 +1174,9 @@ export default function DashboardPage() {
                       className={`w-full flex items-center justify-between px-5 py-3 text-left transition ${active ? 'bg-orange-50' : 'hover:bg-gray-50'}`}>
                       <span className={`text-base font-semibold ${active ? 'text-orange-700' : 'text-gray-800'}`}>{staff}</span>
                       <div className="flex items-center gap-3 text-sm">
-                        <span className="text-gray-500">未処理 <span className="font-bold text-gray-800">{total}</span>件</span>
+                        <span className="text-gray-500">処理済み <span className="font-bold text-green-700">{done}</span>件</span>
+                        <span className="text-gray-500">未処理 <span className={`font-bold ${total > 0 ? 'text-gray-800' : 'text-gray-400'}`}>{total}</span>件</span>
+                        {total === 0 && <span className="text-green-600 text-xs font-bold">✓ 完了</span>}
                         {overdue > 0 && (
                           <span className="text-red-500 font-bold">期日超過 {overdue}件</span>
                         )}
@@ -1191,7 +1215,7 @@ export default function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {settleItems.filter(item => !settleFilterStaff || (item.primary_staff || '未割当') === settleFilterStaff).map(item => {
+                      {settleItems.filter(item => !settleFilterStaff || isSettleStaff(item.primary_staff, settleFilterStaff)).map(item => {
                         const overDeadline = now.getDate() >= 20
                         return (
                           <tr key={item.client_id} className={overDeadline ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}>
@@ -1219,6 +1243,9 @@ export default function DashboardPage() {
                           </tr>
                         )
                       })}
+                      {settleFilterStaff && !settleItems.some(item => isSettleStaff(item.primary_staff, settleFilterStaff)) && (
+                        <tr><td colSpan={3} className="px-4 py-6 text-center text-sm text-green-600">✓ {settleFilterStaff} さんの未処理はありません</td></tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
