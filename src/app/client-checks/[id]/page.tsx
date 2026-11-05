@@ -141,6 +141,8 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
     window.open(data.signedUrl, '_blank')
   }
 
+  const [printScale, printScaleKey, setPrintScaleKey] = usePrintScale()
+
   if (!check) return <div className="p-6 text-gray-400">読み込み中...</div>
 
   function fmtDate(d: string | null | undefined) {
@@ -149,7 +151,6 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
     return `${y}年${Number(m)}月${Number(day)}日`
   }
 
-  const [printScale, printScaleKey, setPrintScaleKey] = usePrintScale()
   const contentLabel = form.type === '処理方法' ? '処理方法・特殊対応の内容' : form.type === 'クレーム' ? 'クレーム内容' : '指摘内容'
 
   return (
