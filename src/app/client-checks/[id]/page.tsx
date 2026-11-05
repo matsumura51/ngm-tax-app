@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { ClientCheck, ClientCheckAttachment } from '@/lib/types'
 import { ChevronLeft, Trash2, Paperclip, Download, X, Printer } from 'lucide-react'
 import Link from 'next/link'
+import { usePrintScale, PrintScaleSelect } from '@/lib/printScale'
 import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 
@@ -148,6 +149,7 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
     return `${y}年${Number(m)}月${Number(day)}日`
   }
 
+  const [printScale, printScaleKey, setPrintScaleKey] = usePrintScale()
   const contentLabel = form.type === '処理方法' ? '処理方法・特殊対応の内容' : form.type === 'クレーム' ? 'クレーム内容' : '指摘内容'
 
   return (
@@ -156,7 +158,7 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
     <style>{`
       @media print {
         body { visibility: hidden; }
-        #print-area { visibility: visible; position: fixed; inset: 0; padding: 24px; font-size: 11pt; color: #000; background: #fff; }
+        #print-area { visibility: visible; position: absolute; top: 0; left: 0; width: 100%; padding: 24px; box-sizing: border-box; font-size: ${11 * printScale}pt; color: #000; background: #fff; }
         #print-area * { visibility: visible; }
       }
       @media screen {
@@ -165,10 +167,10 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
     `}</style>
     <div id="print-area">
       <div style={{ borderBottom: '2px solid #333', paddingBottom: 8, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <div style={{ fontSize: 18, fontWeight: 'bold' }}>指摘事項</div>
-        <div style={{ fontSize: 11 }}>{form.client_code} {form.client_name}</div>
+        <div style={{ fontSize: 18 * printScale, fontWeight: 'bold' }}>指摘事項</div>
+        <div style={{ fontSize: 11 * printScale }}>{form.client_code} {form.client_name}</div>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16, fontSize: 10 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16, fontSize: 10 * printScale }}>
         <tbody>
           <tr>
             <td style={{ width: '15%', padding: '4px 8px', background: '#f3f4f6', border: '1px solid #ccc', fontWeight: 'bold' }}>指摘日</td>
@@ -189,10 +191,10 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
         </tbody>
       </table>
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 'bold', fontSize: 10, marginBottom: 4, background: '#f3f4f6', padding: '4px 8px', border: '1px solid #ccc' }}>{contentLabel}</div>
-        <div style={{ padding: '8px', border: '1px solid #ccc', minHeight: 80, whiteSpace: 'pre-wrap', fontSize: 10 }}>{form.content || ''}</div>
+        <div style={{ fontWeight: 'bold', fontSize: 10 * printScale, marginBottom: 4, background: '#f3f4f6', padding: '4px 8px', border: '1px solid #ccc' }}>{contentLabel}</div>
+        <div style={{ padding: '8px', border: '1px solid #ccc', minHeight: 80 * printScale, whiteSpace: 'pre-wrap', fontSize: 10 * printScale }}>{form.content || ''}</div>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12, fontSize: 10 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12, fontSize: 10 * printScale }}>
         <tbody>
           <tr>
             <td style={{ width: '15%', padding: '4px 8px', background: '#f3f4f6', border: '1px solid #ccc', fontWeight: 'bold' }}>訂正日</td>
@@ -201,11 +203,11 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
         </tbody>
       </table>
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 'bold', fontSize: 10, marginBottom: 4, background: '#f3f4f6', padding: '4px 8px', border: '1px solid #ccc' }}>訂正メモ</div>
-        <div style={{ padding: '8px', border: '1px solid #ccc', minHeight: 60, whiteSpace: 'pre-wrap', fontSize: 10 }}>{form.correction_note || ''}</div>
+        <div style={{ fontWeight: 'bold', fontSize: 10 * printScale, marginBottom: 4, background: '#f3f4f6', padding: '4px 8px', border: '1px solid #ccc' }}>訂正メモ</div>
+        <div style={{ padding: '8px', border: '1px solid #ccc', minHeight: 60 * printScale, whiteSpace: 'pre-wrap', fontSize: 10 * printScale }}>{form.correction_note || ''}</div>
       </div>
       {attachments.length > 0 && (
-        <div style={{ fontSize: 10 }}>
+        <div style={{ fontSize: 10 * printScale }}>
           <div style={{ fontWeight: 'bold', marginBottom: 4, background: '#f3f4f6', padding: '4px 8px', border: '1px solid #ccc' }}>添付ファイル</div>
           <ul style={{ margin: 0, padding: '4px 8px 4px 24px', border: '1px solid #ccc' }}>
             {attachments.map(a => <li key={a.id}>{a.file_name}</li>)}
@@ -227,6 +229,7 @@ export default function ClientCheckDetailPage({ params }: { params: Promise<{ id
           )}
         </div>
         <div className="flex items-center gap-3">
+          <PrintScaleSelect value={printScaleKey} onChange={setPrintScaleKey} />
           <button onClick={() => window.print()} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
             <Printer size={14} /> 印刷
           </button>

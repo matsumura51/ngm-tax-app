@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { ClientQuestion, ClientQuestionAttachment } from '@/lib/types'
 import { ChevronLeft, Trash2, Paperclip, Download, X, Plus, Printer, GripVertical } from 'lucide-react'
 import Link from 'next/link'
+import { usePrintScale, PrintScaleSelect } from '@/lib/printScale'
 import { confirmLeaveIfDirty, setUnsavedChanges, useUnsavedGuard } from '@/lib/unsavedGuard'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { useDragReorder } from '@/lib/useDragReorder'
@@ -55,6 +56,7 @@ export default function ClientQuestionDetailPage({ params }: { params: Promise<{
   const { id } = use(params)
   const router = useRouter()
   const [question, setQuestion] = useState<ClientQuestion | null>(null)
+  const [printScale, printScaleKey, setPrintScaleKey] = usePrintScale()
   const [form, setForm] = useState<Partial<ClientQuestion>>({})
   const [items, setItems] = useState<QItem[]>([{ text: '', answered: false, answer: '' }])
   const drag = useDragReorder(setItems)
@@ -256,6 +258,7 @@ export default function ClientQuestionDetailPage({ params }: { params: Promise<{
   }
 
   function handlePrint() {
+    const fs = (px: number) => `${Math.round(px * printScale * 10) / 10}px`
     const clientName = form.client_name || ''
     const questionDate = form.question_date || ''
     const questioner = form.questioner || ''
@@ -268,15 +271,15 @@ export default function ClientQuestionDetailPage({ params }: { params: Promise<{
         const box = it.answered ? '☑' : '☐'
         const escapedText = it.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
         const answerHtml = it.answer
-          ? `<div style="margin-left:24px;margin-top:4px;font-size:11px;color:#555">→ ${it.answer.replace(/\n/g, '<br>')}</div>`
+          ? `<div style="margin-left:24px;margin-top:4px;font-size:${fs(11)};color:#555">→ ${it.answer.replace(/\n/g, '<br>')}</div>`
           : ''
         return `<div style="margin-bottom:18px;page-break-inside:avoid">
           <div style="display:flex;gap:8px;align-items:flex-start">
-            <span style="font-size:15px;flex-shrink:0;line-height:1.4">${box}</span>
-            <span style="font-size:12px;line-height:1.6">${escapedText}</span>
+            <span style="font-size:${fs(15)};flex-shrink:0;line-height:1.4">${box}</span>
+            <span style="font-size:${fs(12)};line-height:1.6">${escapedText}</span>
           </div>${answerHtml}
           <div style="margin-top:8px;margin-left:24px">
-            <div style="height:24px"></div>
+            <div style="height:${fs(24)}"></div>
           </div>
         </div>`
       }).join('')
@@ -285,9 +288,9 @@ export default function ClientQuestionDetailPage({ params }: { params: Promise<{
 <title>質問事項 ${clientName}</title>
 <style>
 body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;margin:20px;color:#333}
-h1{font-size:15px;margin-bottom:4px}
-.meta{font-size:11px;color:#666;margin-bottom:16px}
-.section-title{font-size:11px;font-weight:bold;color:#444;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid #eee}
+h1{font-size:${fs(15)};margin-bottom:4px}
+.meta{font-size:${fs(11)};color:#666;margin-bottom:16px}
+.section-title{font-size:${fs(11)};font-weight:bold;color:#444;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid #eee}
 @media print{@page{margin:15mm}}
 </style></head><body>
 <h1>質問事項　${clientName}</h1>
@@ -355,6 +358,7 @@ ${itemRows}
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <PrintScaleSelect value={printScaleKey} onChange={setPrintScaleKey} />
           <button onClick={handlePrint}
             className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg text-sm hover:bg-gray-50">
             <Printer size={14} /> 印刷
