@@ -393,11 +393,16 @@ export default function DashboardPage() {
     const years = Array.from(new Set([currentYear, prevYear]))
     const [progressAllRes, { data: clientIntervalData }] = await Promise.all([
       Promise.all(years.map(y => fetch(`/api/monthly-progress/list?year=${y}`))),
-      supabase.from('clients').select('id, report_interval').is('contract_end_date', null),
+      supabase.from('clients').select('id, code, report_interval').is('contract_end_date', null).eq('show_in_monthly', true),
     ])
-    const progressRaw = (await Promise.all(progressAllRes.map(r => r.ok ? r.json() : []))).flat()
     const reportIntervalMap: Record<string, number> = {}
-    for (const c of (clientIntervalData || [])) reportIntervalMap[c.id] = c.report_interval ?? 1
+    const activeIdByCode: Record<string, string> = {}
+    for (const c of (clientIntervalData || [])) { reportIntervalMap[c.id] = c.report_interval ?? 1; if (c.code) activeIdByCode[c.code] = c.id }
+    // 月次進捗表に出ない顧問先（契約終了日あり・進捗表に表示オフ）は月次未処理・未回収から外す。
+    // 顧客IDが空の進捗データは顧客コードで顧問先を探して補う
+    const progressRaw = (await Promise.all(progressAllRes.map(r => r.ok ? r.json() : []))).flat()
+      .map((p: any) => (p.client_id ? p : { ...p, client_id: (p.client_code && activeIdByCode[p.client_code]) || null }))
+      .filter((p: any) => !!p.client_id && p.client_id in reportIntervalMap)
 
     const todayTime = now.getTime()
     const seen = new Set<string>()
