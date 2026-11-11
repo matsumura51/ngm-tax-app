@@ -270,7 +270,16 @@ function MonthlyContent() {
   const [filterFiscalMonth, setFilterFiscalMonth] = useState('')
   const [editingCell, setEditingCell] = useState<{ id: string; field: string; value: string } | null>(null)
   const [filterTaxMonth, setFilterTaxMonth] = useState('')
-  const [allUsers, setAllUsers] = useState<{ name: string; division: string | null }[]>([])
+  const [allUsers, setAllUsers] = useState<{ name: string; division: string | null; leave_date?: string | null }[]>([])
+  // 退職者（退社日あり）の名前。主担当が退職者のままの顧問先は、完了日を入れるとき担当者を選んでもらう
+  const retiredKeys = new Set(allUsers.filter(u => u.leave_date).map(u => staffKey(u.name)))
+  const activeStaff = (...names: (string | null | undefined)[]): string | null => {
+    for (const n of names) if (n && !retiredKeys.has(staffKey(n))) return n
+    return null
+  }
+  const isRetired = (n: string | null | undefined) => !!n && retiredKeys.has(staffKey(n))
+  const staffLabel = (n: string | null | undefined) => isRetired(n) ? `担当者を選んでください（${n}は退職）` : `担当：${n || '未設定'}`
+  const staffSelectCls = (needPick: boolean) => `border rounded px-1 py-1 text-xs max-w-[9rem] ${needPick ? 'border-red-400 bg-red-50 text-red-600' : 'border-gray-300 text-gray-600'}`
   const [filterHasAmount, setFilterHasAmount] = useState(false)
   const isFirstLoad = useRef(true)
 
@@ -312,7 +321,7 @@ function MonthlyContent() {
     const supabase = createClient()
     const [{ data: clientsData }, { data: usersData }, progressRes, authResult] = await Promise.all([
       supabase.from('clients').select('*').is('contract_end_date', null).eq('show_in_monthly', true).order('code'),
-      supabase.from('users').select('name, division').order('name'),
+      supabase.from('users').select('name, division, leave_date').order('name'),
       fetch(`/api/monthly-progress/list?year=${year}`),
       supabase.auth.getUser(),
     ])
@@ -566,13 +575,23 @@ function MonthlyContent() {
     for (let m = fromMonth; m <= toMonth; m++) {
       const k = String(m)
       compStaff[k] = decideStaff(updates.monthly_completion?.[k], p.monthly_completion?.[k], p.monthly_completion_staff?.[k],
-        m === fromMonth ? monthDates.monthly_completion_staff : null, client.primary_staff)
+        m === fromMonth ? monthDates.monthly_completion_staff : null,
+        activeStaff(client.primary_staff, monthDates.monthly_completion_staff))
     }
     updates.monthly_completion_staff = compStaff
     if (client.include_payroll) {
       const k = String(fromMonth)
       updates.monthly_payroll_staff = { ...(p.monthly_payroll_staff || {}), [k]: decideStaff(updates.monthly_payroll?.[k], p.monthly_payroll?.[k],
-        p.monthly_payroll_staff?.[k], monthDates.monthly_payroll_staff, client.payroll_staff || client.primary_staff) }
+        p.monthly_payroll_staff?.[k], monthDates.monthly_payroll_staff, activeStaff(client.payroll_staff || client.primary_staff)) }
+    }
+    // 主担当が退職者のままで担当者を選んでいない場合は保存しない（退職者の名前でマスが付かないように）
+    const missing: string[] = []
+    for (let m = fromMonth; m <= toMonth; m++) if (updates.monthly_completion?.[String(m)] && !compStaff[String(m)]) { missing.push('月次完成'); break }
+    if (client.include_payroll && updates.monthly_payroll?.[String(fromMonth)] && !updates.monthly_payroll_staff?.[String(fromMonth)]) missing.push('給与計算')
+    if (missing.length > 0) {
+      alert(`主担当（${client.payroll_staff && missing[0] === '給与計算' ? client.payroll_staff : client.primary_staff}）は退職しています。\n${missing.join('・')}の日付の横で、処理した担当者を選んでください。`)
+      setSaving(false)
+      return
     }
     const res = await fetch('/api/monthly-progress/update', {
       method: 'POST',
@@ -630,7 +649,12 @@ function MonthlyContent() {
     for (const [k, v] of Object.entries(settleForm)) updates[k] = v || null
     // 進捗グラフの決算一覧用：申告書作成を入力した時点の主担当を記録
     updates.settle_return_prepared_staff = decideStaff(updates.settle_return_prepared, p.settle_return_prepared,
-      p.settle_return_prepared_staff, settleForm.settle_return_prepared_staff, settleModal.primary_staff)
+      p.settle_return_prepared_staff, settleForm.settle_return_prepared_staff, activeStaff(settleModal.primary_staff))
+    if (updates.settle_return_prepared && !updates.settle_return_prepared_staff) {
+      alert(`主担当（${settleModal.primary_staff}）は退職しています。\n申告書作成の日付の横で、処理した担当者を選んでください。`)
+      setSaving(false)
+      return
+    }
     const res = await fetch('/api/monthly-progress/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1241,8 +1265,8 @@ function MonthlyContent() {
                   {f.key === 'monthly_completion' && monthDates.monthly_completion && (
                     <StaffSelect value={monthDates.monthly_completion_staff}
                       onChange={v => setMonthDates(d => ({ ...d, monthly_completion_staff: v }))}
-                      emptyLabel={`担当：${monthModal.client.primary_staff || '未設定'}`}
-                      className="border border-gray-300 rounded px-1 py-1 text-xs text-gray-600 max-w-[9rem]" />
+                      emptyLabel={staffLabel(monthModal.client.primary_staff)}
+                      className={staffSelectCls(isRetired(monthModal.client.primary_staff) && !monthDates.monthly_completion_staff)} />
                   )}
                 </div>
                 )
@@ -1275,8 +1299,8 @@ function MonthlyContent() {
                   {monthDates.monthly_payroll && (
                     <StaffSelect value={monthDates.monthly_payroll_staff}
                       onChange={v => setMonthDates(d => ({ ...d, monthly_payroll_staff: v }))}
-                      emptyLabel={`担当：${monthModal.client.payroll_staff || monthModal.client.primary_staff || '未設定'}`}
-                      className="border border-gray-300 rounded px-1 py-1 text-xs text-gray-600 max-w-[9rem]" />
+                      emptyLabel={staffLabel(monthModal.client.payroll_staff || monthModal.client.primary_staff)}
+                      className={staffSelectCls(isRetired(monthModal.client.payroll_staff || monthModal.client.primary_staff) && !monthDates.monthly_payroll_staff)} />
                   )}
                 </div>
               )}
@@ -1337,8 +1361,8 @@ function MonthlyContent() {
                       {key === 'settle_return_prepared' && settleForm[key] && (
                         <StaffSelect value={settleForm.settle_return_prepared_staff}
                           onChange={v => setSettleForm(f => ({ ...f, settle_return_prepared_staff: v }))}
-                          emptyLabel={`担当：${settleModal.primary_staff || '未設定'}`}
-                          className="border border-gray-300 rounded px-1 py-1 text-xs text-gray-600 max-w-[9rem]" />
+                          emptyLabel={staffLabel(settleModal.primary_staff)}
+                          className={staffSelectCls(isRetired(settleModal.primary_staff) && !settleForm.settle_return_prepared_staff)} />
                       )}
                     </div>
                   ) : type === 'yearmonth' ? (
