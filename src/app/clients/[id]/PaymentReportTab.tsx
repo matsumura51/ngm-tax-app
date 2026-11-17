@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Plus, Trash2, Printer, Download } from 'lucide-react'
+import { Plus, Trash2, Printer, Download, Paperclip } from 'lucide-react'
+import ContractsModal, { type Contract } from './ContractsModal'
+import { matchKey } from '@/lib/contractKey'
 import { PaymentReportItem } from '@/lib/types'
 import * as XLSX from 'xlsx'
 
@@ -112,6 +114,21 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
   const [shikikinByPayee, setShikikinByPayee] = useState<Record<string, string>>({})
   const [notes, setNotes] = useState('')
   const [notesSaving, setNotesSaving] = useState(false)
+
+  // 契約書（Googleドライブ）。支払先＋物件所在地で行と結びつける（翌年以降も同じ契約書を表示）
+  const [contracts, setContracts] = useState<Contract[]>([])
+  const [contractItem, setContractItem] = useState<PaymentReportItem | null>(null)
+  async function loadContracts() {
+    const { data } = await createClient().from('payment_report_contracts').select('*').eq('client_id', clientId).order('created_at')
+    setContracts((data as Contract[]) || [])
+  }
+  const contractsOf = (it: { payee_name?: string | null; property_address?: string | null }) => contracts.filter(c => c.payee_key === matchKey(it.payee_name) && c.property_key === matchKey(it.property_address))
+  useEffect(() => {
+    let off = false
+    createClient().from('payment_report_contracts').select('*').eq('client_id', clientId).order('created_at')
+      .then(({ data }) => { if (!off) setContracts((data as Contract[]) || []) })
+    return () => { off = true }
+  }, [clientId])
 
   useEffect(() => { load() }, [year, clientId])
   useEffect(() => { loadShikikinCache() }, [clientId])
@@ -396,6 +413,7 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
                 <th className="text-left px-4 py-2">用途</th>
                 <th className="text-right px-4 py-2">敷金</th>
                 <th className="text-right px-4 py-2">年間合計</th>
+                <th className="text-center px-3 py-2">契約書</th>
                 <th className="px-3 py-2 w-16"></th>
               </tr>
             </thead>
@@ -410,6 +428,12 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-gray-700">
                     {itemTotal(item) > 0 ? itemTotal(item).toLocaleString('ja-JP') + '円' : '—'}
+                  </td>
+                  <td className="px-3 py-2.5 text-center">
+                    <button onClick={e => { e.stopPropagation(); setContractItem(item) }} title="契約書を見る・添付する"
+                      className={`inline-flex items-center gap-0.5 text-xs px-2 py-0.5 rounded border ${contractsOf(item).length ? 'border-indigo-300 text-indigo-700 bg-indigo-50' : 'border-gray-200 text-gray-400 hover:text-gray-600'}`}>
+                      <Paperclip size={12} />{contractsOf(item).length || '添付'}
+                    </button>
                   </td>
                   <td className="px-3 py-2.5 text-center">
                     <button onClick={e => { e.stopPropagation(); deleteItem(item.id) }}
@@ -629,6 +653,10 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
             </div>
           </div>
         </div>
+      )}
+      {contractItem && (
+        <ContractsModal clientId={clientId} payeeName={contractItem.payee_name || ''} propertyAddress={contractItem.property_address || ''}
+          contracts={contractsOf(contractItem)} onClose={() => setContractItem(null)} onChanged={loadContracts} />
       )}
     </div>
   )

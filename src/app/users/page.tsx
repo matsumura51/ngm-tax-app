@@ -108,6 +108,7 @@ export default function UsersPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">ユーザー管理</h1>
+        <a href="/drive-connect" className="ml-auto mr-3 text-sm text-blue-600 hover:underline" title="支払調書の契約書の保存先">Googleドライブの接続</a>
         <button
           onClick={() => { setShowModal(true); setSaveError('') }}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
