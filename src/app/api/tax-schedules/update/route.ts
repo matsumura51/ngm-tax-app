@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireUser } from '@/lib/apiAuth'
 import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req: NextRequest) {
+  const me = await requireUser(req)
+  if (me instanceof NextResponse) return me
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!serviceKey) return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
 

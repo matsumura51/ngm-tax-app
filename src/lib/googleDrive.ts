@@ -2,7 +2,6 @@
 // 権限は drive.file（このアプリが作ったファイル・フォルダだけを扱える。ドライブのほかのファイルは見えない）
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
 
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file openid email'
 export const ROOT_FOLDER_NAME = '支払調書_契約書'
@@ -16,18 +15,7 @@ export function serviceClient(): SupabaseClient {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
-// ログインしている人（いなければ 401 の応答）
-export async function requireUser(req: NextRequest, adminOnly = false): Promise<{ id: string; name: string; role: string } | NextResponse> {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return NextResponse.json({ error: 'サーバー設定エラー（SERVICE_ROLE_KEY未設定）' }, { status: 500 })
-  const auth = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    cookies: { getAll() { return req.cookies.getAll() }, setAll() {} },
-  })
-  const { data: { user } } = await auth.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'ログインしていません' }, { status: 401 })
-  const { data: me } = await serviceClient().from('users').select('name, role').eq('id', user.id).maybeSingle()
-  if (adminOnly && me?.role !== 'admin') return NextResponse.json({ error: '管理者のみ操作できます' }, { status: 403 })
-  return { id: user.id, name: me?.name || user.email || '', role: me?.role || '' }
-}
+export { requireUser } from './apiAuth'
 
 // 保存してある refresh_token から、その都度アクセス用のトークンをもらう
 export async function accessToken(db: SupabaseClient): Promise<string> {

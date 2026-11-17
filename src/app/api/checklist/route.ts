@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireUser } from '@/lib/apiAuth'
 import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, GeminiOverloadedError } from '@/lib/geminiRetry'
@@ -9,6 +10,8 @@ const supabase = createClient(
 )
 
 export async function POST(req: NextRequest) {
+  const me = await requireUser(req)
+  if (me instanceof NextResponse) return me
   const { client_id } = await req.json()
   if (!client_id) return NextResponse.json({ error: 'client_id required' }, { status: 400 })
 

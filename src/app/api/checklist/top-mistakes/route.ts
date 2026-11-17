@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
+import { requireUser } from '@/lib/apiAuth'
 import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { fetchAllRows } from '@/lib/fetchAllRows'
@@ -12,7 +13,9 @@ const supabase = createClient(
 const CHUNK_SIZE = 150 // 無料枠のトークン上限（分あたり）に収まるよう分割するサイズ
 
 // 前回生成した結果を返す（Geminiは呼ばない）
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const me = await requireUser(req)
+  if (me instanceof NextResponse) return me
   const { data, error } = await supabase
     .from('top_mistakes_report')
     .select('checklist, count, generated_at')
@@ -22,7 +25,9 @@ export async function GET() {
   return NextResponse.json({ report: data || null })
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const me = await requireUser(req)
+  if (me instanceof NextResponse) return me
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'GEMINI_API_KEY が設定されていません' }, { status: 500 })
 

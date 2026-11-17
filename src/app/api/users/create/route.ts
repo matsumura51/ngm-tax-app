@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireUser } from '@/lib/apiAuth'
 import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req: NextRequest) {
+  const me = await requireUser(req, true)
+  if (me instanceof NextResponse) return me
   const body = await req.json()
   const { name, password, role, department, hire_date, leave_date, division } = body
   // 全角のログインIDは半角に揃える（ログイン画面は半角で入力されるため）

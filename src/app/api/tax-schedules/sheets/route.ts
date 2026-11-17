@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
+import { requireUser } from '@/lib/apiAuth'
 
 const SHEET_ID = '1dopOS5hjcHsyk9-mWvTKYGWNQAFuPBaoF0rMjuptMhc'
 
@@ -22,7 +23,9 @@ async function sheetExists(name: string): Promise<boolean> {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const me = await requireUser(req)
+  if (me instanceof NextResponse) return me
   // 全候補を並列チェック
   const checks = await Promise.all(
     CANDIDATES.map(async (name) => ({ name, exists: await sheetExists(name) }))
