@@ -118,6 +118,14 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
   // 契約書（Googleドライブ）。支払先＋物件所在地で行と結びつける（翌年以降も同じ契約書を表示）
   const [contracts, setContracts] = useState<Contract[]>([])
   const [contractItem, setContractItem] = useState<PaymentReportItem | null>(null)
+  const [contractDrop, setContractDrop] = useState<File[] | undefined>(undefined)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  // 置き場所以外にファイルを落としたとき、ブラウザがそのファイルを開いて画面が切り替わらないようにする
+  useEffect(() => {
+    const stop = (e: DragEvent) => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault() }
+    window.addEventListener('dragover', stop); window.addEventListener('drop', stop)
+    return () => { window.removeEventListener('dragover', stop); window.removeEventListener('drop', stop) }
+  }, [])
   async function loadContracts() {
     const { data } = await createClient().from('payment_report_contracts').select('*').eq('client_id', clientId).order('created_at')
     setContracts((data as Contract[]) || [])
@@ -430,8 +438,11 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
                     {itemTotal(item) > 0 ? itemTotal(item).toLocaleString('ja-JP') + '円' : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-center">
-                    <button onClick={e => { e.stopPropagation(); setContractItem(item) }} title="契約書を見る・添付する"
-                      className={`inline-flex items-center gap-0.5 text-xs px-2 py-0.5 rounded border ${contractsOf(item).length ? 'border-indigo-300 text-indigo-700 bg-indigo-50' : 'border-gray-200 text-gray-400 hover:text-gray-600'}`}>
+                    <button onClick={e => { e.stopPropagation(); setContractDrop(undefined); setContractItem(item) }} title="契約書を見る・添付する（ファイルをここにドラッグしても添付できます）"
+                      onDragOver={e => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; if (dragOverId !== item.id) setDragOverId(item.id) }}
+                      onDragLeave={() => setDragOverId(null)}
+                      onDrop={e => { e.preventDefault(); e.stopPropagation(); setDragOverId(null); const f = [...e.dataTransfer.files]; if (!f.length || contractItem) return; setContractDrop(f); setContractItem(item) }}
+                      className={`inline-flex items-center gap-0.5 text-xs px-2 py-0.5 rounded border ${dragOverId === item.id ? 'border-indigo-500 bg-indigo-100 text-indigo-700 ring-2 ring-indigo-300' : contractsOf(item).length ?'border-indigo-300 text-indigo-700 bg-indigo-50' : 'border-gray-200 text-gray-400 hover:text-gray-600'}`}>
                       <Paperclip size={12} />{contractsOf(item).length || '添付'}
                     </button>
                   </td>
@@ -656,7 +667,7 @@ export default function PaymentReportTab({ clientId, clientCode, clientName }: P
       )}
       {contractItem && (
         <ContractsModal clientId={clientId} payeeName={contractItem.payee_name || ''} propertyAddress={contractItem.property_address || ''}
-          contracts={contractsOf(contractItem)} onClose={() => setContractItem(null)} onChanged={loadContracts} />
+          contracts={contractsOf(contractItem)} initialFiles={contractDrop} onClose={() => { setContractItem(null); setContractDrop(undefined) }} onChanged={loadContracts} />
       )}
     </div>
   )

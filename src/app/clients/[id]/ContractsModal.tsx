@@ -1,12 +1,13 @@
 'use client'
 // 支払調書の契約書（貸主×物件ごと）：一覧・添付・表示・削除。ファイルは Googleドライブ（m.jun@tax-machida.com）に保存
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FileText, Trash2, Upload, X } from 'lucide-react'
 
 export type Contract = { id: string; client_id: string; payee_key: string; property_key: string; payee_name: string | null; property_address: string | null; file_name: string; mime_type: string | null; file_size: number | null; uploaded_by: string | null; created_at: string }
 
 const fmtSize = (n: number | null) => (!n ? '' : n < 1024 * 1024 ? `${Math.ceil(n / 1024)}KB` : `${(n / 1024 / 1024).toFixed(1)}MB`)
 const ACCEPT = 'application/pdf,image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif'
+const okType = (f: File) => ACCEPT.split(',').includes(f.type) || (!f.type && /\.(pdf|heic|heif)$/i.test(f.name))
 
 // 写真は保存する前に縮小する（長い辺 2000px・JPEG）。読めない形式（HEICなど）はそのまま
 async function shrink(file: File): Promise<File> {
@@ -30,15 +31,22 @@ async function postJson(url: string, body: unknown) {
   return j
 }
 
-export default function ContractsModal({ clientId, payeeName, propertyAddress, contracts, onClose, onChanged }: {
-  clientId: string; payeeName: string; propertyAddress: string; contracts: Contract[]; onClose: () => void; onChanged: () => void
+export default function ContractsModal({ clientId, payeeName, propertyAddress, contracts, initialFiles, onClose, onChanged }: {
+  clientId: string; payeeName: string; propertyAddress: string; contracts: Contract[]; initialFiles?: File[]; onClose: () => void; onChanged: () => void
 }) {
   const input = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
+  const [over, setOver] = useState(false)
+  const canAdd = !!(payeeName.trim() || propertyAddress.trim())
 
-  async function upload(files: File[]) {
+  async function upload(all: File[]) {
     setError('')
+    if (!canAdd) { setError('支払先か物件所在地を入れてから添付してください'); return }
+    const files = all.filter(okType)
+    const ng = all.filter(f => !okType(f))
+    if (ng.length) setError(`PDF・画像だけ添付できます（保存しなかったファイル：${ng.map(f => f.name).join('、')}）`)
+    if (!files.length) return
     for (const [i, f0] of files.entries()) {
       try {
         setBusy(`保存中…（${i + 1}/${files.length}）${f0.name}`)
@@ -54,6 +62,21 @@ export default function ContractsModal({ clientId, payeeName, propertyAddress, c
     setBusy('')
     onChanged()
   }
+  // 一覧のクリップにドロップして開いたときは、そのファイルをすぐ保存する（1回だけ）
+  const started = useRef(false)
+  useEffect(() => {
+    if (started.current || !initialFiles?.length) return
+    started.current = true
+    Promise.resolve().then(() => upload(initialFiles))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault(); setOver(false)
+    if (busy) return
+    const f = [...e.dataTransfer.files]
+    if (f.length) upload(f)
+  }
+
   async function remove(c: Contract) {
     if (!confirm(`「${c.file_name}」を削除しますか？\n（Googleドライブではゴミ箱に移します。30日間は戻せます）`)) return
     setBusy('削除中…'); setError('')
@@ -68,7 +91,10 @@ export default function ContractsModal({ clientId, payeeName, propertyAddress, c
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => !busy && onClose()}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-xl" onClick={(e) => e.stopPropagation()}
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = busy || !canAdd ? 'none' : 'copy'; if (!over) setOver(true) }}
+        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false) }}
+        onDrop={onDrop}>
         <div className="flex items-center justify-between px-5 py-3 border-b">
           <div>
             <div className="font-medium text-gray-800">契約書</div>
@@ -91,12 +117,13 @@ export default function ContractsModal({ clientId, payeeName, propertyAddress, c
           )}
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>}
           <input ref={input} type="file" accept={ACCEPT} multiple hidden onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ''; if (f.length) upload(f) }} />
-          <div className="flex items-center gap-3">
-            <button onClick={() => input.current?.click()} disabled={!!busy || (!payeeName.trim() && !propertyAddress.trim())}
+          <div className={`flex flex-wrap items-center gap-3 rounded-lg border-2 border-dashed px-4 py-4 transition-colors ${over && canAdd && !busy ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}>
+            <button onClick={() => input.current?.click()} disabled={!!busy || !canAdd}
               className="flex items-center gap-1 text-sm px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg">
               <Upload size={14} /> 契約書を添付
             </button>
-            {busy && <span className="text-sm text-gray-500">{busy}</span>}
+            {busy ? <span className="text-sm text-gray-500">{busy}</span>
+              : <span className="text-sm text-gray-400">{over && canAdd ? 'ここで離すと保存します' : 'またはファイルをここにドラッグ'}</span>}
           </div>
           <p className="text-xs text-gray-500">PDF・画像（50MBまで）。写真は縮小して保存します。同じ顧問先で支払先と物件所在地が同じ行には、翌年以降の支払調書にも同じ契約書が表示されます。</p>
         </div>
